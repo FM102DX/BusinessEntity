@@ -1,0 +1,31 @@
+﻿@using SampleOnlineMall.FrontEnd.Blazor.Components.ImageSelector;
+
+<div class="display-image-with-selector__container display-image-with-selector__part" style="@ContainerStyle">
+
+
+    @if (@SelectorPosition==@SelectorPositionEnum.bottom)
+    {
+        <div class="display-image-with-selector__image display-image-with-selector__part" style="@ImageStyle">
+            <img class="display-image-with-selector__image" src="@CurrentImage.MidSizePath" />
+        </div>
+
+        <div style="float:left;clear:both;" />
+        
+        <div class="display-image-with-selector__selector display-image-with-selector__part" style="@SelectorStyle">
+            <ImageSelector Items="@ImgList" SelectorDirection="@ImageSelector.SelectorDirectionEnum.Horizontal" Parent="@this" Current="@CurrentImage"></ImageSelector>
+        </div>
+    }
+    @if (@SelectorPosition==@SelectorPositionEnum.left)
+    {
+        <div class="display-image-with-selector__selector display-image-with-selector__part" style="@SelectorStyle">
+            <img class="display-image-with-selector__image" src="@CurrentImage.MidSizePath" />
+        </div>
+        <div class="display-image-with-selector__image display-image-with-selector__part" style="@ImageStyle">
+            <ImageSelector Items="@ImgList" SelectorDirection="@ImageSelector.SelectorDirectionEnum.Vertical" Parent="@this" Current="@CurrentImage"></ImageSelector>
+        </div>
+    }
+</div>
+
+@code {
+
+    }

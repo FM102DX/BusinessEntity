@@ -1,0 +1,15 @@
+﻿<div class="@HolderDivClass">
+
+    @foreach (var img in Items)
+    {
+        <ImageSelectorElement Parent="@this"  Image="@img" ThumbWidthPx="70" />
+        @if (SelectorDirection== SelectorDirectionEnum.Vertical){
+            <div style="float:left;clear:both;"></div>
+        }
+    }
+
+</div>
+
+@code {
+
+}

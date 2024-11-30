@@ -1,0 +1,33 @@
+﻿@using SampleOnlineMall.FrontEnd.Blazor.Components
+@using SampleOnlineMall.FrontEnd.Blazor.Components.Paginator
+
+        
+<div class="PaginationControlContainer">
+            <div class="paginator-control">
+                @if (@FirstBtnsClickable)
+                {
+                        <a href="/@StrConcat(@SearchStringPart,@FistPageNo)"><Div class="paginator-control-item @FirstBtnsClickableClass">First</Div></a>
+                        <a href="/@StrConcat(@SearchStringPart,@PrevNumber.ToString())"><Div class="paginator-control-item @FirstBtnsClickableClass">Prev</Div></a>
+                }
+                else
+                {
+                        <Div class="paginator-control-item @FirstBtnsClickableClass">First</Div>
+                        <Div class="paginator-control-item @FirstBtnsClickableClass">Prev</Div>
+                }
+                @for (int i = 1; i <= @PagesCount; i++)
+                {
+                        <a href="/@StrConcat(@SearchStringPart,@i.ToString())"><Div class="paginator-control-item @SelectedClass(@i)"> @i </Div></a>
+                }
+                @if (@LastBtnsClickable)
+                {
+                        <a href="/@StrConcat(@SearchStringPart,@NextNumber.ToString())"><Div class="paginator-control-item @LastBtnsClickableClass">Next</Div></a>
+                        <a href="/@StrConcat(@SearchStringPart,@PagesCount.ToString())"><Div class="paginator-control-item @LastBtnsClickableClass">Last</Div></a>
+                }
+                else
+                {
+                        <Div class="paginator-control-item @LastBtnsClickableClass">Next</Div>
+                        <Div class="paginator-control-item @LastBtnsClickableClass">Last</Div>
+                }
+            </div>
+            @Status
+</div>

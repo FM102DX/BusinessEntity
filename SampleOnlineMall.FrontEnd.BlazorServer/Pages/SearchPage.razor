@@ -1,0 +1,9 @@
+﻿@page "/search/{searchText}"
+@page "/search/{searchText}/{Page:int}"
+@using SampleOnlineMall.FrontEnd.Blazor.Components
+@using SampleOnlineMall.FrontEnd.Blazor.Shared
+@using SampleOnlineMall.FrontEnd.Blazor.Pages
+@using SampleOnlineMall.FrontEnd.Blazor.Components.ShopItemCollection
+
+ 
+<ShopItemCollection UsageCase="@ShopItemCollection.ShopItemCollectionUsageCaseEnum.MainBarSearch" SearchText="@SearchText" ItemsPerPage="6" Page="@PageToPass" />
