@@ -29,7 +29,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
             Serilog.ILogger _logger = new LoggerConfiguration()
                        .MinimumLevel.Override("Microsoft", LogEventLevel.Debug)
                        .Enrich.FromLogContext()
-                       .WriteTo.BrowserConsole()
+                       //.WriteTo.BrowserConsole()
                        .WriteTo.File(logFilePath)
                        .CreateLogger();
 

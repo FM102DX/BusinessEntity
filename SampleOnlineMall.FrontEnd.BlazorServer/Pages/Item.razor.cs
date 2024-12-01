@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
-using SampleOnlineMall.FrontEnd.Blazor.Components.ImageSelector;
+using SampleOnlineMall.FrontEnd.BlazorServer.Components.ImageSelector;
 using System.Collections;
-using SampleOnlineMall.FrontEnd.Blazor.Data;
+using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.Core.Models;
 using SampleOnlineMall.Core.Mappers;

@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using System;
 using System.Collections.Generic;
-using SampleOnlineMall.FrontEnd.Blazor.Components.ImageSelector;
+using SampleOnlineMall.FrontEnd.BlazorServer.Components.ImageSelector;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.DisplayImageWithSelector
 {

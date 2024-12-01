@@ -2,11 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using SampleOnlineMall.FrontEnd.Blazor.Data;
+using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.DataAccess.Models;
 using Newtonsoft.Json;
-using SampleOnlineMall.FrontEnd.Blazor.Components.Paginator;
+using SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator;
+using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection
 {

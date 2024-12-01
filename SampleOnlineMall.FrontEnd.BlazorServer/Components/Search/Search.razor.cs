@@ -1,7 +1,8 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using System;
-using SampleOnlineMall.FrontEnd.Blazor.Data;
+using SampleOnlineMall.FrontEnd.BlazorServer.Data;
+using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.Search
 {

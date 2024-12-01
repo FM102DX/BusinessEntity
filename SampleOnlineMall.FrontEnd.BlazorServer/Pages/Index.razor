@@ -1,9 +1,9 @@
 ﻿@page "/"
 @page "/{Page:int}"
 
-@using SampleOnlineMall.FrontEnd.Blazor.Components
-@using SampleOnlineMall.FrontEnd.Blazor.Pages
-@using SampleOnlineMall.FrontEnd.Blazor.Components.ShopItemCollection
+@using SampleOnlineMall.FrontEnd.BlazorServer.Components
+@using SampleOnlineMall.FrontEnd.BlazorServer.Pages
+@using SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection
 
 <ShopItemCollection UsageCase="@ShopItemCollection.ShopItemCollectionUsageCaseEnum.MainPageAppearamce" Page="@PageToPass" ItemsPerPage="6" />
 

@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Components;
-using SampleOnlineMall.FrontEnd.Blazor.Data;
+using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator
 {
@@ -18,7 +18,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator
         public string? SearchText { get; set; }
 
         [Parameter]
-        public PaginatorUsageCaseEnum UsageCase { get; set; }
+        public SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator.PaginatorUsageCaseEnum UsageCase { get; set; }
 
         public bool FirstBtnsClickable => SelectedPage > 1;
         public bool LastBtnsClickable => SelectedPage < PagesCount;
@@ -86,15 +86,15 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator
             CompHub.PaginatorStateSet += CompHub_SetPaginatorState;
         }
 
-        private void CompHub_SetPaginatorState(int selectedPage, int totalCount, int itemsPerPage, PaginatorUsageCaseEnum usageCase)
+        private void CompHub_SetPaginatorState(int selectedPage, int count, int itemsPerPage, SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator.PaginatorUsageCaseEnum usageCase)
         {
-            SelectedPage = selectedPage==0 ? 1 : selectedPage;
-            TotalCount = totalCount;
+            SelectedPage = selectedPage == 0 ? 1 : selectedPage;
+            TotalCount = count;
             ItemsPerPage = itemsPerPage;
             NextNumber = (SelectedPage == PagesCount) ? PagesCount : SelectedPage + 1;
-            PrevNumber = (SelectedPage == 1) ? 1:  SelectedPage - 1;
-            PagesCount = totalCount / itemsPerPage;
-            if (PagesCount * itemsPerPage < totalCount) PagesCount++;
+            PrevNumber = (SelectedPage == 1) ? 1 : SelectedPage - 1;
+            PagesCount = count / itemsPerPage;
+            if (PagesCount * itemsPerPage < count) PagesCount++;
             if (PagesCount == 0) PagesCount = 1;
             if (SelectedPage == 0) SelectedPage = 1;
             UsageCase = usageCase;

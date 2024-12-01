@@ -1,4 +1,4 @@
-﻿using SampleOnlineMall.FrontEnd.Blazor.Components.Paginator;
+﻿using SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
 {
@@ -28,11 +28,11 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
 
 
         // PaginatorStateSet
-        public delegate void SetPaginatorStateHandler(int selectedPage, int count, int itemsPerPage, PaginatorUsageCaseEnum usageCase);
+        public delegate void SetPaginatorStateHandler(int selectedPage, int count, int itemsPerPage, SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator.PaginatorUsageCaseEnum usageCase);
 
         public event SetPaginatorStateHandler PaginatorStateSet;
 
-        public void SetPaginatonState(int selectedPage, int count, int itemsPerPage, PaginatorUsageCaseEnum usageCase)
+        public void SetPaginatonState(int selectedPage, int count, int itemsPerPage, SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator.PaginatorUsageCaseEnum usageCase)
         {
             PaginatorStateSet (selectedPage,count, itemsPerPage, usageCase);
         }

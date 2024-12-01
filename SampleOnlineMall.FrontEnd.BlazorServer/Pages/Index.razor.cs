@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using static SampleOnlineMall.FrontEnd.Blazor.Components.ShopItemCollection.ShopItemCollection;
+using static SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection.ShopItemCollection;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Pages
 {
