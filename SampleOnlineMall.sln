@@ -29,7 +29,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorApp1", "BlazorApp1\Bl
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ControlNode", "ControlNode", "{E5BC70C6-4830-4558-9551-2392590E4BF0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlNode", "ControlNode\ControlNode.csproj", "{C28543E9-C736-4B78-843F-A86DF9BDC9F9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ControlNode", "ControlNode\ControlNode.csproj", "{C28543E9-C736-4B78-843F-A86DF9BDC9F9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
