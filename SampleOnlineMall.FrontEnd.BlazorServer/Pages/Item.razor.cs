@@ -19,7 +19,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Pages
         public StoreManager Manager { get; set; }
 
         [Inject]
-        public Mapper Mpr { get; set; }
+        public CustomMapper Mpr { get; set; }
 
         [Inject]
         public Serilog.ILogger Logger { get; set; }

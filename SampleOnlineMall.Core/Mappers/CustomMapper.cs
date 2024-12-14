@@ -9,8 +9,9 @@ using System.Threading.Tasks;
 
 namespace SampleOnlineMall.Core.Mappers
 {
-    public class Mapper
+    public class CustomMapper
     {
+        private object _locker = new object();
         public CommodityItem CommodityItemFromCommodityItemApiFeed(CommodityItemApiFeed item)
         {
             var newItem = new CommodityItem();
@@ -35,12 +36,12 @@ namespace SampleOnlineMall.Core.Mappers
             return newItem;
 
         }
-        public CommodityItemFrontendDisplayed CommodityItemFrontendDisplayedFromTransport (CommodityItemFrontend item)
+        public CommodityItemFrontendDisplayed CommodityItemFrontendDisplayedFromTransport(CommodityItemFrontend item)
         {
             var newItem = new CommodityItemFrontendDisplayed();
             newItem.Id = item.Id;
             newItem.Name = item.Name;
-            newItem.Price= item.Price;
+            newItem.Price = item.Price;
             newItem.Description = item.Description;
             newItem.Pictures = new List<PictureInfo>();
             foreach (var x in item.Pictures)
@@ -74,6 +75,8 @@ namespace SampleOnlineMall.Core.Mappers
         }
         public RepositoryResponce<CommodityItemFrontendDisplayed> ResponceFrontDisplayedFromTransport(RepositoryResponce<CommodityItemFrontend> sourceResp)
         {
+
+            if (sourceResp == null) return null;
             var targetResp = new RepositoryResponce<CommodityItemFrontendDisplayed>();
             targetResp.ItemsPerPage = sourceResp.ItemsPerPage;
             targetResp.UsedSearch = sourceResp.UsedSearch;
@@ -83,16 +86,21 @@ namespace SampleOnlineMall.Core.Mappers
             targetResp.Result = new Service.CommonOperationResult();
             targetResp.Result.Success = sourceResp.Result.Success;
             targetResp.Result.Message = sourceResp.Result.Message;
+
             var itemList = new List<CommodityItemFrontendDisplayed>();
-
-            foreach (var item in sourceResp.Items)
+            if (sourceResp != null)
             {
-                itemList.Add(CommodityItemFrontendDisplayedFromTransport(item));
+                if (sourceResp.Items != null)
+                {
+                    foreach (var item in sourceResp.Items)
+                    {
+                        itemList.Add(CommodityItemFrontendDisplayedFromTransport(item));
+                    }
+                }
+                targetResp.Items = itemList;
             }
-            targetResp.Items = itemList;
             return targetResp;
+
         }
-
-
     }
 }

@@ -19,9 +19,9 @@ namespace SampleOnlineMall.Core.Managers
         private IAsyncRepository<CommodityItem> _repo;
         private Serilog.ILogger _logger;
         private SampleOnlineMallAssortmentApiApp _app;
-        private Mapper _mapper;
+        private CustomMapper _mapper;
         private WebLoggerManager _webLogger;
-        public CommodityItemManager(IAsyncRepository<CommodityItem> repo, WebLoggerManager webLogger, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, Mapper mapper)
+        public CommodityItemManager(IAsyncRepository<CommodityItem> repo, WebLoggerManager webLogger, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
         {
             _repo = repo;
             _logger = logger;

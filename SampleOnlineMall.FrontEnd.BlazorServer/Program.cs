@@ -22,7 +22,9 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
             // Add services to the container.
             builder.Services.AddRazorPages();
             builder.Services.AddServerSideBlazor();
-            
+
+            #region custom calls
+
             var _app = new SampleOnlineMallFrontEndBlazorApp();
             string logFilePath = System.IO.Path.Combine(_app.LogsDirectory, Functions.GetNextFreeFileName(_app.LogsDirectory, "SampleMallBlazorFrontend", "txt"));
 
@@ -64,29 +66,31 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
             frontEndSettings.DisplayNavBar = false;
             builder.Services.AddScoped(typeof(FrontEndSettings), (x) => frontEndSettings);
             builder.Services.AddScoped(typeof(StoreManager), typeof(StoreManager));
-            builder.Services.AddScoped(typeof(Mapper), typeof(Mapper));
+            builder.Services.AddScoped(typeof(CustomMapper), typeof(CustomMapper));
             builder.Services.AddScoped(typeof(ComponentHub), typeof(ComponentHub));
             _logger.Information("Blazor P3");
 
+            #endregion 
 
             var app = builder.Build();
-
-            // Configure the HTTP request pipeline.
-            if (!app.Environment.IsDevelopment())
+            if (app.Environment.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
             {
                 app.UseExceptionHandler("/Error");
-                // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
-
             app.UseHttpsRedirection();
-
             app.UseStaticFiles();
-
             app.UseRouting();
 
-            app.MapBlazorHub();
-            app.MapFallbackToPage("/_Host");
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapBlazorHub();
+                endpoints.MapFallbackToPage("/_Host");
+            });
 
             app.Run();
         }

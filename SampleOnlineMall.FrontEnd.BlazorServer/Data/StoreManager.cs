@@ -16,11 +16,11 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
 
         private SampleOnlineMallFrontEndBlazorApp _app { get; set; }
         
-        private Mapper _mapper { get; set; }
+        private CustomMapper _mapper { get; set; }
 
         public string StoreBaseUrl { get; set; }
 
-        public StoreManager(NavigationManager Navi, IAsyncRepository<CommodityItemFrontend> repo, SampleOnlineMallFrontEndBlazorApp app, Mapper mapper)
+        public StoreManager(NavigationManager Navi, IAsyncRepository<CommodityItemFrontend> repo, SampleOnlineMallFrontEndBlazorApp app, CustomMapper mapper)
         {
             StoreBaseUrl = Navi.BaseUri;
             _repo = repo;
@@ -37,7 +37,8 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
         }
         public async Task<RepositoryResponce<CommodityItemFrontendDisplayed>> GetAllAsync(RepositoryRequestTextSearch repositoryRequest)
         {
-            return _mapper.ResponceFrontDisplayedFromTransport(await _repo.GetAllByRequestAsync(repositoryRequest));
+            var resp = await _repo.GetAllByRequestAsync(repositoryRequest);
+            return _mapper.ResponceFrontDisplayedFromTransport(resp);
         }
 
         public async Task<List<CommodityItemFrontendDisplayed>> Search(string searchText)

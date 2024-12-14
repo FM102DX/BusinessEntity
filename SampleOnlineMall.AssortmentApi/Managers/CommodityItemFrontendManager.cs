@@ -24,10 +24,10 @@ namespace SampleOnlineMall.Core.Managers
         private Serilog.ILogger _logger;
         private SampleOnlineMallAssortmentApiApp _app;
         private WebLoggerManager _webLogMgr;
-        private Mapper _mapper;
+        private CustomMapper _mapper;
         private IAsyncRepository<Supplier> _supplierRepo;
 
-        public CommodityItemFrontendManager(IAsyncRepository<CommodityItem> repo, IAsyncRepository<Supplier> supplierRepo,  Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, Mapper mapper, WebLoggerManager webLogMgr)
+        public CommodityItemFrontendManager(IAsyncRepository<CommodityItem> repo, IAsyncRepository<Supplier> supplierRepo,  Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper, WebLoggerManager webLogMgr)
         {
             _repo = repo;
             _logger = logger;
