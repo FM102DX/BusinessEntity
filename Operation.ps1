@@ -1,43 +1,14 @@
-
 # Получение пути текущего скрипта
 $scriptDirectory = $PSScriptRoot
 
+# Функция для выполнения внешнего скрипта
+function ExecExternalScript {
+    param (
+        [string]$scriptPath
+    )
 
+    $targetScriptPath = Join-Path -Path $scriptDirectory -ChildPath $scriptPath
 
-# Определяем обработчики для каждого пункта меню
-function Action1 {
-        $targetScriptPath = Join-Path -Path $scriptDirectory -ChildPath "Powershell\BuildAssortAndOpenInDocker.ps1"
-
-        # Запуск целевого скрипта
-        Write-Host "Запуск скрипта: $targetScriptPath"
-        & $targetScriptPath
-
-        # Проверка результата выполнения
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Ошибка при выполнении скрипта: $targetScriptPath"
-            exit $LASTEXITCODE
-        }
-}
-
-
-function Action2 {
-        $targetScriptPath = Join-Path -Path $scriptDirectory -ChildPath "Powershell\DockerNetworkInfo.ps1"
-   
-        # Запуск целевого скрипта
-        Write-Host "Запуск скрипта: $targetScriptPath"
-        & $targetScriptPath
-
-        # Проверка результата выполнения
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Ошибка при выполнении скрипта: $targetScriptPath"
-            exit $LASTEXITCODE
-        }
-}
-
-
-function Action3 {
-    $targetScriptPath = Join-Path -Path $scriptDirectory -ChildPath "Powershell\DockerNetworkInfo.ps1"
-   
     # Запуск целевого скрипта
     Write-Host "Запуск скрипта: $targetScriptPath"
     & $targetScriptPath
@@ -49,6 +20,19 @@ function Action3 {
     }
 }
 
+# Определяем обработчики для каждого пункта меню
+function Action1 {
+    ExecExternalScript -scriptPath "Powershell\BuildAssortAndOpenInDocker.ps1"
+}
+
+function Action2 {
+    ExecExternalScript -scriptPath "Powershell\DockerNetworkInfo.ps1"
+}
+
+function Action3 {
+    ExecExternalScript -scriptPath "Powershell\AddContainersToNetwork.ps1"
+}
+
 function ClearScreen {
     Clear-Host
 }
@@ -56,9 +40,9 @@ function ClearScreen {
 # Функция отображения меню
 function Show-Menu {
     Write-Host "Меню:"
-    Write-Host "1 -- Запстить ассортимент в докере"
+    Write-Host "1 -- Запустить ассортимент в докере"
     Write-Host "2 -- Показать состав докер сети"
-    Write-Host "3 -- Добавить все запущенные контейнры в существующую докер сеть"
+    Write-Host "3 -- Добавить все запущенные контейнеры в сеть docker-networkmall2"
     Write-Host "80 -- Очистить экран (CLS)"
     Write-Host "99 -- Выход"
 }
