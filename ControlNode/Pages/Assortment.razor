@@ -3,7 +3,10 @@
 
 <h3>Assortment</h3>
 <RadzenButton Text="Загрузить ассортимент" Click="OnLoadAssortClick" Style="margin: 10px;" />
-<p>@_message</p>
-@code {
-
+<p>@Message</p>
+<p></p>
+<p>Content</p>
+@foreach (var line in Content)
+{
+    <p>@line</p>
 }

@@ -18,15 +18,14 @@ namespace SampleOnlineMall
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
-
-            builder.WebHost.ConfigureKestrel(options => options.ListenLocalhost(6000));
-
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-
             var configuration = new ConfigurationBuilder().Build();
-
             builder.Configuration.AddConfiguration(configuration);
+            builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 
+
+            
+            #region бизнес-логика
             var _app = new SampleOnlineMallAssortmentApiApp();
 
             string logFilePath = System.IO.Path.Combine(_app.LogsDirectory, Functions.GetNextFreeFileName(_app.LogsDirectory, "AssortmentApiLogs", "txt"));
@@ -38,22 +37,16 @@ namespace SampleOnlineMall
 
             _logger.Information("P1");
 
-            //var confMgr = new ConfigurationManager();
-
-            //confMgr.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-
-            builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-            var cnnStr = builder.Configuration.GetConnectionString("PostgreConnection");
-
+            // web-logger
             var loggerOptions = new WebApiAsyncRepositoryOptions()
                         .SetLogger(_logger)
                         .SetBaseAddress("https://weblogger.t109.tech")
                         .SetInsertHostPath("insertitem/");
 
             // Add services to the container
+            builder.Services.AddSingleton(typeof(SampleOnlineMallAssortmentApiApp), (x) => _app);//само приложение
             builder.Services.AddSingleton(typeof(Microsoft.Extensions.Configuration.ConfigurationManager), (x) => builder.Configuration);
             builder.Services.AddScoped(typeof(DbContext), typeof(EfPostgresDbContext));
-            builder.Services.AddSingleton(typeof(SampleOnlineMallAssortmentApiApp), (x) => _app);
             builder.Services.AddScoped(typeof(CommodityItemManager));
             builder.Services.AddScoped(typeof(CommodityItemFrontendManager));
             builder.Services.AddScoped(typeof(SupplierManager));
@@ -63,6 +56,10 @@ namespace SampleOnlineMall
 
             builder.Services.AddScoped<CustomMapper>();
             builder.Services.AddScoped(typeof(WebLoggerManager), (x) => new WebLoggerManager("assortment", loggerOptions));
+
+
+
+            #endregion
 
             builder.Services.AddCors(confg =>
                 confg.AddPolicy("AllowAll",
@@ -75,6 +72,16 @@ namespace SampleOnlineMall
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
             _logger.Information("P2");
+
+            builder.WebHost.ConfigureKestrel(options =>
+            {
+                options.ListenAnyIP(80); // HTTP на всех интерфейсах
+                //нам не нужен сертификат внутри контейнера, это делает шлюз
+                //options.ListenAnyIP(443, listenOptions =>
+                //{
+                //    listenOptions.UseHttps(); // HTTPS на всех интерфейсах
+                //});
+            });
 
             var app = builder.Build();
 

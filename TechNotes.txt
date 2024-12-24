@@ -1,0 +1,8 @@
+Команда запуска докер для ассортиментного апи
+выполнить из cmd или powershell
+docker run -d --network mall_network --name postgres-assort-db -e POSTGRES_USER=adm01 -e POSTGRES_PASSWORD=adm01pwd -e POSTGRES_DB=mall -p 5432:5432   postgres:latest
+
+docker network connect mall_network SampleOnlineMall.AssortmentApi
+
+<Exec Command="docker run -d --name SampleOnlineMall.AssortmentApi --network mall_network -p 18637:80 sampleonlinemallassortmentapi:dev" />
+

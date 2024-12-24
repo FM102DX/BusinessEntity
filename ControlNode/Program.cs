@@ -1,4 +1,5 @@
 using ControlNode.Data;
+using ControlNode.Data.AssortmentLoader;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 
@@ -14,7 +15,8 @@ namespace ControlNode
             builder.Services.AddRazorPages();
             builder.Services.AddServerSideBlazor();
             builder.Services.AddSingleton<WeatherForecastService>();
-
+            builder.Services.AddScoped<AssortmentLoader>();
+            builder.Services.Configure<AppSettings>(builder.Configuration);
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.

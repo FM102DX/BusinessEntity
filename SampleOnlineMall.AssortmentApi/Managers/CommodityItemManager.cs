@@ -23,6 +23,7 @@ namespace SampleOnlineMall.Core.Managers
         private WebLoggerManager _webLogger;
         public CommodityItemManager(IAsyncRepository<CommodityItem> repo, WebLoggerManager webLogger, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
         {
+            //_logger.Information($"CommodityItemManager_entering_ctor_0");
             _repo = repo;
             _logger = logger;
             _app = app;

@@ -10,7 +10,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Radzen.Blazor" Version="5.6.15" />
+    <PackageReference Include="ReactiveUI" Version="20.1.63" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SampleOnlineMall.Core\SampleOnlineMall.Core.csproj" />
   </ItemGroup>
 
 </Project>
