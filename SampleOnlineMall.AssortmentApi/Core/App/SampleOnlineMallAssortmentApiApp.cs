@@ -18,6 +18,8 @@ namespace SampleOnlineMall.Core.Appilcation
 
         }
 
+        public bool IsDocker { get; set; } = false;
+
         public String BaseUrl { get => "https://mallassortapi01.t109.tech/"; }
         
 

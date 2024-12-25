@@ -5,8 +5,6 @@ using SampleOnlineMall.Service;
 using System;
 using System.Collections.Generic;
 
-
-
 namespace SampleOnlineMall
 {
     [ApiController]

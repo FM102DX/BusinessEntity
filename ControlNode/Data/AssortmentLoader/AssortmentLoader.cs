@@ -9,6 +9,7 @@ namespace ControlNode.Data.AssortmentLoader
     {
         private string _status = "Idle";
         private string _content = "Idle";
+        private int _loadedPos = 0;
         private Microsoft.Extensions.Options.IOptions<AppSettings> _settings;
 
         private readonly IWebHostEnvironment _env;
@@ -25,16 +26,37 @@ namespace ControlNode.Data.AssortmentLoader
             get => _status;
             set => this.RaiseAndSetIfChanged(ref _status, value); 
         }
+        public int LoadedPos
+        {
+            get => _loadedPos;
+            set => this.RaiseAndSetIfChanged(ref _loadedPos, value);
+        }
+
         public string Content
         {
             get => _content;
             set => this.RaiseAndSetIfChanged(ref _content, value);
         }
 
-        public async Task LoadAsync()
+        public async Task<int> GetCountAsync()
         {
-            //берем ассортимент и перебираем там папки внутри
 
+        }
+
+
+        public async Task ClearAsync()
+        {
+
+        }
+
+        public async Task<int> LoadAsync()
+        {
+            
+            //чистим ассортимент
+
+            
+            //берем ассортимент и перебираем там папки внутри
+            LoadedPos = 0;
             List<CommodityItemApiFeed> resultFeedSource = new List<CommodityItemApiFeed>();
 
             // Получаем физический путь к wwwroot
@@ -84,7 +106,7 @@ namespace ControlNode.Data.AssortmentLoader
                 if (resultFeedSource.Count > 0)
                 {
                     //закидываем ассортимент на контроллер
-
+                    LoadedPos++;
                 }
             }
             else
@@ -97,10 +119,11 @@ namespace ControlNode.Data.AssortmentLoader
             //Content = string.Join(";", files);
             
             Status = "Preparing";
-            await Task.Delay(500); // Асинхронная пауза
-            Status = "Loading";
-            await Task.Delay(500);
-            Status = "Completed";
+            //await Task.Delay(500); // Асинхронная пауза
+            //Status = "Loading";
+            //await Task.Delay(500);
+            //Status = "Completed";
+            return count;
         }
     }
 }

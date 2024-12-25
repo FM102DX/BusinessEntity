@@ -20,18 +20,35 @@ namespace SampleOnlineMall
         {
             
             _logger = logger;
-            _logger.Information("InfoController_enter_ctor_0");
+            _logger.Information("InfoController_ctor_0");
             _commodityItemManager = commodityItemManager;
         }
 
         [HttpGet]
         public async Task<string> Info()
         {
-            _logger.Information("InfoController_enter_1");
-            int cnt = await _commodityItemManager.Count();
-            _logger.Information("InfoController_enter_2");
-            var positions = string.Join("<br />", _commodityItemManager.GetAll().Result.ToList().Select(x => $"{x.Name}"));
-            return $"This is AssortmentController. Now {cnt} positions in assortment {positions}";
+
+            string s = "E_";
+            _logger.Information("InfoController_Info_1");
+            try
+            {
+                int cnt = await _commodityItemManager.Count();
+                var positions = string.Join("<br />", _commodityItemManager.GetAll().Result.ToList().Select(x => $"{x.Name}"));
+                _logger.Information("InfoController_Info_3_SUCCESS");
+                return $"This is AssortmentController. Now {cnt} positions in assortment {positions}";
+                
+            }
+            catch(Exception ex)
+            {
+                s += "InfoController_Info_4_ERRROR" + Environment.NewLine + ex.Message + ex.InnerException;
+                _logger.Information("InfoController_Info_4_ERRROR");
+                _logger.Information($"{ex.Message}");
+                _logger.Information($"{ex.InnerException}");
+                
+
+
+            }
+            return s;
         }
     }
 }

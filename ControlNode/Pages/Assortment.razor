@@ -2,9 +2,12 @@
 
 
 <h3>Assortment</h3>
+
+<RadzenButton Text="Узнать количество позиций ассортимента" Click="OnLoadAssortClick" Style="margin: 10px;" />
+<p>@Message</p>
 <RadzenButton Text="Загрузить ассортимент" Click="OnLoadAssortClick" Style="margin: 10px;" />
 <p>@Message</p>
-<p></p>
+<p>@AssortLoader.LoadedPos</p>
 <p>Content</p>
 @foreach (var line in Content)
 {

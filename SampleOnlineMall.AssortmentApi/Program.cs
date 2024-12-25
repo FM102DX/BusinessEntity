@@ -24,10 +24,12 @@ namespace SampleOnlineMall
             builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 
 
-            
-            #region бизнес-логика
-            var _app = new SampleOnlineMallAssortmentApiApp();
 
+            #region бизнес-логика
+
+            var _app = new SampleOnlineMallAssortmentApiApp();
+            _app.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
+            
             string logFilePath = System.IO.Path.Combine(_app.LogsDirectory, Functions.GetNextFreeFileName(_app.LogsDirectory, "AssortmentApiLogs", "txt"));
 
             Serilog.ILogger _logger = new LoggerConfiguration()
@@ -36,6 +38,13 @@ namespace SampleOnlineMall
                   .CreateLogger();
 
             _logger.Information("P1");
+            _logger.Information($"_app.IsDocker={Environment.GetEnvironmentVariable("IS_DOCKER")}");
+
+            foreach (var key in Environment.GetEnvironmentVariables().Keys)
+            {
+                _logger.Information($"{key}={Environment.GetEnvironmentVariable(key.ToString())}");
+            }
+
 
             // web-logger
             var loggerOptions = new WebApiAsyncRepositoryOptions()
@@ -73,9 +82,16 @@ namespace SampleOnlineMall
             builder.Services.AddSwaggerGen();
             _logger.Information("P2");
 
+
+            //var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+            //if (!string.IsNullOrEmpty(urls))
+            //{
+            //    builder.WebHost.UseUrls(urls);
+            //}
+
             builder.WebHost.ConfigureKestrel(options =>
             {
-                options.ListenAnyIP(80); // HTTP на всех интерфейсах
+                options.ListenAnyIP(5000); // HTTP на всех интерфейсах
                 //нам не нужен сертификат внутри контейнера, это делает шлюз
                 //options.ListenAnyIP(443, listenOptions =>
                 //{

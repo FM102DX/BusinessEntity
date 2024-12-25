@@ -4,7 +4,8 @@ $buildContextPath="C:\Develop\Mall2"
 $imageName = "assortmentapi"
 $containerName = "assortmentapi-container"
 $dockerfilePath = "$projectPath\Dockerfile"
-$port = 5000 # Укажите порт, который будет использоваться приложением
+$portExt = 5000
+$portInt = 5000 
 
 # Проверка наличия Docker
 if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
@@ -45,7 +46,7 @@ if ($existingContainer) {
 
 # Запуск контейнера
 Write-Host "Запуск контейнера..."
-docker run -d --name $containerName -p "$($port):$($port)" $imageName
+docker run -e 'ASPNETCORE_URLS=http://*:80' -d --name $containerName -p "$($portExt):$($portInt)" $imageName
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
@@ -56,5 +57,9 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Получение IP-адреса контейнера..."
 $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $containerName
 Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
-Write-Host "Приложение доступно по адресу: http://${$containerIP}:${$port}"
-Read-Host
+Write-Host "Приложение доступно по адресу: http://$($containerIP):$($port)"
+
+# Открытие в браузере Opera
+$address = "http://localhost:$($portExt)"
+Write-Host "Открытие в браузере Opera: $address"
+Start-Process "opera" $address

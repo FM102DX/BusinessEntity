@@ -6,6 +6,7 @@ namespace ControlNode.Pages
     public partial class Assortment
     {
         private string Message { get; set; } = "";
+        private int AssortPosQ { get; set; } = 0;
         private List<string> Content{ get; set; } = new List<string>();
 
 
