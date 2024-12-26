@@ -2,6 +2,7 @@
 using ReactiveUI;
 using SampleOnlineMall.Core;
 using System.Reflection;
+using SampleOnlineMall.DataAccess.DataAccess;
 
 namespace ControlNode.Data.AssortmentLoader
 {
@@ -11,15 +12,13 @@ namespace ControlNode.Data.AssortmentLoader
         private string _content = "Idle";
         private int _loadedPos = 0;
         private Microsoft.Extensions.Options.IOptions<AppSettings> _settings;
-
         private readonly IWebHostEnvironment _env;
-
-        
-
-        public AssortmentLoader(Microsoft.Extensions.Options.IOptions<AppSettings> settings, IWebHostEnvironment env)
+        private WebApiAsyncRepository<CommodityItemApiFeed> _webRepo;
+        public AssortmentLoader(Microsoft.Extensions.Options.IOptions<AppSettings> settings, WebApiAsyncRepository<CommodityItemApiFeed> webRepo, IWebHostEnvironment env)
         {
             _settings=settings;
             _env = env;
+            _webRepo = webRepo;
         }
         public string Status
         {
@@ -40,7 +39,7 @@ namespace ControlNode.Data.AssortmentLoader
 
         public async Task<int> GetCountAsync()
         {
-
+            return 0;
         }
 
 
@@ -49,7 +48,7 @@ namespace ControlNode.Data.AssortmentLoader
 
         }
 
-        public async Task<int> LoadAsync()
+        public async Task LoadAsync()
         {
             
             //чистим ассортимент
@@ -103,11 +102,14 @@ namespace ControlNode.Data.AssortmentLoader
                     }
                 }
 
-                if (resultFeedSource.Count > 0)
+                foreach (var item in resultFeedSource)
                 {
-                    //закидываем ассортимент на контроллер
+                    //var rezult = await _webRepo.AddAsync(item);
+                    await Task.Delay(1000);
                     LoadedPos++;
                 }
+
+
             }
             else
             {
@@ -123,7 +125,7 @@ namespace ControlNode.Data.AssortmentLoader
             //Status = "Loading";
             //await Task.Delay(500);
             //Status = "Completed";
-            return count;
+            //return count;
         }
     }
 }

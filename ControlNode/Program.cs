@@ -2,6 +2,10 @@ using ControlNode.Data;
 using ControlNode.Data.AssortmentLoader;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using SampleOnlineMall.Core;
+using SampleOnlineMall.DataAccess.DataAccess;
 
 namespace ControlNode
 {
@@ -14,9 +18,22 @@ namespace ControlNode
             // Add services to the container.
             builder.Services.AddRazorPages();
             builder.Services.AddServerSideBlazor();
-            builder.Services.AddSingleton<WeatherForecastService>();
+
+            var opts = new WebApiAsyncRepositoryOptions()
+                .SetBaseAddress("localhost:5000")
+                .SetInsertHostPath("insertitem")
+                .SetDeleteAllHostPath("deleteallitems");
+
             builder.Services.AddScoped<AssortmentLoader>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
+            builder.Services.AddScoped<WebApiAsyncRepository<CommodityItemApiFeed>>(provider =>
+            {
+                return new WebApiAsyncRepository<CommodityItemApiFeed>(opts);
+            });
+
+
+
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
