@@ -28,13 +28,17 @@ namespace ControlNode.Pages
             if (e.PropertyName == nameof(AssortLoader.Status))
             {
                 Message=AssortLoader.Status;
-                StateHasChanged();
+
             }
             if (e.PropertyName == nameof(AssortLoader.Content))
             {
                 Content = AssortLoader.Content.Split(';').ToList();
-                StateHasChanged();
             }
+            if (e.PropertyName == nameof(AssortLoader.LoadedPos))
+            {
+                Content = AssortLoader.Content.Split(';').ToList();
+            }
+            StateHasChanged();
         }
 
         private async void OnLoadAssortClick()

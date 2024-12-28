@@ -46,12 +46,6 @@ namespace SampleOnlineMall
             }
 
 
-            // web-logger
-            var loggerOptions = new WebApiAsyncRepositoryOptions()
-                        .SetLogger(_logger)
-                        .SetBaseAddress("https://weblogger.t109.tech")
-                        .SetInsertHostPath("insertitem/");
-
             // Add services to the container
             builder.Services.AddSingleton(typeof(SampleOnlineMallAssortmentApiApp), (x) => _app);//само приложение
             builder.Services.AddSingleton(typeof(Microsoft.Extensions.Configuration.ConfigurationManager), (x) => builder.Configuration);

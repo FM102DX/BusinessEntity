@@ -33,6 +33,10 @@ function Action3 {
     ExecExternalScript -scriptPath "Powershell\AddContainersToNetwork.ps1"
 }
 
+function Action31 {
+    ExecExternalScript -scriptPath "Powershell\StartDockerLoggingDbContainer5440.ps1"
+}
+
 function Action4 {
             # Определяем путь к каталогу для сохранения логов на хосте
             $destinationPath = "C:\debuglogs"
@@ -133,6 +137,8 @@ function Action41 {
                 Start-Process explorer.exe $destinationPath
 }
 
+
+
 function ClearScreen {
     Clear-Host
 }
@@ -143,6 +149,7 @@ function Show-Menu {
     Write-Host "1  -- Запустить ассортимент в докере"
     Write-Host "2  -- Показать состав докер сети"
     Write-Host "3  -- Добавить все запущенные контейнеры в сеть docker-networkmall2"
+    Write-Host "31 -- Поднять базу логгинга на порту 5440:5440"
     Write-Host "4  -- Скопировать логи ассортиментного контроллера кот из VS2022"
     Write-Host "41 -- Скопировать логи ассортиментного контроллера кот из под Docker"
     Write-Host "5  -- Подкл к ассорт контейнеру"
@@ -161,11 +168,13 @@ do {
         "1"  { Action1 }
         "2"  { Action2 }
         "3"  { Action3 }
+        "31"  { Action31 }
         "4"  { Action4 }
         "41" { Action41 }
         "5"  { Action5 }
         "51" { Action51 }
         "52" { Action52 }
+
         "80" { ClearScreen }
         "99" { Write-Host "Выход из программы..." -ForegroundColor Red }
         default {

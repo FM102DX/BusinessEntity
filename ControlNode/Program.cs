@@ -20,7 +20,7 @@ namespace ControlNode
             builder.Services.AddServerSideBlazor();
 
             var opts = new WebApiAsyncRepositoryOptions()
-                .SetBaseAddress("localhost:5000")
+                .SetBaseAddress("http://localhost:5000")
                 .SetInsertHostPath("insertitem")
                 .SetDeleteAllHostPath("deleteallitems");
 

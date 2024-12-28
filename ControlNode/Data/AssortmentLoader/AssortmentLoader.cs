@@ -65,7 +65,7 @@ namespace ControlNode.Data.AssortmentLoader
             {
                 // Перебираем все каталоги внутри wwwroot
                 var cats = Directory.GetDirectories(wwwrootPath, "*.*", SearchOption.TopDirectoryOnly).ToList();
-                Content = string.Join(";", cats);
+                //Content = string.Join(";", cats);
 
                 foreach (var folder in cats)
                 {
@@ -104,8 +104,8 @@ namespace ControlNode.Data.AssortmentLoader
 
                 foreach (var item in resultFeedSource)
                 {
-                    //var rezult = await _webRepo.AddAsync(item);
-                    await Task.Delay(1000);
+                    var rezult = await _webRepo.AddAsync(item);
+                    //await Task.Delay(1000);
                     LoadedPos++;
                 }
 

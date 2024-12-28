@@ -171,19 +171,16 @@ namespace SampleOnlineMall.DataAccess.DataAccess
 
                 switch (response.StatusCode)
                 {
-
                     case System.Net.HttpStatusCode.OK:
                         rez = CommonOperationResult.SayOk(response.Content.ReadAsStringAsync().Result);
                         break;
-
                     default:
                         throw new Exception();
-
                 }
             }
             catch (Exception ex)
             {
-                rez = CommonOperationResult.SayFail($"WebApiRepository caught an exception: {ex.Message}");
+                rez = CommonOperationResult.SayFail($"WebApiRepository caught an exception: {ex.Message}  {ex.StackTrace}");
             }
             return rez;
         }
