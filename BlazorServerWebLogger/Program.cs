@@ -1,5 +1,6 @@
 using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.App;
+using BlazorServerWebLogger.Data.Services.HostedServices;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
@@ -32,19 +33,11 @@ namespace BlazorServerWebLogger
 
             // Чтение настроек из appsettings.json
 
-            var logEraserSettings = new LogEraserSettings();
-            builder.Services.AddScoped(provider =>
-            {
-                builder.Configuration.GetSection("LogEraserSettings").Bind(logEraserSettings);
-                return logEraserSettings;
-            });
-            
-            var sampleLogSettings = new SampleLogSettings();
-            builder.Services.AddScoped(provider =>
-            {
-                builder.Configuration.GetSection("SampleLogSettings").Bind(sampleLogSettings);
-                return sampleLogSettings;
-            });
+            builder.Services.Configure<LogEraserSettings>(
+                builder.Configuration.GetSection("LogEraserSettings"));
+
+            builder.Services.Configure<SampleLogSettings>(
+                builder.Configuration.GetSection("SampleLogSettings"));
 
             builder.Services.AddSingleton(typeof(WebLoggerApp), (x) => _app); // само приложение
 
@@ -52,21 +45,24 @@ namespace BlazorServerWebLogger
                 ? builder.Configuration.GetConnectionString("DockerConnection")
                 : builder.Configuration.GetConnectionString("IisExpressConnection");
 
-            builder.Services.AddDbContext<WebLoggerDbContext>(options =>
-                options.UseNpgsql(connectionString));
-            
-            builder.Services.AddScoped<LogReaderService>();
-            builder.Services.AddScoped<IHostedService, SampleLogGeneratorService>();
-            builder.Services.AddScoped<IHostedService, LogEraserService>();
+            // Регистрируем DbContextOptions<WebLoggerDbContext> в DI
+            builder.Services.AddSingleton(provider =>
+            {
+                var optionsBuilder = new DbContextOptionsBuilder<WebLoggerDbContext>();
+                optionsBuilder.UseNpgsql(connectionString); // Указываем использование PostgreSQL
+                return optionsBuilder.Options;
+            });
 
+            builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // Регистрация фабрики
+            //builder.Services.AddScoped<LogReaderService>();
+            builder.Services.AddHostedService<SampleLogGeneratorService>();
+            builder.Services.AddHostedService<LogEraserService>();
+                
             var app = builder.Build();
-
-
 
             //Создаем новый Scope для генератора логов
 
-
-            // Configure the HTTP request pipeline.
+            // Configure the HTTP request pipeline
             if (!app.Environment.IsDevelopment())
             {
                 app.UseExceptionHandler("/Error");
