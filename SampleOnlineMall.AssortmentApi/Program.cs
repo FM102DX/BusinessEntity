@@ -58,7 +58,7 @@ namespace SampleOnlineMall
             builder.Services.AddScoped(typeof(IAsyncRepository<Supplier>), typeof(EfAsyncRepository<Supplier>));
 
             builder.Services.AddScoped<CustomMapper>();
-            builder.Services.AddScoped(typeof(WebLoggerManager), (x) => new WebLoggerManager("assortment", loggerOptions));
+            //builder.Services.AddScoped(typeof(WebLoggerManager), (x) => new WebLoggerManager("assortment", loggerOptions));
 
 
 

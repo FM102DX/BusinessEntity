@@ -1,9 +1,19 @@
 ﻿@page "/"
+@using Radzen
+@using Radzen.Blazor
+@using SampleOnlineMall.WebLogger.Models
 
-<PageTitle>Index</PageTitle>
+<PageTitle>LoggerMain</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>LoggerMain</h1>
 
-Welcome to your new app.
+<p>Общее количество записей: @TotalLogsCount</p>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+<RadzenDataGrid TItem="LogEntryDbStorable" ColumnWidth="200px" Count="@TotalLogsCount" Data="@LogEntries"  PagerVisible="true" >
+    <Columns>
+        <RadzenDataGridColumn TItem="LogEntryDbStorable" Property="Timestamp" Title="Дата и время" />
+        <RadzenDataGridColumn TItem="LogEntryDbStorable" Property="ServiceCode" Title="Код сервиса" />
+        <RadzenDataGridColumn TItem="LogEntryDbStorable" Property="MessageType" Title="Тип сообщения" />
+        <RadzenDataGridColumn TItem="LogEntryDbStorable" Property="Message" Title="Текст сообщения" />
+    </Columns>
+</RadzenDataGrid>

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BlazorServerWebLogger.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -87,10 +88,13 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         public void Dispose()
         {
             _cancellationTokenSource?.Dispose();
-
             lock (_lock)
             {
-                _dbContext?.Dispose();
+                if (_dbContext != null && _dbContext.Database.GetDbConnection().State != System.Data.ConnectionState.Closed)
+                {
+                    _dbContext.Dispose();
+                }
+                _dbContext = null; // Явно обнуляем, чтобы избежать повторного использования
             }
         }
     }

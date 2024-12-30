@@ -1,6 +1,9 @@
+using BlazorServerWebLogger.Contracts;
 using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.App;
+using BlazorServerWebLogger.Data.Services;
 using BlazorServerWebLogger.Data.Services.HostedServices;
+using BlazorServerWebLogger.DataAccess.Repository;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
@@ -23,19 +26,12 @@ namespace BlazorServerWebLogger
             // Add services to the container.
             builder.Services.AddRazorPages();
             builder.Services.AddServerSideBlazor();
-            
 
             var _app = new WebLoggerApp();
 
-
-
-            // Add services to the container
-
             // Чтение настроек из appsettings.json
-
             builder.Services.Configure<LogEraserSettings>(
                 builder.Configuration.GetSection("LogEraserSettings"));
-
             builder.Services.Configure<SampleLogSettings>(
                 builder.Configuration.GetSection("SampleLogSettings"));
 
@@ -52,15 +48,14 @@ namespace BlazorServerWebLogger
                 optionsBuilder.UseNpgsql(connectionString); // Указываем использование PostgreSQL
                 return optionsBuilder.Options;
             });
-
+            
+            builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, SampleOnlineMall.DataAccess.EfAsyncRepository<LogEntryDbStorable>>();
             builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // Регистрация фабрики
-            //builder.Services.AddScoped<LogReaderService>();
+            builder.Services.AddScoped<LogReaderService>();
             builder.Services.AddHostedService<SampleLogGeneratorService>();
             builder.Services.AddHostedService<LogEraserService>();
                 
             var app = builder.Build();
-
-            //Создаем новый Scope для генератора логов
 
             // Configure the HTTP request pipeline
             if (!app.Environment.IsDevelopment())
