@@ -28,10 +28,10 @@ public class ThreadSafeDbContextFactory
     {
         foreach (var pool in _pools.Values)
         {
-            var record = pool.PoolRecords.FirstOrDefault(r => ReferenceEquals(r.Context, context));
-            if (record != null)
+            var record = pool.PoolRecords.FirstOrDefault(r => ReferenceEquals(r.Value.Context, context));
+            if (record.Value != null)
             {
-                record.Busy = false;
+                record.Value.Busy = false;
                 return;
             }
         }
@@ -43,7 +43,7 @@ public class DbContextPool
     private readonly int _dbContextLifeTimeMs;
     private readonly DbContextOptions<WebLoggerDbContext> _options;
     private readonly Action<WebLoggerDbContext> _freeUpFunc;
-    public ConcurrentBag<DbContextPoolRecord> PoolRecords { get; } = new();
+    public ConcurrentDictionary<Guid,DbContextPoolRecord> PoolRecords { get; } = new();
 
     private readonly Timer _cleanupTimer;
 
@@ -52,41 +52,40 @@ public class DbContextPool
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _freeUpFunc = freeUpFunc ?? throw new ArgumentNullException(nameof(freeUpFunc));
-
         _cleanupTimer = new Timer(CleanupExpiredRecords, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
     }
 
     public DbContextWrap GetDbContext()
     {
-        var record = PoolRecords.FirstOrDefault(r => !r.Busy && !r.Expired);
-        if (record == null)
+        var record = PoolRecords.FirstOrDefault(r => !r.Value.Busy && !r.Value.Expired);
+        if (record.Value == null)
         {
-            record = new DbContextPoolRecord(_dbContextLifeTimeMs)
+            var recordTmp = new DbContextPoolRecord(_dbContextLifeTimeMs)
             {
                 TimeStamp = DateTime.Now,
                 Busy = true,
                 Context = new WebLoggerDbContext(_options)
             };
-            PoolRecords.Add(record);
+            PoolRecords.TryAdd(Guid.NewGuid(), recordTmp);
         }
         else
         {
-            record.Busy = true;
+            record.Value.Busy = true;
         }
 
-        return new DbContextWrap(record.Context, _freeUpFunc);
+        return new DbContextWrap(record.Value.Context, _freeUpFunc);
     }
 
     private void CleanupExpiredRecords(object? state)
     {
         var expiredRecords = PoolRecords
-            .Where(record => !record.Busy && record.Expired)
+            .Where(record => !record.Value.Busy && record.Value.Expired)
             .ToList();
 
         foreach (var record in expiredRecords)
         {
-            record.Context.Dispose();
-            PoolRecords.TryTake(out _);
+            record.Value.Context.Dispose();
+            PoolRecords.Remove(record.Key, out _);
         }
 
         Console.WriteLine($"{expiredRecords.Count} устаревших записей удалено из пула.");

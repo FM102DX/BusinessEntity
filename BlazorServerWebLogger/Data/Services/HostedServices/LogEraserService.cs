@@ -16,7 +16,6 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         private readonly int _erasePeriod;
         private readonly int _logsTargetCount;
         private readonly object _lock = new(); // Блокировка для синхронизации доступа к DbContext
-        private WebLoggerDbContext _dbContext; // Общий экземпляр DbContext
         private CancellationTokenSource _cancellationTokenSource;
 
         public LogEraserService(
@@ -26,10 +25,6 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _erasePeriod = settings.Value.ErasePeriod;
             _logsTargetCount = settings.Value.LogsTargetCount;
-
-            // Создаём один экземпляр DbContext
-            _dbContext = _dbContextFactory.GetDbContext();
-
             Console.WriteLine($"Период удаления логов (ErasePeriod): {_erasePeriod} мс");
             Console.WriteLine($"Целевое количество логов (LogsTargetCount): {_logsTargetCount}");
         }
@@ -47,36 +42,20 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                lock (_lock) // Синхронизируем доступ к DbContext
+                using (var contextWrp = _dbContextFactory.GetDbContext())
                 {
-                    try
+                    var dbContext = contextWrp.Context;
+                    var totalLogs = dbContext.LogEntries.Count();
+                    if (totalLogs > _logsTargetCount)
                     {
-
-                        var totalLogs = _dbContext.LogEntries.Count();
-
-                        if (totalLogs > _logsTargetCount)
-                        {
-                            var logsToRemove = totalLogs - _logsTargetCount;
-
-                            var oldestLogs = _dbContext.LogEntries
-                                .OrderBy(log => log.Timestamp)
-                                .Take(logsToRemove)
-                                .ToList();
-
-                            _dbContext.LogEntries.RemoveRange(oldestLogs);
-                            _dbContext.SaveChanges();
-
-                            Console.WriteLine($"Удалено {logsToRemove} старых логов.");
-                        }
-
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Ошибка при удалении старых логов: {ex.Message}");
-
-                        // Пересоздаем DbContext в случае ошибки
-                            _dbContext?.Dispose();
-                            _dbContext = _dbContextFactory.GetDbContext();
+                        var logsToRemove = totalLogs - _logsTargetCount;
+                        var oldestLogs = dbContext.LogEntries
+                            .OrderBy(log => log.Timestamp)
+                            .Take(logsToRemove)
+                            .ToList();
+                        dbContext.LogEntries.RemoveRange(oldestLogs);
+                        dbContext.SaveChanges();
+                        Console.WriteLine($"Удалено {logsToRemove} старых логов.");
                     }
                 }
                 await Task.Delay(_erasePeriod, cancellationToken);
@@ -91,14 +70,7 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
 
         public void Dispose()
         {
-            lock (_lock)
-            {
-                if (_dbContext != null && _dbContext.Database.GetDbConnection().State != System.Data.ConnectionState.Closed)
-                {
-                    _dbContext.Dispose();
-                }
-                _dbContext = null; // Явно обнуляем, чтобы избежать повторного использования
-            }
+
         }
     }
 }

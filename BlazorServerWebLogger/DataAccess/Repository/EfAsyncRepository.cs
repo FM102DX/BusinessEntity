@@ -7,6 +7,7 @@ using SampleOnlineMall.WebLogger.DataAccess;
 using BlazorServerWebLogger.Contracts;
 using SampleOnlineMall.DataAccess.Models;
 using SampleOnlineMall.Service;
+using Radzen;
 
 namespace BlazorServerWebLogger.DataAccess.Repository
 {
@@ -21,94 +22,104 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<RepositoryResponce<T>> GetAllAsync(Func<T, bool>? filter = null)
         {
-            using var context = _dbContextFactory.GetDbContext();
-
-            IQueryable<T> query = context.Set<T>();
-
-            if (filter != null)
+            using (var contextWrp = _dbContextFactory.GetDbContext())
             {
-                query = query.Where(filter).AsQueryable();
+                var context = contextWrp.Context;
+                IQueryable<T> query = context.Set<T>();
+                if (filter != null)
+                {
+                    query = query.Where(filter).AsQueryable();
+                }
+                var result = await query.ToListAsync();
+                return new RepositoryResponce<T>() { Items = result };
             }
-
-            var result = await query.ToListAsync();
-            return new RepositoryResponce<T>() { Items = result };
         }
 
         public async Task<T?> GetByIdOrNullAsync(Guid id)
         {
-            using var context = _dbContextFactory.GetDbContext();
-            return await context.Set<T>().FirstOrDefaultAsync(entity => entity.Id == id);
+            using (var contextWrp = _dbContextFactory.GetDbContext())
+            {
+                var context = contextWrp.Context;
+                return await context.Set<T>().FirstOrDefaultAsync(entity => entity.Id == id);
+            }
         }
 
         public async Task<int> GetCountAsync()
         {
-            using var context = _dbContextFactory.GetDbContext();
-            return await context.Set<T>().CountAsync();
+            using (var contextWrp = _dbContextFactory.GetDbContext())
+            {
+                var context = contextWrp.Context;
+                return await context.Set<T>().CountAsync();
+            }
         }
 
         public async Task<bool> ExistsAsync(Guid id)
         {
-            using var context = _dbContextFactory.GetDbContext();
-            return await context.Set<T>().AnyAsync(entity => entity.Id == id);
+            using (var contextWrp = _dbContextFactory.GetDbContext())
+            {
+                var context = contextWrp.Context;
+                return await context.Set<T>().AnyAsync(entity => entity.Id == id);
+            }
         }
 
         public async Task<CommonOperationResult> InsertAsync(T entity)
         {
-            using var context = _dbContextFactory.GetDbContext();
-
-            await context.Set<T>().AddAsync(entity);
-            await context.SaveChangesAsync();
-
-            return new CommonOperationResult { Success = true, Message = "Entity inserted successfully." };
+            using (var contextWrp = _dbContextFactory.GetDbContext())
+            {
+                var context=contextWrp.Context;
+                await context.Set<T>().AddAsync(entity);
+                await context.SaveChangesAsync();
+                return new CommonOperationResult { Success = true, Message = "Entity inserted successfully." };
+            }
         }
 
         public async Task<CommonOperationResult> DeleteOldestRecordsAsync(int leftCount)
         {
-            using var context = _dbContextFactory.GetDbContext();
-
-            var dbSet = context.Set<T>();
-            var totalCount = await dbSet.CountAsync();
-
-            if (totalCount <= leftCount)
+            using (var contextWrp = _dbContextFactory.GetDbContext())
             {
+                var context = contextWrp.Context;
+                var dbSet = context.Set<T>();
+                var totalCount = await dbSet.CountAsync();
+                if (totalCount <= leftCount)
+                {
+                    return new CommonOperationResult
+                    {
+                        Success = false,
+                        Message = "No records to delete."
+                    };
+                }
+                var toDelete = await dbSet
+                    .OrderBy(entity => entity.Timestamp)
+                    .Take(totalCount - leftCount)
+                    .ToListAsync();
+                dbSet.RemoveRange(toDelete);
+                await context.SaveChangesAsync();
                 return new CommonOperationResult
                 {
-                    Success = false,
-                    Message = "No records to delete."
+                    Success = true,
+                    Message = $"{toDelete.Count} oldest records deleted."
                 };
             }
-
-            var toDelete = await dbSet
-                .OrderBy(entity => entity.Timestamp)
-                .Take(totalCount - leftCount)
-                .ToListAsync();
-
-            dbSet.RemoveRange(toDelete);
-            await context.SaveChangesAsync();
-
-            return new CommonOperationResult
-            {
-                Success = true,
-                Message = $"{toDelete.Count} oldest records deleted."
-            };
         }
 
         public async Task<CommonOperationResult> InitAsync(bool deleteDb = false)
         {
-            using var context = _dbContextFactory.GetDbContext();
-
-            if (deleteDb)
+            using (var contextWrp = _dbContextFactory.GetDbContext())
             {
-                await context.Database.EnsureDeletedAsync();
+                var context = contextWrp.Context;
+                if (deleteDb)
+                {
+                    await context.Database.EnsureDeletedAsync();
+                }
+
+                await context.Database.EnsureCreatedAsync();
+
+                return new CommonOperationResult
+                {
+                    Success = true,
+                    Message = "Database initialized successfully."
+                };
             }
-
-            await context.Database.EnsureCreatedAsync();
-
-            return new CommonOperationResult
-            {
-                Success = true,
-                Message = "Database initialized successfully."
-            };
         }
 
         Task<CommonOperationResult> IAsyncRepository<T>.DeleteOldestReciordsAsync(int leftCount)

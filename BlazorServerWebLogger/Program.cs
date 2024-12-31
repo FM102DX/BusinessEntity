@@ -49,7 +49,7 @@ namespace BlazorServerWebLogger
                 return optionsBuilder.Options;
             });
             
-            builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, SampleOnlineMall.DataAccess.EfAsyncRepository<LogEntryDbStorable>>();
+            builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, BlazorServerWebLogger.DataAccess.Repository.EfAsyncRepository<LogEntryDbStorable>>();
             builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // Регистрация фабрики
             builder.Services.AddScoped<LogReaderService>();
             builder.Services.AddHostedService<SampleLogGeneratorService>();

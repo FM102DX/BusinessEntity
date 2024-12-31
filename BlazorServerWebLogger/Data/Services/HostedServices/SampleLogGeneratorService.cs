@@ -16,7 +16,6 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         private readonly ThreadSafeDbContextFactory _dbContextFactory;
         private readonly int _sampleLogCreatePeriod;
         private readonly object _lock = new(); // Блокировка для синхронизации
-        private WebLoggerDbContext _dbContext; // Один общий экземпляр DbContext
         private CancellationTokenSource _cancellationTokenSource;
 
         public SampleLogGeneratorService(
@@ -25,10 +24,6 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _sampleLogCreatePeriod = settings.Value.SampleLogCreatePeriod;
-
-            // Создаём один экземпляр DbContext
-            _dbContext = _dbContextFactory.GetDbContext();
-
             Console.WriteLine($"Период создания логов (SampleLogCreatePeriod): {_sampleLogCreatePeriod} мс");
         }
 
@@ -47,35 +42,27 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                lock (_lock) // Синхронизируем доступ к DbContext
+                using (var contextWrp = _dbContextFactory.GetDbContext())
                 {
-                    try
+                    var dbContext = contextWrp.Context;
+                    var logEntry = new LogEntryDbStorable
                     {
-                        var logEntry = new LogEntryDbStorable
-                        {
-                            Id = Guid.NewGuid(),
-                            Timestamp = DateTime.UtcNow,
-                            ServiceCode = "self",
-                            MessageType = "Info",
-                            Message = new string(Enumerable.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 100)
-                                .Select(s => s[random.Next(s.Length)]).ToArray())
-                        };
-                        _dbContext.LogEntries.Add(logEntry);
-                        _dbContext.SaveChanges();
+                        Id = Guid.NewGuid(),
+                        Timestamp = DateTime.UtcNow,
+                        ServiceCode = "self",
+                        MessageType = "Info",
+                        Message = new string(Enumerable.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 100)
+                            .Select(s => s[random.Next(s.Length)]).ToArray())
+                    };
+                    dbContext.LogEntries.Add(logEntry);
+                    dbContext.SaveChanges();
 
-                        // Вывод данных о записи в консоль
-                        Console.WriteLine($"Сгенерирована запись: Id={logEntry.Id}, Timestamp={logEntry.Timestamp}, " +
-                                          $"ServiceCode={logEntry.ServiceCode}, MessageType={logEntry.MessageType}, Message={logEntry.Message}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Ошибка при генерации лога: {ex.Message}");
-                        // Пересоздаём `DbContext` в случае ошибки
-                        _dbContext?.Dispose();
-                        _dbContext = _dbContextFactory.GetDbContext();
-                    }
+                    // Вывод данных о записи в консоль
+                    Console.WriteLine($"Сгенерирована запись: Id={logEntry.Id}, Timestamp={logEntry.Timestamp}, " +
+                                      $"ServiceCode={logEntry.ServiceCode}, MessageType={logEntry.MessageType}, Message={logEntry.Message}");
+
+                    await Task.Delay(_sampleLogCreatePeriod, cancellationToken);
                 }
-                await Task.Delay(_sampleLogCreatePeriod, cancellationToken);
             }
         }
 
@@ -88,14 +75,6 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         public void Dispose()
         {
             _cancellationTokenSource?.Dispose();
-            lock (_lock)
-            {
-                if (_dbContext != null && _dbContext.Database.GetDbConnection().State != System.Data.ConnectionState.Closed)
-                {
-                    _dbContext.Dispose();
-                }
-                _dbContext = null; // Явно обнуляем, чтобы избежать повторного использования
-            }
         }
     }
 

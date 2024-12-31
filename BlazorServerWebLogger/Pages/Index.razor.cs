@@ -37,15 +37,12 @@ namespace BlazorServerWebLogger.Pages
             {
                 if (newEntries.Any())
                 {
-
                     foreach (var entry in newEntries)
                     {
                         LogEntries.Insert(0, entry); // Новые записи добавляются сверху
                     }
-
                     TotalLogsCount = totalCount;
                     StateHasChanged();
-
                 }
             });
 
