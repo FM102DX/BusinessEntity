@@ -42,7 +42,7 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                using (var contextWrp = _dbContextFactory.GetDbContext())
+                using (var contextWrp = _dbContextFactory.GetDbContextWrap())
                 {
                     var dbContext = contextWrp.Context;
                     var logEntry = new LogEntryDbStorable

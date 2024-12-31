@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SampleOnlineMall.WebLogger.DataAccess;
@@ -20,24 +21,35 @@ namespace BlazorServerWebLogger.DataAccess.Repository
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         }
 
-        public async Task<RepositoryResponce<T>> GetAllAsync(Func<T, bool>? filter = null)
+        public async Task<RepositoryResponce<T>> GetAllAsync(Expression<Func<T, bool>>? filter = null, int? count = null)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContext())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
             {
                 var context = contextWrp.Context;
                 IQueryable<T> query = context.Set<T>();
+
+                // Применяем фильтр, если он задан
                 if (filter != null)
                 {
-                    query = query.Where(filter).AsQueryable();
+                    query = query.Where(filter);
                 }
+
+                // Применяем ограничение на количество записей, если оно задано
+                if (count != null)
+                {
+                    query = query.OrderByDescending(x => EF.Property<DateTime>(x, "Timestamp")) // Сортируем по убыванию Timestamp
+                        .Take(count.Value);
+                }
+
+                // Выполняем запрос и возвращаем результат
                 var result = await query.ToListAsync();
-                return new RepositoryResponce<T>() { Items = result };
+                return new RepositoryResponce<T> { Items = result };
             }
         }
 
         public async Task<T?> GetByIdOrNullAsync(Guid id)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContext())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
             {
                 var context = contextWrp.Context;
                 return await context.Set<T>().FirstOrDefaultAsync(entity => entity.Id == id);
@@ -46,7 +58,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<int> GetCountAsync()
         {
-            using (var contextWrp = _dbContextFactory.GetDbContext())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
             {
                 var context = contextWrp.Context;
                 return await context.Set<T>().CountAsync();
@@ -55,7 +67,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<bool> ExistsAsync(Guid id)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContext())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
             {
                 var context = contextWrp.Context;
                 return await context.Set<T>().AnyAsync(entity => entity.Id == id);
@@ -64,7 +76,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<CommonOperationResult> InsertAsync(T entity)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContext())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
             {
                 var context=contextWrp.Context;
                 await context.Set<T>().AddAsync(entity);
@@ -75,7 +87,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<CommonOperationResult> DeleteOldestRecordsAsync(int leftCount)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContext())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
             {
                 var context = contextWrp.Context;
                 var dbSet = context.Set<T>();
@@ -104,7 +116,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<CommonOperationResult> InitAsync(bool deleteDb = false)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContext())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
             {
                 var context = contextWrp.Context;
                 if (deleteDb)

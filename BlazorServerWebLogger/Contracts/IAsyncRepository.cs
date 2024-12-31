@@ -9,7 +9,7 @@ namespace BlazorServerWebLogger.Contracts
     public interface IAsyncRepository<T> where T : IBaseEntity
     {
 
-        public Task<DataAccess.Repository.RepositoryResponce<T>> GetAllAsync(Func<T, bool>? filter);
+        public Task<DataAccess.Repository.RepositoryResponce<T>> GetAllAsync(Expression<Func<T, bool>>? filter, int? count);
 
         public Task<T> GetByIdOrNullAsync(Guid id);
 
