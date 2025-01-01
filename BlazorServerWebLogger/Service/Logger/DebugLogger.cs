@@ -35,49 +35,23 @@
             {
                 _workingDir = "C:\\DebugLogs";
             }
-            if (!Directory.Exists(_workingDir))
+
+            lock (_lock)
             {
-                try
-                {
+                if (!Directory.Exists(_workingDir))
                     Directory.CreateDirectory(_workingDir);
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidOperationException($"Failed to create directory: {_workingDir}", ex);
-                }
+                _currentFilePath = Path.Combine(_workingDir, $"{_prefix}_{Guid.NewGuid()}.txt");
             }
         }
 
         public void Write(string text)
         {
-            if (!_isActive)
-            {
+            if (!_isActive) // Предполагается, что это логический флаг
                 return;
-            }
 
-            if (_currentFilePath == null)
+            lock (_lock)
             {
-                _currentFilePath = Path.Combine(_workingDir, $"{_prefix}_{Guid.NewGuid()}.txt");
-                try
-                {
-                    using (File.Create(_currentFilePath)) { }
-                }
-                catch (Exception ex)
-                {
-                    throw new IOException($"Failed to create log file: {_currentFilePath}", ex);
-                }
-            }
-
-            try
-            {
-                lock (_lock)
-                {
-                    File.AppendAllText(_currentFilePath, text + Environment.NewLine);
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new IOException($"Failed to write to log file: {_currentFilePath}", ex);
+                File.AppendAllText(_currentFilePath, text + Environment.NewLine);
             }
         }
 
