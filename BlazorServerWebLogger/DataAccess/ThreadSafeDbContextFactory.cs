@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
-using System.Xml.XPath;
 using BlazorServerWebLogger.Service.Logger;
 using Microsoft.EntityFrameworkCore;
 using SampleOnlineMall.WebLogger.DataAccess;
@@ -67,7 +66,7 @@ public class ThreadSafeDbContextFactory
 
             foreach (var record in poolValue.PoolRecords.Values)
             {
-                _logger.Write($"[Record] id={record.Id,30} busy={record.Busy,7} disposed={record.Disposed}");
+                _logger.Write($"[Record] id={record.Id,30} busy={record.Busy,7} disposed={record.Disposed} issued={record.IssuedCount}");
             }
         }
         _logger.Write($"");
@@ -110,7 +109,8 @@ public class DbContextPool
                         {
                             record.Busy = true;
                             record.TimeStamp = DateTime.UtcNow;
-                            _logger.Write($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}");
+                            record.IncrementIssuedCount(); // Увеличиваем счетчик выдач
+                            _logger.Write($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
                             return new DbContextWrap(record.Context, _freeUpFunc, record);
                         }
                     }
@@ -129,9 +129,9 @@ public class DbContextPool
                 Busy = true,
                 Context = new WebLoggerDbContext(_options)
             };
-
+            newRecord.IncrementIssuedCount(); // Увеличиваем счетчик для нового контекста
             PoolRecords.TryAdd(id, newRecord);
-            _logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
+            _logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}, issued={newRecord.IssuedCount}");
             return new DbContextWrap(newRecord.Context, _freeUpFunc, newRecord);
         }
         catch
@@ -178,6 +178,7 @@ public class DbContextPoolRecord
     public bool Disposed { get; set; }
     public bool Expired => (DateTime.UtcNow - TimeStamp).TotalMilliseconds > _dbContextLifeTimeMs;
     public object SyncLock { get; } = new();
+    public int IssuedCount { get; private set; } // Счетчик выдач
 
     private readonly int _dbContextLifeTimeMs;
 
@@ -185,6 +186,11 @@ public class DbContextPoolRecord
     {
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
         Id = id;
+    }
+
+    public void IncrementIssuedCount()
+    {
+        IssuedCount++; // Увеличиваем счетчик при выдаче
     }
 }
 
