@@ -28,6 +28,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
                 using (var contextWrp = _dbContextFactory.GetDbContextWrap(rawKey: "rp_read", maxPoolSize: 20))
                 {
                     var context = contextWrp.Context;
+                    context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
                     IQueryable<T> query = context.Set<T>();
 
                     // Применяем фильтр, если он задан
@@ -60,6 +61,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
             using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_getbyid"))
             {
                 var context = contextWrp.Context;
+                context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
                 return await context.Set<T>().FirstOrDefaultAsync(entity => entity.Id == id);
             }
         }
@@ -69,6 +71,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
             using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_count"))
             {
                 var context = contextWrp.Context;
+                context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
                 return await context.Set<T>().CountAsync();
             }
         }
@@ -78,6 +81,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
             using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_exist"))
             {
                 var context = contextWrp.Context;
+                context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
                 return await context.Set<T>().AnyAsync(entity => entity.Id == id);
             }
         }
@@ -86,7 +90,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
         {
             using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_insert"))
             {
-                var context=contextWrp.Context;
+                var context = contextWrp.Context;
                 await context.Set<T>().AddAsync(entity);
                 await context.SaveChangesAsync();
                 return new CommonOperationResult { Success = true, Message = "Entity inserted successfully." };
