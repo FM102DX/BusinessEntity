@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using BlazorServerWebLogger.Service.Logger;
@@ -11,62 +10,67 @@ public class ThreadSafeDbContextFactory
 {
     private readonly DbContextOptions<WebLoggerDbContext> _options;
     private readonly ConcurrentDictionary<string, DbContextPool> _pools = new();
+    private readonly SemaphoreSlim _semaphore;
     private readonly int _dbContextLifeTimeMs;
-    private readonly object _locker = new object();
     private readonly DebugLogger _logger;
-    private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(5);
 
-    public ThreadSafeDbContextFactory(DbContextOptions<WebLoggerDbContext> options, int dbContextLifeTimeMs = 30000)
+    public ThreadSafeDbContextFactory(DbContextOptions<WebLoggerDbContext> options, int dbContextLifeTimeMs = 30000, int maxConcurrentThreads = 5)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
-        _logger=new DebugLogger("DBF",true);
+        _semaphore = new SemaphoreSlim(maxConcurrentThreads);
+        _logger = new DebugLogger("DBF", true);
     }
 
     public DbContextWrap GetDbContextWrap(string poolName = "default")
     {
-        _semaphore.Wait(); // Синхронно ожидаем доступ к критической секции
+        _semaphore.Wait(); // Ожидание доступа к критической секции
         try
         {
-            var pool = _pools.GetOrAdd(poolName, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext,_logger));
+            var pool = _pools.GetOrAdd(poolName, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext, _logger));
             var wrapTmp = pool.GetDbContext();
-            PerformPoolsDump(state: null); // Выполняем логирование или другую работу
+            _logger.Write($"[ISSUED] DbContext issued from pool: {wrapTmp.DemoStr}");
+            PerformPoolsDump();
             return wrapTmp;
         }
         finally
         {
-            _semaphore.Release(); // Освобождаем доступ для следующего потока
+            _semaphore.Release(); // Освобождаем доступ для других потоков
         }
     }
+
     private void FreeUpDbContext(WebLoggerDbContext context)
     {
         foreach (var pool in _pools.Values)
         {
-            var record = pool.PoolRecords.FirstOrDefault(r => ReferenceEquals(r.Value.Context, context));
-            if (record.Value != null)
+            var record = pool.PoolRecords.Values.FirstOrDefault(r => ReferenceEquals(r.Context, context));
+            if (record != null)
             {
-                record.Value.Busy = false;
-                _logger.Write($"returning id={record.Value.Id,30} busy={record.Value.Busy}");
-                PerformPoolsDump(null);
-                return;
+                lock (record.SyncLock)
+                {
+                    if (!record.Disposed)
+                    {
+                        record.Busy = false;
+                        _logger.Write($"[RETURNED] DbContext returned to pool: id={record.Id}, busy={record.Busy}");
+                        PerformPoolsDump();
+                        return;
+                    }
+                }
             }
         }
     }
 
-    private void PerformPoolsDump(object? state)
+    private void PerformPoolsDump()
     {
+        _logger.Write($"[POOL STATE] Dumping pool state:");
         foreach (var pool in _pools.Values)
         {
-            // Пример действия: выводим количество свободных контекстов
-            var freeCount = pool.PoolRecords.Count(r => !r.Value.Busy);
-            _logger.Write($"");
-            _logger.Write($"***********");
-            _logger.Write($"Пул содержит {freeCount} свободных контекстов.");
-            foreach (var _rec in pool.PoolRecords)
+            var freeCount = pool.PoolRecords.Values.Count(r => !r.Busy && !r.Disposed);
+            _logger.Write($"  Pool contains {freeCount} free contexts.");
+            foreach (var record in pool.PoolRecords.Values)
             {
-                _logger.Write($"id={_rec.Value.Id,30} busy={_rec.Value.Busy,7} disposed={_rec.Value.Disposed,7} ");
+                _logger.Write($"  id={record.Id,30} busy={record.Busy,7} disposed={record.Disposed,7}");
             }
-            _logger.Write($"");
         }
     }
 }
@@ -77,7 +81,8 @@ public class DbContextPool
     private readonly DbContextOptions<WebLoggerDbContext> _options;
     private readonly Action<WebLoggerDbContext> _freeUpFunc;
     private readonly DebugLogger _logger;
-    public ConcurrentDictionary<Guid,DbContextPoolRecord> PoolRecords { get; } = new();
+
+    public ConcurrentDictionary<Guid, DbContextPoolRecord> PoolRecords { get; } = new();
 
     private readonly Timer _cleanupTimer;
 
@@ -92,48 +97,74 @@ public class DbContextPool
 
     public DbContextWrap GetDbContext()
     {
-        DbContextWrap wrapTmp;
-        var record = PoolRecords.FirstOrDefault(r => !r.Value.Busy && !r.Value.Expired);
-        if (record.Value == null)
+        foreach (var record in PoolRecords.Values)
         {
-            var id = Guid.NewGuid();
-            var recordTmp = new DbContextPoolRecord(_dbContextLifeTimeMs,id)
+            if (Monitor.TryEnter(record.SyncLock))
             {
-                TimeStamp = DateTime.Now,
-                Busy = true,
-                Context = new WebLoggerDbContext(_options)
-            };
-            
-            PoolRecords.TryAdd(id, recordTmp);
-            wrapTmp = new DbContextWrap(recordTmp.Context, _freeUpFunc, recordTmp);
-            _logger.Write($"Giving away new wrap {wrapTmp.DemoStr}");
-            return wrapTmp;
+                try
+                {
+                    if (!record.Busy && !record.Expired && !record.Disposed)
+                    {
+                        record.Busy = true;
+                        record.TimeStamp = DateTime.UtcNow;
+                        _logger.Write($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}");
+                        return new DbContextWrap(record.Context, _freeUpFunc, record);
+                    }
+                }
+                finally
+                {
+                    Monitor.Exit(record.SyncLock);
+                }
+            }
         }
-        record.Value.Busy = true;
-        wrapTmp = new DbContextWrap(record.Value.Context, _freeUpFunc, record.Value);
-        _logger.Write($"Giving away existing wrap {wrapTmp.DemoStr}");
-        return wrapTmp;
+
+        // Если нет доступных записей, создаём новую
+        var id = Guid.NewGuid();
+        var newRecord = new DbContextPoolRecord(_dbContextLifeTimeMs, id)
+        {
+            TimeStamp = DateTime.UtcNow,
+            Busy = true,
+            Context = new WebLoggerDbContext(_options)
+        };
+
+        PoolRecords.TryAdd(id, newRecord);
+        _logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
+        return new DbContextWrap(newRecord.Context, _freeUpFunc, newRecord);
     }
 
     private void CleanupExpiredRecords(object? state)
     {
         var expiredRecords = PoolRecords
-            .Where(record => !record.Value.Busy && record.Value.Expired)
+            .Values
+            .Where(record => !record.Busy && record.Expired)
             .ToList();
 
         foreach (var record in expiredRecords)
         {
-            record.Value.Context.Dispose();
-            record.Value.Disposed=true;
-            _logger.Write($"Disposing record id={record.Value.Id} busy={record.Value.Busy}");
-            PoolRecords.Remove(record.Key, out _);
+            lock (record.SyncLock)
+            {
+                if (!record.Disposed)
+                {
+                    record.Context.Dispose();
+                    record.Disposed = true;
+                    _logger.Write($"[DISPOSED] DbContext disposed: id={record.Id}");
+                    PoolRecords.TryRemove(record.Id, out _);
+                }
+            }
         }
     }
 }
 
 public class DbContextPoolRecord
 {
-    public Guid Id { get; private set; }
+    public Guid Id { get; }
+    public WebLoggerDbContext Context { get; set; }
+    public DateTime TimeStamp { get; set; }
+    public bool Busy { get; set; }
+    public bool Disposed { get; set; }
+    public bool Expired => (DateTime.UtcNow - TimeStamp).TotalMilliseconds > _dbContextLifeTimeMs;
+    public object SyncLock { get; } = new();
+
     private readonly int _dbContextLifeTimeMs;
 
     public DbContextPoolRecord(int dbContextLifeTimeMs, Guid id)
@@ -141,30 +172,24 @@ public class DbContextPoolRecord
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
         Id = id;
     }
-
-    public WebLoggerDbContext Context { get; set; }
-    public DateTime TimeStamp { get; set; }
-    public bool Expired => (DateTime.Now - TimeStamp).TotalMilliseconds > _dbContextLifeTimeMs;
-    public bool Busy { get; set; }
-    public bool Disposed { get; set; }
 }
 
 public class DbContextWrap : IDisposable
 {
     private readonly WebLoggerDbContext _context;
     private readonly Action<WebLoggerDbContext> _freeUpFunc;
-    private readonly DbContextPoolRecord _rec;
+    private readonly DbContextPoolRecord _record;
 
-    public DbContextWrap(WebLoggerDbContext context, Action<WebLoggerDbContext> freeUpFunc, DbContextPoolRecord rec)
+    public DbContextWrap(WebLoggerDbContext context, Action<WebLoggerDbContext> freeUpFunc, DbContextPoolRecord record)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _freeUpFunc = freeUpFunc ?? throw new ArgumentNullException(nameof(freeUpFunc));
-        _rec= rec;
+        _record = record ?? throw new ArgumentNullException(nameof(record));
     }
 
     public WebLoggerDbContext Context => _context;
 
-    public string DemoStr => $"id={_rec.Id} busy={_rec.Busy}";
+    public string DemoStr => $"id={_record.Id} busy={_record.Busy}";
 
     public void Dispose()
     {
