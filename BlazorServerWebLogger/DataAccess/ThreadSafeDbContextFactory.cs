@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using BlazorServerWebLogger.Service.Logger;
 using Microsoft.EntityFrameworkCore;
@@ -20,13 +21,37 @@ public class ThreadSafeDbContextFactory
         _logger = new DebugLogger("DBF", true);
     }
 
-    public DbContextWrap GetDbContextWrap(string poolName = "default", int maxPoolSize = 5)
+    public DbContextWrap GetDbContextWrap(string rawKey, int maxPoolSize = 5)
     {
-        var pool = _pools.GetOrAdd(poolName, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext, _logger, maxPoolSize));
+        // Обработка ключа
+        var processedKey = ProcessPoolKey(rawKey);
+
+        // Получаем или создаем пул
+        var pool = _pools.GetOrAdd(processedKey, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext, _logger, maxPoolSize));
+
+        // Получаем контекст из пула
         var contextWrap = pool.GetDbContext();
 
-        LogPoolsState(); // Логирование состояния пулов после выдачи DbContext
+        // Логируем состояние пулов
+        LogPoolsState();
+
         return contextWrap;
+    }
+
+    private string ProcessPoolKey(string rawKey)
+    {
+        // Убираем все, кроме латиницы и цифр
+        var cleanedKey = Regex.Replace(rawKey ?? "default", "[^a-zA-Z0-9]", "");
+
+        // Ограничиваем длину до 20 символов
+        if (cleanedKey.Length > 20)
+            cleanedKey = cleanedKey.Substring(0, 20);
+
+        // Добавляем новый GUID через символ '-'
+        cleanedKey += "-" + Guid.NewGuid();
+
+        // Приводим к нижнему регистру
+        return cleanedKey.ToLower();
     }
 
     private void FreeUpDbContext(WebLoggerDbContext context)
@@ -54,7 +79,7 @@ public class ThreadSafeDbContextFactory
 
     private void LogPoolsState()
     {
-        _logger.Write($"");
+        _logger.Write("");
         _logger.Write($"[POOLS DUMP] Pools total={_pools.Count}");
         foreach (var pool in _pools)
         {
@@ -69,7 +94,7 @@ public class ThreadSafeDbContextFactory
                 _logger.Write($"[Record] id={record.Id,30} busy={record.Busy,7} disposed={record.Disposed} issued={record.IssuedCount}");
             }
         }
-        _logger.Write($"");
+        _logger.Write("");
     }
 }
 
@@ -109,7 +134,7 @@ public class DbContextPool
                         {
                             record.Busy = true;
                             record.TimeStamp = DateTime.UtcNow;
-                            record.IncrementIssuedCount(); // Увеличиваем счетчик выдач
+                            record.IssuedCount++;
                             _logger.Write($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
                             return new DbContextWrap(record.Context, _freeUpFunc, record);
                         }
@@ -129,9 +154,9 @@ public class DbContextPool
                 Busy = true,
                 Context = new WebLoggerDbContext(_options)
             };
-            newRecord.IncrementIssuedCount(); // Увеличиваем счетчик для нового контекста
+
             PoolRecords.TryAdd(id, newRecord);
-            _logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}, issued={newRecord.IssuedCount}");
+            _logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
             return new DbContextWrap(newRecord.Context, _freeUpFunc, newRecord);
         }
         catch
@@ -178,7 +203,7 @@ public class DbContextPoolRecord
     public bool Disposed { get; set; }
     public bool Expired => (DateTime.UtcNow - TimeStamp).TotalMilliseconds > _dbContextLifeTimeMs;
     public object SyncLock { get; } = new();
-    public int IssuedCount { get; private set; } // Счетчик выдач
+    public int IssuedCount { get; set; } // Счетчик выдачи DbContext
 
     private readonly int _dbContextLifeTimeMs;
 
@@ -186,11 +211,6 @@ public class DbContextPoolRecord
     {
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
         Id = id;
-    }
-
-    public void IncrementIssuedCount()
-    {
-        IssuedCount++; // Увеличиваем счетчик при выдаче
     }
 }
 
@@ -209,7 +229,7 @@ public class DbContextWrap : IDisposable
 
     public WebLoggerDbContext Context => _context;
 
-    public string DemoStr => $"id={_record.Id} busy={_record.Busy}";
+    public string DemoStr => $"id={_record.Id} busy={_record.Busy} issued={_record.IssuedCount}";
 
     public void Dispose()
     {

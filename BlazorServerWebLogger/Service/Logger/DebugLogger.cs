@@ -35,7 +35,6 @@
             {
                 _workingDir = "C:\\DebugLogs";
             }
-
             lock (_lock)
             {
                 if (!Directory.Exists(_workingDir))
@@ -48,7 +47,6 @@
         {
             if (!_isActive) // Предполагается, что это логический флаг
                 return;
-
             lock (_lock)
             {
                 File.AppendAllText(_currentFilePath, text + Environment.NewLine);
@@ -57,7 +55,6 @@
 
         public static void Write(string text, string prefix = "", string workingDir = "")
         {
-
             var key = $"{prefix}";
 
             if (!LoggerInstances.ContainsKey(key))
@@ -65,7 +62,6 @@
                 var logger = new DebugLogger(prefix, true, workingDir);
                 LoggerInstances[key] = logger;
             }
-
             LoggerInstances[key].Write(text);
         }
     }
