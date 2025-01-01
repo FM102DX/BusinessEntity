@@ -1,63 +1,49 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using SampleOnlineMall.WebLogger.DataAccess;
-using BlazorServerWebLogger.Data;
+using BlazorServerWebLogger.Contracts;
+using SampleOnlineMall.WebLogger.Models;
 
 namespace BlazorServerWebLogger.Data.Services.HostedServices
 {
     public class LogEraserService : IHostedService, IDisposable
     {
-        private readonly ThreadSafeDbContextFactory _dbContextFactory;
+        private readonly IRepositoryFactory<LogEntryDbStorable> _repositoryFactory;
         private readonly int _erasePeriod;
         private readonly int _logsTargetCount;
-        private readonly object _lock = new(); // Блокировка для синхронизации доступа к DbContext
         private CancellationTokenSource _cancellationTokenSource;
 
         public LogEraserService(
-            ThreadSafeDbContextFactory dbContextFactory,
+            IRepositoryFactory<LogEntryDbStorable> repositoryFactory,
             IOptions<LogEraserSettings> settings)
         {
-            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+            _repositoryFactory = repositoryFactory ?? throw new ArgumentNullException(nameof(repositoryFactory));
             _erasePeriod = settings.Value.ErasePeriod;
             _logsTargetCount = settings.Value.LogsTargetCount;
-            Console.WriteLine($"Период удаления логов (ErasePeriod): {_erasePeriod} мс");
-            Console.WriteLine($"Целевое количество логов (LogsTargetCount): {_logsTargetCount}");
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
             Task.Run(() => EraseOldLogsAsync(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
-
             return Task.CompletedTask;
         }
 
         private async Task EraseOldLogsAsync(CancellationToken cancellationToken)
         {
+            var logRepository = _repositoryFactory.GetRepository();
+
             while (!cancellationToken.IsCancellationRequested)
             {
-                using (var contextWrp = _dbContextFactory.GetDbContextWrap())
+                var totalLogs = await logRepository.GetCountAsync();
+                if (totalLogs > _logsTargetCount)
                 {
-                    var dbContext = contextWrp.Context;
-                    var totalLogs = dbContext.LogEntries.Count();
-                    if (totalLogs > _logsTargetCount)
-                    {
-                        var logsToRemove = totalLogs - _logsTargetCount;
-                        var oldestLogs = dbContext.LogEntries
-                            .OrderBy(log => log.Timestamp)
-                            .Take(logsToRemove)
-                            .ToList();
-                        dbContext.LogEntries.RemoveRange(oldestLogs);
-                        dbContext.SaveChanges();
-                        Console.WriteLine($"Удалено {logsToRemove} старых логов.");
-                    }
+                    var logsToRemove = totalLogs - _logsTargetCount;
+                    await logRepository.DeleteNOldestRecordsAsync(logsToRemove);
                 }
+
                 await Task.Delay(_erasePeriod, cancellationToken);
             }
         }
@@ -70,7 +56,7 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
 
         public void Dispose()
         {
-
+            _cancellationTokenSource?.Dispose();
         }
     }
 }

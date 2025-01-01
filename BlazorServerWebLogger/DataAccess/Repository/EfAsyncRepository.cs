@@ -23,33 +23,41 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<RepositoryResponce<T>> GetAllAsync(Expression<Func<T, bool>>? filter = null, int? count = null)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
+            try
             {
-                var context = contextWrp.Context;
-                IQueryable<T> query = context.Set<T>();
-
-                // Применяем фильтр, если он задан
-                if (filter != null)
+                using (var contextWrp = _dbContextFactory.GetDbContextWrap(rawKey: "rp_read", maxPoolSize: 20))
                 {
-                    query = query.Where(filter);
-                }
+                    var context = contextWrp.Context;
+                    IQueryable<T> query = context.Set<T>();
 
-                // Применяем ограничение на количество записей, если оно задано
-                if (count != null)
-                {
-                    query = query.OrderByDescending(x => EF.Property<DateTime>(x, "Timestamp")) // Сортируем по убыванию Timestamp
-                        .Take(count.Value);
-                }
+                    // Применяем фильтр, если он задан
+                    if (filter != null)
+                    {
+                        query = query.Where(filter);
+                    }
 
-                // Выполняем запрос и возвращаем результат
-                var result = await query.ToListAsync();
-                return new RepositoryResponce<T> { Items = result };
+                    // Применяем ограничение на количество записей, если оно задано
+                    if (count != null)
+                    {
+                        query = query.OrderByDescending(x => EF.Property<DateTime>(x, "Timestamp"))
+                            .Take(count.Value);
+                    }
+
+                    // Выполняем запрос и возвращаем результат
+                    var result = await query.ToListAsync();
+                    return new RepositoryResponce<T> { Items = result };
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка в GetAllAsync: {ex.Message}");
+                throw;
             }
         }
 
         public async Task<T?> GetByIdOrNullAsync(Guid id)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_getbyid"))
             {
                 var context = contextWrp.Context;
                 return await context.Set<T>().FirstOrDefaultAsync(entity => entity.Id == id);
@@ -58,7 +66,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<int> GetCountAsync()
         {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_count"))
             {
                 var context = contextWrp.Context;
                 return await context.Set<T>().CountAsync();
@@ -67,7 +75,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<bool> ExistsAsync(Guid id)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_exist"))
             {
                 var context = contextWrp.Context;
                 return await context.Set<T>().AnyAsync(entity => entity.Id == id);
@@ -76,7 +84,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<CommonOperationResult> InsertAsync(T entity)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_insert"))
             {
                 var context=contextWrp.Context;
                 await context.Set<T>().AddAsync(entity);
@@ -85,38 +93,9 @@ namespace BlazorServerWebLogger.DataAccess.Repository
             }
         }
 
-        public async Task<CommonOperationResult> DeleteOldestRecordsAsync(int leftCount)
-        {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
-            {
-                var context = contextWrp.Context;
-                var dbSet = context.Set<T>();
-                var totalCount = await dbSet.CountAsync();
-                if (totalCount <= leftCount)
-                {
-                    return new CommonOperationResult
-                    {
-                        Success = false,
-                        Message = "No records to delete."
-                    };
-                }
-                var toDelete = await dbSet
-                    .OrderBy(entity => entity.Timestamp)
-                    .Take(totalCount - leftCount)
-                    .ToListAsync();
-                dbSet.RemoveRange(toDelete);
-                await context.SaveChangesAsync();
-                return new CommonOperationResult
-                {
-                    Success = true,
-                    Message = $"{toDelete.Count} oldest records deleted."
-                };
-            }
-        }
-
         public async Task<CommonOperationResult> InitAsync(bool deleteDb = false)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap())
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_read"))
             {
                 var context = contextWrp.Context;
                 if (deleteDb)
@@ -134,9 +113,25 @@ namespace BlazorServerWebLogger.DataAccess.Repository
             }
         }
 
-        Task<CommonOperationResult> IAsyncRepository<T>.DeleteOldestReciordsAsync(int leftCount)
+        public async Task<CommonOperationResult> DeleteNOldestRecordsAsync(int toDeleteCount)
         {
-            throw new NotImplementedException();
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_delold"))
+            {
+                var context = contextWrp.Context;
+                var dbSet = context.Set<T>();
+
+                var toDelete = await dbSet
+                    .OrderBy(entity => entity.Timestamp)
+                    .Take(toDeleteCount)
+                    .ToListAsync();
+                dbSet.RemoveRange(toDelete);
+                await context.SaveChangesAsync();
+                return new CommonOperationResult
+                {
+                    Success = true,
+                    Message = $"{toDelete.Count} oldest records deleted."
+                };
+            }
         }
     }
 }

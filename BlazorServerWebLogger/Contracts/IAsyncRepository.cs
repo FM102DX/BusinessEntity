@@ -20,7 +20,7 @@ namespace BlazorServerWebLogger.Contracts
         public Task<CommonOperationResult> InsertAsync(T t);
 
 
-        public Task<CommonOperationResult> DeleteOldestReciordsAsync(int leftCount);
+        public Task<CommonOperationResult> DeleteNOldestRecordsAsync(int toDeleteCount);
 
         public Task<CommonOperationResult> InitAsync(bool deleteDb = false);
 

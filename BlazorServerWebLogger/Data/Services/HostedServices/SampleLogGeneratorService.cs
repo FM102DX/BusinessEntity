@@ -2,67 +2,63 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using BlazorServerWebLogger.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using SampleOnlineMall.WebLogger.DataAccess;
+using BlazorServerWebLogger.Contracts;
 using SampleOnlineMall.WebLogger.Models;
+
 namespace BlazorServerWebLogger.Data.Services.HostedServices
 {
     public class SampleLogGeneratorService : IHostedService, IDisposable
     {
-        private readonly ThreadSafeDbContextFactory _dbContextFactory;
+        private readonly IRepositoryFactory<LogEntryDbStorable> _repositoryFactory;
         private readonly int _sampleLogCreatePeriod;
-        private readonly object _lock = new(); // Блокировка для синхронизации
         private CancellationTokenSource _cancellationTokenSource;
 
         public SampleLogGeneratorService(
-            ThreadSafeDbContextFactory dbContextFactory,
+            IRepositoryFactory<LogEntryDbStorable> repositoryFactory,
             IOptions<SampleLogSettings> settings)
         {
-            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+            _repositoryFactory = repositoryFactory ?? throw new ArgumentNullException(nameof(repositoryFactory));
             _sampleLogCreatePeriod = settings.Value.SampleLogCreatePeriod;
-            Console.WriteLine($"Период создания логов (SampleLogCreatePeriod): {_sampleLogCreatePeriod} мс");
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
             Task.Run(() => GenerateLogsAsync(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
-
             return Task.CompletedTask;
         }
 
         private async Task GenerateLogsAsync(CancellationToken cancellationToken)
         {
-            var random = new Random();
-
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                using (var contextWrp = _dbContextFactory.GetDbContextWrap())
+                var random = new Random();
+                var logRepository = _repositoryFactory.GetRepository();
+
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    var dbContext = contextWrp.Context;
+                    var message = new string(Enumerable.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 100)
+                        .Select(s => s[random.Next(s.Length)]).ToArray());
+
                     var logEntry = new LogEntryDbStorable
                     {
                         Id = Guid.NewGuid(),
-                        Timestamp = DateTime.UtcNow,
                         ServiceCode = "self",
                         MessageType = "Info",
-                        Message = new string(Enumerable.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 100)
-                            .Select(s => s[random.Next(s.Length)]).ToArray())
+                        Message = message,
+                        Timestamp = DateTime.UtcNow
                     };
-                    dbContext.LogEntries.Add(logEntry);
-                    dbContext.SaveChanges();
 
-                    // Вывод данных о записи в консоль
-                    Console.WriteLine($"Сгенерирована запись: Id={logEntry.Id}, Timestamp={logEntry.Timestamp}, " +
-                                      $"ServiceCode={logEntry.ServiceCode}, MessageType={logEntry.MessageType}, Message={logEntry.Message}");
-
+                    await logRepository.InsertAsync(logEntry);
                     await Task.Delay(_sampleLogCreatePeriod, cancellationToken);
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка в GenerateLogsAsync: {ex.Message}");
+                throw;
             }
         }
 

@@ -50,8 +50,10 @@ namespace BlazorServerWebLogger
             });
             
             builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, BlazorServerWebLogger.DataAccess.Repository.EfAsyncRepository<LogEntryDbStorable>>();
-            builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // Регистрация фабрики
+            builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // Регистрация фабрики дбконтекстов
+            builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>(); // Регистрация фабрики репозиториев
             builder.Services.AddScoped<LogReaderService>();
+            builder.Services.AddScoped<LogWriterService>();
             builder.Services.AddHostedService<SampleLogGeneratorService>();
             builder.Services.AddHostedService<LogEraserService>();
                 

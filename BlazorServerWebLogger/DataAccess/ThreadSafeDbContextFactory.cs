@@ -23,32 +23,40 @@ public class ThreadSafeDbContextFactory
 
     public DbContextWrap GetDbContextWrap(string rawKey, int maxPoolSize = 5)
     {
-        // Обработка ключа
-        var processedKey = ProcessPoolKey(rawKey);
+        try
+        {
+            // Обработка ключа
+            var processedKey = ProcessPoolKey(rawKey);
 
-        // Получаем или создаем пул
-        var pool = _pools.GetOrAdd(processedKey, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext, _logger, maxPoolSize));
+            // Получаем или создаем пул
+            var pool = _pools.GetOrAdd(processedKey, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext, _logger, maxPoolSize));
 
-        // Получаем контекст из пула
-        var contextWrap = pool.GetDbContext();
+            // Получаем контекст из пула
+            var contextWrap = pool.GetDbContext();
 
-        // Логируем состояние пулов
-        LogPoolsState();
+            // Логируем состояние пулов
+            LogPoolsState();
 
-        return contextWrap;
+            return contextWrap;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при получении DbContextWrap {ex.Message} {ex.InnerException}");
+            throw;
+        }
     }
 
     private string ProcessPoolKey(string rawKey)
     {
         // Убираем все, кроме латиницы и цифр
-        var cleanedKey = Regex.Replace(rawKey ?? "default", "[^a-zA-Z0-9]", "");
+        var cleanedKey = Regex.Replace(rawKey ?? "default", "[^a-zA-Z0-9_]", "");
 
         // Ограничиваем длину до 20 символов
         if (cleanedKey.Length > 20)
             cleanedKey = cleanedKey.Substring(0, 20);
 
         // Добавляем новый GUID через символ '-'
-        cleanedKey += "-" + Guid.NewGuid();
+        //cleanedKey += "-" + Guid.NewGuid();
 
         // Приводим к нижнему регистру
         return cleanedKey.ToLower();
