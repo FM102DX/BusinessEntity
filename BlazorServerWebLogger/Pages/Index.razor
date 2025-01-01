@@ -9,11 +9,21 @@
 
 <p>Общее количество записей: @TotalLogsCount</p>
 
-<RadzenDataGrid TItem="LogEntryDbStorable" ColumnWidth="200px" Count="@TotalLogsCount" Data="@LogEntries"  PagerVisible="true" >
+<RadzenDataGrid 
+    TItem="LogEntryDbStorable" 
+    Data="@LogEntries" 
+    AllowPaging="true" 
+    PageSize="20" 
+    PagerAlwaysVisible="true" 
+    Count="@TotalLogsCount"
+    PageSizeOptions="@SizeArr"
+    PagerHorizontalAlign="HorizontalAlign.Left"
+    PagerPosition="PagerPosition.Bottom"
+>
     <Columns>
-        <RadzenDataGridColumn TItem="LogEntryDbStorable" Property="Timestamp" Title="Дата и время" />
-        <RadzenDataGridColumn TItem="LogEntryDbStorable" Property="ServiceCode" Title="Код сервиса" />
-        <RadzenDataGridColumn TItem="LogEntryDbStorable" Property="MessageType" Title="Тип сообщения" />
-        <RadzenDataGridColumn TItem="LogEntryDbStorable" Property="Message" Title="Текст сообщения" />
+        <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="Timestamp" Title="Дата и время" />
+        <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="ServiceCode" Title="Код сервиса" />
+        <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="MessageType" Title="Тип сообщения" />
+        <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="600px" Property="Message" Title="Текст сообщения" />
     </Columns>
 </RadzenDataGrid>
