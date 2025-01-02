@@ -119,7 +119,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<CommonOperationResult> DeleteNOldestRecordsAsync(int toDeleteCount)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_delold"))
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_delеte"))
             {
                 var context = contextWrp.Context;
                 var dbSet = context.Set<T>();
@@ -135,6 +135,29 @@ namespace BlazorServerWebLogger.DataAccess.Repository
                     Success = true,
                     Message = $"{toDelete.Count} oldest records deleted."
                 };
+            }
+        }
+        public async Task<CommonOperationResult> DeleteAllAsync()
+        {
+            try
+            {
+                using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_delete"))
+                {
+                    var context = contextWrp.Context;
+                    var dbSet = context.Set<T>();
+
+                    // Удаление всех записей
+                    dbSet.RemoveRange(dbSet);
+                    await context.SaveChangesAsync();
+
+                    return CommonOperationResult.SayOk("All records deleted successfully.");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Логируем ошибку и возвращаем отрицательный результат
+                Console.WriteLine($"Error during DeleteAllAsync: {ex.Message}");
+                return CommonOperationResult.SayFail($"Failed to delete records: {ex.Message}");
             }
         }
     }

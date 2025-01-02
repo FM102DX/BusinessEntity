@@ -23,6 +23,7 @@ namespace BlazorServerWebLogger.Contracts
         public Task<CommonOperationResult> DeleteNOldestRecordsAsync(int toDeleteCount);
 
         public Task<CommonOperationResult> InitAsync(bool deleteDb = false);
+        public Task<CommonOperationResult> DeleteAllAsync();
 
     }
 }

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using BlazorServerWebLogger.Contracts;
@@ -20,7 +18,7 @@ namespace BlazorServerWebLogger.Data.Services
         // Метод для начальной загрузки первых n записей
         public async Task<ObservableCollection<LogEntryDbStorable>> ReadInitialAsync(int n = 50)
         {
-            var result = await _repo.GetAllAsync(null,n);
+            var result = await _repo.GetAllAsync(null, n);
 
             // Сортируем по убыванию времени и берем только первые n записей
             var entries = result.Items
@@ -34,7 +32,7 @@ namespace BlazorServerWebLogger.Data.Services
         public async Task<List<LogEntryDbStorable>> ReadNewEntriesAsync(DateTime lastTimestamp)
         {
             var result = await _repo.GetAllAsync(
-                filter: entry => entry.Timestamp > lastTimestamp,null // Фильтруем по времени
+                filter: entry => entry.Timestamp > lastTimestamp, null // Фильтруем по времени
             );
 
             return result.Items
@@ -46,6 +44,12 @@ namespace BlazorServerWebLogger.Data.Services
         public async Task<int> GetTotalLogCount()
         {
             return await _repo.GetCountAsync();
+        }
+
+        // Новый метод для удаления всех записей
+        public async Task DeleteAllLogsAsync()
+        {
+            await _repo.DeleteAllAsync();
         }
     }
 }

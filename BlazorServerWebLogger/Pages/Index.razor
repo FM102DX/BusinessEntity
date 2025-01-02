@@ -2,28 +2,53 @@
 @using Radzen
 @using Radzen.Blazor
 @using SampleOnlineMall.WebLogger.Models
+@using BlazorServerWebLogger.Pages
+
 
 <PageTitle>LoggerMain</PageTitle>
 
 <h1>LoggerMain</h1>
 
-<p>Общее количество записей: @TotalLogsCount</p>
+<div class="main-logger-content">
+<div class="main-logger-table">
+    <RadzenDataGrid TItem="LogEntryDbStorable" Data="@FilteredLogEntries" AllowPaging="true" PageSize="20" Count="@FilteredLogEntries.Count()"
+                    PagerHorizontalAlign="HorizontalAlign.Left" PagerPosition="PagerPosition.Bottom">
+        <Columns>
+            <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="Timestamp" Title="Дата и время" />
+            <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="ServiceCode" Title="Код сервиса" />
+            <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="MessageType" Title="Тип сообщения" />
+            <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="600px" Property="Message" Title="Текст сообщения" />
+        </Columns>
+    </RadzenDataGrid>
+</div>
 
-<RadzenDataGrid 
-    TItem="LogEntryDbStorable" 
-    Data="@LogEntries" 
-    AllowPaging="true" 
-    PageSize="20" 
-    PagerAlwaysVisible="true" 
-    Count="@TotalLogsCount"
-    PageSizeOptions="@SizeArr"
-    PagerHorizontalAlign="HorizontalAlign.Left"
-    PagerPosition="PagerPosition.Bottom"
->
-    <Columns>
-        <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="Timestamp" Title="Дата и время" />
-        <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="ServiceCode" Title="Код сервиса" />
-        <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="MessageType" Title="Тип сообщения" />
-        <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="600px" Property="Message" Title="Текст сообщения" />
-    </Columns>
-</RadzenDataGrid>
+    <div class="main-logger-widgets">
+        <!-- Виджеты -->
+        <div class="main-logger-widget">
+            <h4>Фильтр по сервисам</h4>
+            @foreach (var service in ServiceCodes)
+            {
+                <label style="display: block; margin-bottom: 5px;">
+                    <input type="checkbox" @bind="service.Selected" /> @service.ServiceCode
+                </label>
+            }
+        </div>
+        <div class="main-logger-widget">
+            <h4>Фильтр по типам сообщений</h4>
+            @foreach (var message in MessageTypes)
+            {
+                <label style="display: block; margin-bottom: 5px;">
+                    <input type="checkbox" @bind="message.Selected" /> @message.MessageType
+                </label>
+            }
+        </div>
+        <div class="main-logger-widget">
+            <p>Общее количество записей: @TotalLogsCount</p>
+        </div>
+        <div class="main-logger-widget">
+            <button class="btn btn-danger" style="margin-top: 10px;" @onclick="DeleteAllRecords">Удалить все</button>
+        </div>
+
+    </div>
+
+</div>

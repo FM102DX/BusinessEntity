@@ -5,58 +5,116 @@ using SampleOnlineMall.WebLogger.Models;
 
 namespace BlazorServerWebLogger.Pages
 {
-public partial class Index : ComponentBase
-{
-    public int TotalLogsCount { get; set; } = 0;
-    public ObservableCollection<LogEntryDbStorable> LogEntries { get; set; } = new();
-    //public List<LogEntryDbStorable> PagedLogEntries => LogEntries.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
-    public IEnumerable<int> SizeArr => (new int[] { 20, 40, 60, 80, 100 }) as IEnumerable<int>;
-    //public int CurrentPage { get; set; } = 1;
-    //public int PageSize { get; set; } = 25;
-
-    [Inject]
-    public LogReaderService LogReaderService { get; set; }
-
-    private Timer _timer;
-
-    protected override async Task OnInitializedAsync()
+    public partial class Index : ComponentBase
     {
-        var data = await LogReaderService.ReadInitialAsync(n: 50);
-        TotalLogsCount = data.Count;
-        LogEntries = new ObservableCollection<LogEntryDbStorable>(data);
+        public int TotalLogsCount { get; set; } = 0;
+        public ObservableCollection<LogEntryDbStorable> LogEntries { get; set; } = new();
+        public List<ServiceCodeFilter> ServiceCodes { get; set; } = new();
+        public List<MessageTypeFilter> MessageTypes { get; set; } = new();
+        public IEnumerable<LogEntryDbStorable> FilteredLogEntries => LogEntries
+            .Where(entry =>
+                ServiceCodes.Any(filter => filter.Selected && filter.ServiceCode == entry.ServiceCode) &&
+                MessageTypes.Any(filter => filter.Selected && filter.MessageType == entry.MessageType));
 
-        StateHasChanged();
-        _timer = new Timer(async _ => await UpdateDataAsync(), null, 0, 500);
-    }
+        [Inject]
+        public LogReaderService LogReaderService { get; set; }
 
-    private async Task UpdateDataAsync()
-    {
-        var newEntries = await LogReaderService.ReadNewEntriesAsync(LogEntries.FirstOrDefault()?.Timestamp ?? DateTime.MinValue);
-        var totalCount = await LogReaderService.GetTotalLogCount();
+        private Timer _timer;
 
-        await InvokeAsync(() =>
+        protected override async Task OnInitializedAsync()
         {
-            if (newEntries.Any())
+            var data = await LogReaderService.ReadInitialAsync(n: 50);
+            TotalLogsCount = data.Count;
+            LogEntries = new ObservableCollection<LogEntryDbStorable>(data);
+
+            UpdateFilters();
+            StateHasChanged();
+            _timer = new Timer(async _ => await UpdateDataAsync(), null, 0, 500);
+        }
+
+        private async Task UpdateDataAsync()
+        {
+            var newEntries = await LogReaderService.ReadNewEntriesAsync(LogEntries.FirstOrDefault()?.Timestamp ?? DateTime.MinValue);
+            var totalCount = await LogReaderService.GetTotalLogCount();
+
+            await InvokeAsync(() =>
             {
-                foreach (var entry in newEntries)
+                if (newEntries.Any())
                 {
-                    LogEntries.Insert(0, entry); // Новые записи добавляются сверху
+                    foreach (var entry in newEntries)
+                    {
+                        LogEntries.Insert(0, entry);
+                    }
+                    TotalLogsCount = totalCount;
+                    UpdateFilters();
                 }
-
-                TotalLogsCount = totalCount;
                 StateHasChanged();
+            });
+        }
+
+        private void UpdateFilters()
+        {
+            // Обновление ServiceCodes
+            var existingServiceCodes = ServiceCodes;
+            ServiceCodes = LogEntries
+                .Select(entry => entry.ServiceCode)
+                .Distinct()
+                .Select(code => new ServiceCodeFilter { ServiceCode = code, Selected = true })
+                .OrderBy(filter => filter.ServiceCode)
+                .ToList();
+
+            foreach (var filter in ServiceCodes)
+            {
+                var existingFilter = existingServiceCodes.FirstOrDefault(f => f.ServiceCode == filter.ServiceCode);
+                if (existingFilter != null)
+                {
+                    filter.Selected = existingFilter.Selected;
+                }
             }
-        });
-    }
 
-    public void OnPageChanged(int page)
-    {
-        //CurrentPage = page;
-        StateHasChanged();
-    }
+            // Обновление MessageTypes
+            var existingMessageTypes = MessageTypes;
+            MessageTypes = LogEntries
+                .Select(entry => entry.MessageType)
+                .Distinct()
+                .Select(type => new MessageTypeFilter { MessageType = type, Selected = true })
+                .OrderBy(filter => filter.MessageType)
+                .ToList();
 
-    public void Dispose()
-    {
-        _timer?.Dispose();
+            foreach (var filter in MessageTypes)
+            {
+                var existingFilter = existingMessageTypes.FirstOrDefault(f => f.MessageType == filter.MessageType);
+                if (existingFilter != null)
+                {
+                    filter.Selected = existingFilter.Selected;
+                }
+            }
+        }
+
+        private async Task DeleteAllRecords()
+        {
+            await LogReaderService.DeleteAllLogsAsync();
+            LogEntries.Clear();
+            TotalLogsCount = 0;
+            UpdateFilters();
+            StateHasChanged();
+        }
+
+        public void Dispose()
+        {
+            _timer?.Dispose();
+        }
+
+        public class ServiceCodeFilter
+        {
+            public string ServiceCode { get; set; }
+            public bool Selected { get; set; }
+        }
+
+        public class MessageTypeFilter
+        {
+            public string MessageType { get; set; }
+            public bool Selected { get; set; }
+        }
     }
-}}
+}

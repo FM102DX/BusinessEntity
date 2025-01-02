@@ -14,6 +14,8 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         private readonly IRepositoryFactory<LogEntryDbStorable> _repositoryFactory;
         private readonly int _sampleLogCreatePeriod;
         private CancellationTokenSource _cancellationTokenSource;
+        private readonly Random _random;
+        private IAsyncRepository<LogEntryDbStorable> _logRepository;
 
         public SampleLogGeneratorService(
             IRepositoryFactory<LogEntryDbStorable> repositoryFactory,
@@ -21,6 +23,8 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         {
             _repositoryFactory = repositoryFactory ?? throw new ArgumentNullException(nameof(repositoryFactory));
             _sampleLogCreatePeriod = settings.Value.SampleLogCreatePeriod;
+            _random = new Random();
+            _logRepository = _repositoryFactory.GetRepository();
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -34,26 +38,30 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
         {
             try
             {
-                var random = new Random();
-                var logRepository = _repositoryFactory.GetRepository();
-
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    var message = new string(Enumerable.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 100)
-                        .Select(s => s[random.Next(s.Length)]).ToArray());
-
-                    var logEntry = new LogEntryDbStorable
+                    var logRepository = _logRepository;
+                    while (!cancellationToken.IsCancellationRequested)
                     {
-                        Id = Guid.NewGuid(),
-                        ServiceCode = "self",
-                        MessageType = "Info",
-                        Message = message,
-                        Timestamp = DateTime.UtcNow
-                    };
+                        var message = new string(Enumerable.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 100)
+                            .Select(s => s[_random.Next(s.Length)]).ToArray());
 
-                    await logRepository.InsertAsync(logEntry);
-                    await Task.Delay(_sampleLogCreatePeriod, cancellationToken);
-                }
+                        var messageTypes = new string[] { "Info", "Error", "Warning" };
+                        var serviceCodeIndex = _random.Next(1, 5); // Генерируем число от 1 до 4
+                        var messageTypeIndex = _random.Next(1, 4); // Генерируем число от 1 до 3
+                        var serviceCode = $"SELF_{serviceCodeIndex}";
+                        var messageType = messageTypes[messageTypeIndex-1];
+
+                        var logEntry = new LogEntryDbStorable
+                        {
+                            Id = Guid.NewGuid(),
+                            ServiceCode = serviceCode,
+                            MessageType = messageType ?? "default",
+                            Message = message,
+                            Timestamp = DateTime.UtcNow
+                        };
+
+                        await logRepository.InsertAsync(logEntry);
+                        await Task.Delay(_sampleLogCreatePeriod, cancellationToken);
+                    }
             }
             catch (Exception ex)
             {
@@ -73,5 +81,4 @@ namespace BlazorServerWebLogger.Data.Services.HostedServices
             _cancellationTokenSource?.Dispose();
         }
     }
-
 }
