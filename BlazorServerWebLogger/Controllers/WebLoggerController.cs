@@ -5,7 +5,7 @@ using SampleOnlineMall.WebLogger.Models;
 using BlazorServerWebLogger.Contracts;
 using AutoMapper;
 
-namespace BlazorServerWebLogger
+namespace BlazorServerWebLogger.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
@@ -34,7 +34,7 @@ namespace BlazorServerWebLogger
 
                 // Маппинг DTO в сущность для базы данных
                 var logEntryDb = _mapper.Map<LogEntryDbStorable>(logEntryDto);
-
+                logEntryDb.Id=Guid.NewGuid();
                 // Сохранение в базе данных
                 await repository.InsertAsync(logEntryDb);
 

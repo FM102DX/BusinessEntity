@@ -160,5 +160,10 @@ namespace BlazorServerWebLogger.DataAccess.Repository
                 return CommonOperationResult.SayFail($"Failed to delete records: {ex.Message}");
             }
         }
+
+        public Task<CommonOperationResult> UpdateAsync(T t)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

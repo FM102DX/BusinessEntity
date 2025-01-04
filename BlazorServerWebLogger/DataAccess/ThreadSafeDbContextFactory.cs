@@ -18,25 +18,26 @@ public class ThreadSafeDbContextFactory
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
-        _logger = new DebugLogger("DBF", true);
+        _logger = new DebugLogger("DBF", true,"",false);
     }
 
     public DbContextWrap GetDbContextWrap(string rawKey, int maxPoolSize = 5)
     {
         try
         {
+            
             // Обработка ключа
             var processedKey = ProcessPoolKey(rawKey);
-
+            Console.WriteLine($"P1");
             // Получаем или создаем пул
             var pool = _pools.GetOrAdd(processedKey, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext, _logger, maxPoolSize));
-
+            Console.WriteLine($"P2");
             // Получаем контекст из пула
             var contextWrap = pool.GetDbContext();
-
+            Console.WriteLine($"P3");
             // Логируем состояние пулов
             LogPoolsState();
-
+            Console.WriteLine($"P4");
             return contextWrap;
         }
         catch (Exception ex)
@@ -130,20 +131,25 @@ public class DbContextPool
     public DbContextWrap GetDbContext()
     {
         _semaphore.Wait(); // Ждем доступного слота в пуле
+        Console.WriteLine($"P21");
         try
         {
             foreach (var record in PoolRecords.Values)
             {
+                Console.WriteLine($"P22");
                 if (Monitor.TryEnter(record.SyncLock))
                 {
                     try
                     {
+                        Console.WriteLine($"P3");
                         if (!record.Busy && !record.Expired && !record.Disposed)
                         {
+                            Console.WriteLine($"P4");
                             record.Busy = true;
                             record.TimeStamp = DateTime.UtcNow;
                             record.IssuedCount++;
                             _logger.Write($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
+                            Console.WriteLine($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
                             return new DbContextWrap(record.Context, _freeUpFunc, record);
                         }
                     }
@@ -156,22 +162,37 @@ public class DbContextPool
 
             // Если нет доступных записей, создаём новую
             var id = Guid.NewGuid();
-            var newRecord = new DbContextPoolRecord(_dbContextLifeTimeMs, id)
+            Console.WriteLine("P211");
+            try
             {
-                TimeStamp = DateTime.UtcNow,
-                Busy = true,
-                Context = new WebLoggerDbContext(_options)
-            };
+                var newRecord = new DbContextPoolRecord(_dbContextLifeTimeMs, id)
+                {
+                    TimeStamp = DateTime.UtcNow,
+                    Busy = true,
+                    Context = new WebLoggerDbContext(_options)
+                };
+                Console.WriteLine($"P212");
+                PoolRecords.TryAdd(id, newRecord);
+                _logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
+                Console.WriteLine($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
+                return new DbContextWrap(newRecord.Context, _freeUpFunc, newRecord);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error occurred: msg={ex.Message} inn={ex.InnerException}");
+            }
 
-            PoolRecords.TryAdd(id, newRecord);
-            _logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
-            return new DbContextWrap(newRecord.Context, _freeUpFunc, newRecord);
+
         }
-        catch
+        catch (Exception ex)
         {
+            
             _semaphore.Release(); // Освобождаем слот в случае ошибки
+            Console.WriteLine($"ERR_GetDbContext ex={ex.Message} inn={ex.InnerException}");
             throw;
         }
+
+        return null;
     }
 
     public void ReleaseThread()
@@ -195,6 +216,7 @@ public class DbContextPool
                     record.Context.Dispose();
                     record.Disposed = true;
                     _logger.Write($"[DISPOSED] DbContext disposed: id={record.Id}");
+                    Console.WriteLine($"[DISPOSED] DbContext disposed: id={record.Id}");
                     PoolRecords.TryRemove(record.Id, out _);
                 }
             }

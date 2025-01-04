@@ -18,6 +18,7 @@ namespace BlazorServerWebLogger.Contracts
         public Task<bool> ExistsAsync(Guid id);
 
         public Task<CommonOperationResult> InsertAsync(T t);
+        public Task<CommonOperationResult> UpdateAsync(T t);
 
 
         public Task<CommonOperationResult> DeleteNOldestRecordsAsync(int toDeleteCount);

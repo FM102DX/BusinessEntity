@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using BlazorServerWebLogger.Contracts;
+using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.Services;
 using Microsoft.AspNetCore.Components;
 using SampleOnlineMall.WebLogger.Models;
@@ -15,9 +17,12 @@ namespace BlazorServerWebLogger.Pages
             .Where(entry =>
                 ServiceCodes.Any(filter => filter.Selected && filter.ServiceCode == entry.ServiceCode) &&
                 MessageTypes.Any(filter => filter.Selected && filter.MessageType == entry.MessageType));
+        public LoggerMainViewSettings LoggerMainViewSettings { get; set; }
 
         [Inject]
         public LogReaderService LogReaderService { get; set; }
+       // [Inject]
+        //public IAsyncRepository<LoggerMainViewSettings> SettingsRepo { get; set; }
 
         private Timer _timer;
 
@@ -26,7 +31,7 @@ namespace BlazorServerWebLogger.Pages
             var data = await LogReaderService.ReadInitialAsync(n: 50);
             TotalLogsCount = data.Count;
             LogEntries = new ObservableCollection<LogEntryDbStorable>(data);
-
+           // LoggerMainViewSettings = SettingsRepo.GetAllAsync(null, 1).Result.Items.FirstOrDefault();
             UpdateFilters();
             StateHasChanged();
             _timer = new Timer(async _ => await UpdateDataAsync(), null, 0, 500);
@@ -63,14 +68,21 @@ namespace BlazorServerWebLogger.Pages
                 .OrderBy(filter => filter.ServiceCode)
                 .ToList();
 
-            foreach (var filter in ServiceCodes)
+            foreach (var filterItem in ServiceCodes)
             {
-                var existingFilter = existingServiceCodes.FirstOrDefault(f => f.ServiceCode == filter.ServiceCode);
+                var existingFilter = existingServiceCodes.FirstOrDefault(f => f.ServiceCode == filterItem.ServiceCode);
                 if (existingFilter != null)
                 {
-                    filter.Selected = existingFilter.Selected;
+                    filterItem.Selected = existingFilter.Selected;
+                    //теперь если оно выключено в сеттингах, оно не должно включаться
+
+
                 }
             }
+            //пропускаем через сеттинги
+
+
+
 
             // Обновление MessageTypes
             var existingMessageTypes = MessageTypes;
@@ -89,6 +101,9 @@ namespace BlazorServerWebLogger.Pages
                     filter.Selected = existingFilter.Selected;
                 }
             }
+
+
+            
         }
 
         private async Task DeleteAllRecords()

@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="13.0.1" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Radzen.Blazor" Version="5.7.2" />
     <PackageReference Include="ReactiveUI" Version="20.1.63" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />

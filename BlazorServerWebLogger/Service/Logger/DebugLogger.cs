@@ -24,22 +24,28 @@
         private readonly object _lock = new object();
         private readonly string _workingDir;
         private string _currentFilePath;
+        private readonly bool _logToConsole;
         private static readonly ConcurrentDictionary<string, DebugLogger> LoggerInstances = new();
 
-        public DebugLogger(string prefix = "def", bool isActive = true, string? workingDir = null)
+        public DebugLogger(string prefix = "def", bool isActive = true, string workingDir = "", bool logToConsole = false)
         {
             _prefix = prefix;
             _isActive = isActive;
             _workingDir = workingDir;
-            if (string.IsNullOrEmpty(_workingDir))
+            _logToConsole = logToConsole;
+            if (!logToConsole)
             {
-                _workingDir = "C:\\DebugLogs";
-            }
-            lock (_lock)
-            {
-                if (!Directory.Exists(_workingDir))
-                    Directory.CreateDirectory(_workingDir);
-                _currentFilePath = Path.Combine(_workingDir, $"{_prefix}_{Guid.NewGuid()}.txt");
+                if (string.IsNullOrEmpty(_workingDir))
+                {
+                    _workingDir = "C:\\DebugLogs";
+                }
+                lock (_lock)
+                {
+                    if (!Directory.Exists(_workingDir))
+                        Directory.CreateDirectory(_workingDir);
+                    _currentFilePath = Path.Combine(_workingDir, $"{_prefix}_{Guid.NewGuid()}.txt");
+                }
+
             }
         }
 
@@ -47,9 +53,22 @@
         {
             if (!_isActive) // Предполагается, что это логический флаг
                 return;
-            lock (_lock)
+
+            if (!_logToConsole)
             {
-                File.AppendAllText(_currentFilePath, text + Environment.NewLine);
+
+                lock (_lock)
+                {
+                    File.AppendAllText(_currentFilePath, text + Environment.NewLine);
+                }
+            }
+            else
+            {
+                lock (_lock)
+                {
+                    Console.WriteLine(text);
+                }
+                
             }
         }
 
