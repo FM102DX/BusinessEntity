@@ -3,6 +3,7 @@ using BlazorServerWebLogger.Contracts;
 using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Mvc.Filters;
 using SampleOnlineMall.WebLogger.Models;
 
 namespace BlazorServerWebLogger.Pages
@@ -21,8 +22,8 @@ namespace BlazorServerWebLogger.Pages
 
         [Inject]
         public LogReaderService LogReaderService { get; set; }
-       // [Inject]
-        //public IAsyncRepository<LoggerMainViewSettings> SettingsRepo { get; set; }
+        [Inject]
+        public AppSettingsManager SettingsManager { get; set; }
 
         private Timer _timer;
 
@@ -31,7 +32,7 @@ namespace BlazorServerWebLogger.Pages
             var data = await LogReaderService.ReadInitialAsync(n: 50);
             TotalLogsCount = data.Count;
             LogEntries = new ObservableCollection<LogEntryDbStorable>(data);
-           // LoggerMainViewSettings = SettingsRepo.GetAllAsync(null, 1).Result.Items.FirstOrDefault();
+            LoggerMainViewSettings = await SettingsManager.LoadSettings();
             UpdateFilters();
             StateHasChanged();
             _timer = new Timer(async _ => await UpdateDataAsync(), null, 0, 500);
@@ -75,14 +76,10 @@ namespace BlazorServerWebLogger.Pages
                 {
                     filterItem.Selected = existingFilter.Selected;
                     //теперь если оно выключено в сеттингах, оно не должно включаться
-
-
+                    if (LoggerMainViewSettings.NonDisplayedCats.Split(";").ToList().Contains(filterItem.ServiceCode))
+                        filterItem.Selected = false;
                 }
             }
-            //пропускаем через сеттинги
-
-
-
 
             // Обновление MessageTypes
             var existingMessageTypes = MessageTypes;
@@ -93,17 +90,17 @@ namespace BlazorServerWebLogger.Pages
                 .OrderBy(filter => filter.MessageType)
                 .ToList();
 
-            foreach (var filter in MessageTypes)
+            foreach (var filterItem in MessageTypes)
             {
-                var existingFilter = existingMessageTypes.FirstOrDefault(f => f.MessageType == filter.MessageType);
+                var existingFilter = existingMessageTypes.FirstOrDefault(f => f.MessageType == filterItem.MessageType);
                 if (existingFilter != null)
                 {
-                    filter.Selected = existingFilter.Selected;
+                    filterItem.Selected = existingFilter.Selected;
+                    //теперь если оно выключено в сеттингах, оно не должно включаться
+                    if (LoggerMainViewSettings.NonDisplayedMessageTypes.Split(";").ToList().Contains(filterItem.MessageType))
+                        filterItem.Selected = false;
                 }
             }
-
-
-            
         }
 
         private async Task DeleteAllRecords()

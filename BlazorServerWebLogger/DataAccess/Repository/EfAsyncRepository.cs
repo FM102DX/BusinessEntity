@@ -88,7 +88,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
 
         public async Task<CommonOperationResult> InsertAsync(T entity)
         {
-            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_insert"))
+            using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_insert_update"))
             {
                 var context = contextWrp.Context;
                 await context.Set<T>().AddAsync(entity);
@@ -161,9 +161,36 @@ namespace BlazorServerWebLogger.DataAccess.Repository
             }
         }
 
-        public Task<CommonOperationResult> UpdateAsync(T t)
+        public async Task<CommonOperationResult> UpdateAsync(T entity)
         {
-            throw new NotImplementedException();
+            if (entity == null)
+                throw new ArgumentNullException(nameof(entity));
+
+            try
+            {
+                using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_insert_update"))
+                {
+                    var context = contextWrp.Context;
+                    context.Set<T>().Update(entity);
+                    await context.SaveChangesAsync();
+                }
+
+                return new CommonOperationResult
+                {
+                    Success = true,
+                    Message = "Entity updated successfully."
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during UpdateAsync: {ex.Message}");
+                return new CommonOperationResult
+                {
+                    Success = false,
+                    Message = $"Update failed: {ex.Message}"
+                };
+            }
         }
+
     }
 }

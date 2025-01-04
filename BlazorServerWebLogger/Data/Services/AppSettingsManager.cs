@@ -1,5 +1,6 @@
 ﻿using BlazorServerWebLogger.Contracts;
 using Newtonsoft.Json;
+using SampleOnlineMall.Service;
 
 
 namespace BlazorServerWebLogger.Data.Services
@@ -24,11 +25,11 @@ namespace BlazorServerWebLogger.Data.Services
                 var result = JsonConvert.DeserializeObject<LoggerMainViewSettings>(item.SettingsJsonData);
                 return result;
             }
-
-            return null;
+            //если ничего нет, возвращаем пустой класс
+            return new LoggerMainViewSettings();
         }
 
-        public async Task SaveSettings(LoggerMainViewSettings settings)
+        public async Task<CommonOperationResult> SaveSettings(LoggerMainViewSettings settings)
         {
             if (settings == null)
                 throw new ArgumentNullException(nameof(settings));
@@ -44,8 +45,9 @@ namespace BlazorServerWebLogger.Data.Services
                 SettingsJsonData = jsonData
             };
 
-            // Сохранение в базу данных через ваш репозиторий
-            await _repo.UpdateAsync(item);
+            // Сохранение в базу данных через репозиторий
+            var result = await _repo.UpdateAsync(item);
+            return result;
         }
     }
 }
