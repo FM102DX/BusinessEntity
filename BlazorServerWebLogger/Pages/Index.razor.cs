@@ -1,10 +1,12 @@
 ﻿using System.Collections.ObjectModel;
 using BlazorServerWebLogger.Contracts;
 using BlazorServerWebLogger.Data;
+using BlazorServerWebLogger.Data.Messages;
 using BlazorServerWebLogger.Data.Services;
 using DynamicData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using ReactiveUI;
 using SampleOnlineMall.WebLogger.Models;
 
 namespace BlazorServerWebLogger.Pages
@@ -123,6 +125,18 @@ namespace BlazorServerWebLogger.Pages
                 //для совсем новых элементов true, т.к. их никто не выключал
                 return true;
             }
+        }
+
+        private async Task OnLogGenerationToggle(bool newState)
+        {
+            // Обновляем состояние и сохраняем настройки
+            LoggerMainViewSettings.LogGenerationIsOn = newState;
+
+            // Отправляем сообщение через Messenger
+            MessageBus.Current.SendMessage(new LogsGenOnOffMessage { NewState = newState });
+
+            // Сохраняем изменения в базе данных через AppSettingsManager
+             await SettingsManager.SaveSettings(LoggerMainViewSettings);
         }
 
         private async Task DeleteAllRecords()

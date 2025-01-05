@@ -1,6 +1,7 @@
 ﻿using BlazorServerWebLogger.Contracts;
 using Newtonsoft.Json;
 using SampleOnlineMall.Service;
+using SampleOnlineMall.WebLogger.Models;
 
 
 namespace BlazorServerWebLogger.Data.Services
@@ -11,9 +12,9 @@ namespace BlazorServerWebLogger.Data.Services
     {
         private IAsyncRepository<AppSettingsDbStorable> _repo;
 
-        public AppSettingsManager(IAsyncRepository<AppSettingsDbStorable> repo)
+        public AppSettingsManager(IRepositoryFactory<AppSettingsDbStorable> repositoryFactory)
         {
-            _repo = repo;
+            _repo = repositoryFactory.GetRepository();
         }
 
         private async Task<AppSettingsDbStorable?> GetSettingsRecord()
@@ -37,27 +38,68 @@ namespace BlazorServerWebLogger.Data.Services
 
         public async Task<CommonOperationResult> SaveSettings(LoggerMainViewSettings settings)
         {
-            if (settings == null)
-                throw new ArgumentNullException(nameof(settings));
-
-            // Сериализация объекта в строку JSON
-            string jsonData = JsonConvert.SerializeObject(settings, Formatting.Indented);
-
-            // Получение текущей записи из базы
-            var item = await GetSettingsRecord() ?? new AppSettingsDbStorable
+            try
             {
-                Id = Guid.Empty,
-                UserName = "Admin"
-            };
+                // 1. Проверка аргумента
+                if (settings == null)
+                    throw new ArgumentNullException(nameof(settings));
 
-            // Обновление полей
-            item.SettingsDomain = nameof(LoggerMainViewSettings);
-            item.SettingsJsonData = jsonData;
+                // 2. Сериализация в JSON
+                string jsonData = JsonConvert.SerializeObject(settings, Formatting.Indented);
 
-            // Вставка или обновление записи
-            return item.Id == Guid.Empty
-                ? await _repo.InsertAsync(item)
-                : await _repo.UpdateAsync(item);
+                // 3. Получение или создание записи
+                var item = await GetSettingsRecord() ?? new AppSettingsDbStorable
+                {
+                    UserName = "Admin" // или другие поля по умолчанию
+                };
+                bool isNew = (item.Id == Guid.Empty);
+                if (!isNew)
+                    item = await _repo.GetByIdOrNullAsync(item.Id); //получаем сущность, которая уже трекается
+
+                // 4. Обновляем поля
+                item.SettingsDomain = nameof(LoggerMainViewSettings);
+                item.SettingsJsonData = jsonData;
+
+                // 5. Вставка или обновление
+                
+
+                if (isNew)
+                {
+                    await _repo.InsertAsync(item);
+                }
+                else
+                {
+                    await _repo.UpdateAsync(item);
+                }
+
+                // 6. Возвращаем успешный результат
+                return new CommonOperationResult
+                {
+                    Success = true,
+                    Message = "Настройки успешно сохранены."
+                };
+            }
+            catch (Exception ex)
+            {
+                // Логируем ошибку в консоль
+                Console.WriteLine($"Ошибка в SaveSettings: {ex.Message}");
+
+                // Если есть вложенная ошибка (InnerException), выводим и её
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"InnerException: {ex.InnerException.Message}");
+                }
+
+                // 7. Возвращаем результат с информацией об ошибке
+                return new CommonOperationResult
+                {
+                    Success = false,
+                    Message = $"Ошибка при сохранении настроек: {ex.Message}" +
+                              (ex.InnerException != null ? $" | Inner: {ex.InnerException.Message}" : string.Empty)
+                };
+            }
         }
+
+
     }
 }

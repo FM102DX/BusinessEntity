@@ -62,11 +62,12 @@ namespace BlazorServerWebLogger
                 context.Database.EnsureCreated();
             }
 
-            builder.Services.AddScoped<AppSettingsManager>();
+            builder.Services.AddSingleton<AppSettingsManager>();
             builder.Services.AddScoped<Contracts.IAsyncRepository<AppSettingsDbStorable>, BlazorServerWebLogger.DataAccess.Repository.EfAsyncRepository<AppSettingsDbStorable>>();
             builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, BlazorServerWebLogger.DataAccess.Repository.EfAsyncRepository<LogEntryDbStorable>>();
             builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // Регистрация фабрики дбконтекстов
             builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>(); // Регистрация фабрики репозиториев
+            builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>(); // Регистрация фабрики репозиториев
             builder.Services.AddScoped<LogReaderService>();
             builder.Services.AddHostedService<SampleLogGeneratorService>();
             builder.Services.AddHostedService<LogEraserService>();

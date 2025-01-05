@@ -61,7 +61,7 @@ namespace BlazorServerWebLogger.DataAccess.Repository
             using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_getbyid"))
             {
                 var context = contextWrp.Context;
-                context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+                //это трекается
                 return await context.Set<T>().FirstOrDefaultAsync(entity => entity.Id == id);
             }
         }
@@ -171,7 +171,11 @@ namespace BlazorServerWebLogger.DataAccess.Repository
                 using (var contextWrp = _dbContextFactory.GetDbContextWrap("rp_insert_update"))
                 {
                     var context = contextWrp.Context;
-                    context.Set<T>().Update(entity);
+
+                    // Добавляем новую сущность и помечаем её как изменённую
+                    context.Entry(entity).State = EntityState.Modified;
+
+                    // Сохраняем изменения
                     await context.SaveChangesAsync();
                 }
 
