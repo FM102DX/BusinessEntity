@@ -48,13 +48,19 @@ namespace BlazorServerWebLogger
 
             Console.WriteLine($"ConnectionString={connectionString}");
 
+            //Создаем опции
+            var optionsBuilder = new DbContextOptionsBuilder<WebLoggerDbContext>();
+            optionsBuilder.UseNpgsql(connectionString); // Указываем использование PostgreSQL
+
             // Регистрируем DbContextOptions<WebLoggerDbContext> в DI
-            builder.Services.AddSingleton(provider =>
+            builder.Services.AddSingleton(provider => optionsBuilder.Options);
+
+            // Убедитесь, что база данных и таблицы созданы
+            using (var context = new WebLoggerDbContext(optionsBuilder.Options))
             {
-                var optionsBuilder = new DbContextOptionsBuilder<WebLoggerDbContext>();
-                optionsBuilder.UseNpgsql(connectionString); // Указываем использование PostgreSQL
-                return optionsBuilder.Options;
-            });
+                //context.Database.EnsureDeleted();
+                context.Database.EnsureCreated();
+            }
 
             builder.Services.AddScoped<AppSettingsManager>();
             builder.Services.AddScoped<Contracts.IAsyncRepository<AppSettingsDbStorable>, BlazorServerWebLogger.DataAccess.Repository.EfAsyncRepository<AppSettingsDbStorable>>();

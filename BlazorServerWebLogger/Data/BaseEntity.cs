@@ -4,7 +4,7 @@ using BlazorServerWebLogger.Contracts;
 
 namespace BlazorServerWebLogger.Data
 {
-    public class BaseEntity : IBaseEntity
+    public abstract class BaseEntity : IBaseEntity
     {
         /// <summary>
         /// Уникальный идентификатор записи лога (GUID).

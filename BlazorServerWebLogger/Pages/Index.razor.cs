@@ -2,22 +2,23 @@
 using BlazorServerWebLogger.Contracts;
 using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.Services;
+using DynamicData;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Components.Web;
 using SampleOnlineMall.WebLogger.Models;
 
 namespace BlazorServerWebLogger.Pages
 {
-    public partial class Index : ComponentBase
+    public partial class Index : ComponentBase, IDisposable
     {
         public int TotalLogsCount { get; set; } = 0;
         public ObservableCollection<LogEntryDbStorable> LogEntries { get; set; } = new();
-        public List<ServiceCodeFilter> ServiceCodes { get; set; } = new();
-        public List<MessageTypeFilter> MessageTypes { get; set; } = new();
+        public List<FilterItem> ServiceCodeFilter { get; set; } = new();
+        public List<FilterItem> MessageTypeFilter { get; set; } = new();
         public IEnumerable<LogEntryDbStorable> FilteredLogEntries => LogEntries
             .Where(entry =>
-                ServiceCodes.Any(filter => filter.Selected && filter.ServiceCode == entry.ServiceCode) &&
-                MessageTypes.Any(filter => filter.Selected && filter.MessageType == entry.MessageType));
+                ServiceCodeFilter.Any(filter => filter.Selected && filter.Code == entry.ServiceCode) &&
+                MessageTypeFilter.Any(filter => filter.Selected && filter.Code == entry.MessageType));
         public LoggerMainViewSettings LoggerMainViewSettings { get; set; }
 
         [Inject]
@@ -25,16 +26,28 @@ namespace BlazorServerWebLogger.Pages
         [Inject]
         public AppSettingsManager SettingsManager { get; set; }
 
+        public string SavedCatsDisp => LoggerMainViewSettings?.DisplayedCats;
+        public string SavedCatsNonDisp => LoggerMainViewSettings?.NonDisplayedCats;
+        public string SavedMsgTypesDisp => LoggerMainViewSettings?.DisplayedMessageTypes;
+        public string SavedMsgTypesNonDisp => LoggerMainViewSettings?.NonDisplayedMessageTypes;
+
         private Timer _timer;
 
         protected override async Task OnInitializedAsync()
         {
+            // Загружаем начальные данные логов
             var data = await LogReaderService.ReadInitialAsync(n: 50);
             TotalLogsCount = data.Count;
             LogEntries = new ObservableCollection<LogEntryDbStorable>(data);
+
+            // Загружаем настройки пользователя
             LoggerMainViewSettings = await SettingsManager.LoadSettings();
             UpdateFilters();
+
+            // Обновляем состояние интерфейса
             StateHasChanged();
+
+            // Запускаем таймер для обновления данных
             _timer = new Timer(async _ => await UpdateDataAsync(), null, 0, 500);
         }
 
@@ -58,48 +71,57 @@ namespace BlazorServerWebLogger.Pages
             });
         }
 
-        private void UpdateFilters()
+        private async Task UpdateFilters()
         {
+            
             // Обновление ServiceCodes
-            var existingServiceCodes = ServiceCodes;
-            ServiceCodes = LogEntries
-                .Select(entry => entry.ServiceCode)
-                .Distinct()
-                .Select(code => new ServiceCodeFilter { ServiceCode = code, Selected = true })
-                .OrderBy(filter => filter.ServiceCode)
-                .ToList();
-
-            foreach (var filterItem in ServiceCodes)
-            {
-                var existingFilter = existingServiceCodes.FirstOrDefault(f => f.ServiceCode == filterItem.ServiceCode);
-                if (existingFilter != null)
-                {
-                    filterItem.Selected = existingFilter.Selected;
-                    //теперь если оно выключено в сеттингах, оно не должно включаться
-                    if (LoggerMainViewSettings.NonDisplayedCats.Split(";").ToList().Contains(filterItem.ServiceCode))
-                        filterItem.Selected = false;
-                }
-            }
+            ServiceCodeFilter = UpdateFilter(ServiceCodeFilter,
+                s => s.ServiceCode,
+                s => new FilterItem() {Code =s, Selected = GetIsServiceCodeSelected (ServiceCodeFilter,s, LoggerMainViewSettings.NonDisplayedCats)});
 
             // Обновление MessageTypes
-            var existingMessageTypes = MessageTypes;
-            MessageTypes = LogEntries
-                .Select(entry => entry.MessageType)
-                .Distinct()
-                .Select(type => new MessageTypeFilter { MessageType = type, Selected = true })
-                .OrderBy(filter => filter.MessageType)
-                .ToList();
+            MessageTypeFilter = UpdateFilter(MessageTypeFilter,
+                s => s.MessageType,
+                s => new FilterItem() { Code = s, Selected = GetIsServiceCodeSelected(MessageTypeFilter, s, LoggerMainViewSettings.NonDisplayedMessageTypes)});
 
-            foreach (var filterItem in MessageTypes)
+            // Обновляем настройки на основе выбранных фильтров
+            StateHasChanged();
+        }
+
+        private List<FilterItem> UpdateFilter(List<FilterItem>? currentFilter, Func<LogEntryDbStorable, string> selector1, Func<string, FilterItem> selector2)
+        {
+            //эта функция апдейтит состояние выбранного фильтра
+            //Теперь надо этот фильтра перебрать, и для каждой позиции понять, чекнута или нет
+                return LogEntries
+                .Select(selector1)
+                .Distinct()
+                .Select(selector2)
+                .OrderBy(filter=>filter.Code)
+                .ToList();
+        }
+        private bool GetIsServiceCodeSelected(List<FilterItem>? currentFilter,string code, string nonDisplayedStr)
+        {
+            //эта функция возвращает, выделен конктетный пункт меню или нет
+            var filterTmp = currentFilter;
+            var currentFilterItem = filterTmp.FirstOrDefault(f => f.Code == code);
+            var currentFilterItemExists = currentFilterItem!=null;
+            var isNonDisplayed = !string.IsNullOrEmpty(nonDisplayedStr) &&
+                                 nonDisplayedStr.Split(";").ToList().Contains(code);
+
+            if (isNonDisplayed)
             {
-                var existingFilter = existingMessageTypes.FirstOrDefault(f => f.MessageType == filterItem.MessageType);
-                if (existingFilter != null)
-                {
-                    filterItem.Selected = existingFilter.Selected;
-                    //теперь если оно выключено в сеттингах, оно не должно включаться
-                    if (LoggerMainViewSettings.NonDisplayedMessageTypes.Split(";").ToList().Contains(filterItem.MessageType))
-                        filterItem.Selected = false;
-                }
+                //если он в списке неотоборажаемых, то в любом случае false
+                return false;
+            }
+            else if(!isNonDisplayed && currentFilterItemExists)
+            {
+                //если его нет в списке неоторражаемых, то настройки текущего элемента, которые были перед обновлением
+                return currentFilterItem.Selected;
+            }
+            else
+            {
+                //для совсем новых элементов true, т.к. их никто не выключал
+                return true;
             }
         }
 
@@ -112,21 +134,117 @@ namespace BlazorServerWebLogger.Pages
             StateHasChanged();
         }
 
+
+        // Метод для сохранения ServiceCode фильтров
+        private async Task SaveSrvCodesFilterAsync(FilterItem serviceFilterItem, bool newValue)
+        {
+            await SaveFilterAsync(
+                serviceFilterItem,
+                newValue,
+                () => LoggerMainViewSettings.DisplayedCats,
+                value => LoggerMainViewSettings.DisplayedCats = value,
+                () => LoggerMainViewSettings.NonDisplayedCats,
+                value => LoggerMainViewSettings.NonDisplayedCats = value);
+        }
+
+        // Метод для сохранения MessageType фильтров
+        private async Task SaveMsgTypeFilterAsync(FilterItem serviceFilterItem, bool newValue)
+        {
+            await SaveFilterAsync(
+                serviceFilterItem,
+                newValue,
+                () => LoggerMainViewSettings.DisplayedMessageTypes,
+                value => LoggerMainViewSettings.DisplayedMessageTypes = value,
+                () => LoggerMainViewSettings.NonDisplayedMessageTypes,
+                value => LoggerMainViewSettings.NonDisplayedMessageTypes = value);
+        }
+
+        // Универсальный метод для сохранения фильтров
+        private async Task SaveFilterAsync(
+            FilterItem serviceFilterItem,
+            bool newValue,
+            Func<string> getDisplayedItems,
+            Action<string> setDisplayedItems,
+            Func<string> getNonDisplayedItems,
+            Action<string> setNonDisplayedItems)
+        {
+            // Обновляем состояние элемента фильтра
+            serviceFilterItem.Selected = newValue;
+
+            if (newValue)
+            {
+                // Если состояние изменено с false на true
+                setDisplayedItems(getDisplayedItems() + serviceFilterItem.Code + ";");
+                setNonDisplayedItems(RemoveAllOccurrences(getNonDisplayedItems(), serviceFilterItem.Code + ";"));
+            }
+            else
+            {
+                // Если состояние изменено с true на false
+                setNonDisplayedItems(getNonDisplayedItems() + serviceFilterItem.Code + ";");
+                setDisplayedItems(RemoveAllOccurrences(getDisplayedItems(), serviceFilterItem.Code + ";"));
+            }
+
+            // Сохраняем изменения в базе данных через AppSettingsManager
+            await SettingsManager.SaveSettings(LoggerMainViewSettings);
+            StateHasChanged();
+
+            // Логируем сохранение (опционально)
+            Console.WriteLine("Settings saved.");
+        }
+
         public void Dispose()
         {
+            // Очищаем таймер при завершении работы компонента
             _timer?.Dispose();
         }
 
-        public class ServiceCodeFilter
+        // Вспомогательные классы для фильтров
+        public class FilterItem
         {
-            public string ServiceCode { get; set; }
+            public string Code { get; set; }
             public bool Selected { get; set; }
         }
 
-        public class MessageTypeFilter
+
+        public static string RemoveAllOccurrences(string source, string substring)
         {
-            public string MessageType { get; set; }
-            public bool Selected { get; set; }
+            // Если исходная строка или подстрока == null,
+            // возвращаем исходную строку (без изменений).
+            if (source == null || substring == null)
+            {
+                return source;
+            }
+
+            // Если длина подстроки больше длины строки => неуспешно
+            if (substring.Length > source.Length)
+            {
+                return source;
+            }
+
+            // Если подстрока и исходная строка одной длины => 
+            //   - если полностью совпадают, возвращаем пустую строку
+            //   - иначе не найдём вхождений => возвращаем исходную
+            if (substring.Length == source.Length)
+            {
+                if (source == substring)
+                {
+                    return string.Empty;
+                }
+                return source;
+            }
+
+            // Проверяем, найдётся ли подстрока вообще
+            if (!source.Contains(substring))
+            {
+                // Нет вхождений => операция неуспешна
+                return source;
+            }
+
+            // Если хотя бы одно вхождение есть — удаляем все вхождения
+            // используя Replace(substring, "")
+            string result = source.Replace(substring, "");
+            return result;
         }
+
     }
 }

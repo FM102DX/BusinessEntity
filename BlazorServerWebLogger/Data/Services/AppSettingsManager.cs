@@ -16,11 +16,17 @@ namespace BlazorServerWebLogger.Data.Services
             _repo = repo;
         }
 
+        private async Task<AppSettingsDbStorable?> GetSettingsRecord()
+        {
+            var tmp= await _repo.GetAllAsync(f => f.SettingsDomain == nameof(LoggerMainViewSettings) && f.UserName=="Admin", 1);
+            var result = tmp.Items.FirstOrDefault();
+            return result;
+        }
+
         public async Task<LoggerMainViewSettings> LoadSettings()
         {
-            var itemTmp = await _repo.GetAllAsync(f => f.SettingsDomain == nameof(LoggerMainViewSettings), 1);
-            var item = itemTmp.Items.ToList().FirstOrDefault();
-            if (item != null && string.IsNullOrWhiteSpace(item.SettingsJsonData))
+            var item = await GetSettingsRecord();
+            if (item != null && !string.IsNullOrWhiteSpace(item.SettingsJsonData))
             {
                 var result = JsonConvert.DeserializeObject<LoggerMainViewSettings>(item.SettingsJsonData);
                 return result;
@@ -37,17 +43,21 @@ namespace BlazorServerWebLogger.Data.Services
             // Сериализация объекта в строку JSON
             string jsonData = JsonConvert.SerializeObject(settings, Formatting.Indented);
 
-            // Логика сохранения JSON-строки, например, в файл или базу данных
-            // Здесь сохраняем в базу данных, используя ваш репозиторий
-            var item = new AppSettingsDbStorable
+            // Получение текущей записи из базы
+            var item = await GetSettingsRecord() ?? new AppSettingsDbStorable
             {
-                SettingsDomain = nameof(LoggerMainViewSettings),
-                SettingsJsonData = jsonData
+                Id = Guid.Empty,
+                UserName = "Admin"
             };
 
-            // Сохранение в базу данных через репозиторий
-            var result = await _repo.UpdateAsync(item);
-            return result;
+            // Обновление полей
+            item.SettingsDomain = nameof(LoggerMainViewSettings);
+            item.SettingsJsonData = jsonData;
+
+            // Вставка или обновление записи
+            return item.Id == Guid.Empty
+                ? await _repo.InsertAsync(item)
+                : await _repo.UpdateAsync(item);
         }
     }
 }

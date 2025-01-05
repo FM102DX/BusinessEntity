@@ -20,10 +20,6 @@ namespace SampleOnlineMall.WebLogger.DataAccess
     {
         public WebLoggerDbContext(DbContextOptions<WebLoggerDbContext> options) : base(options)
         {
-            // Убедитесь, что база данных и таблицы созданы
-            Console.WriteLine("P_WebLoggerDbContext_ctor_1");
-            Database.EnsureCreated();
-            Console.WriteLine("P_WebLoggerDbContext_ctor_2");
         }
 
         public DbSet<LogEntryDbStorable> LogEntries { get; set; }
