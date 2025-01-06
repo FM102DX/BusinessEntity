@@ -3,6 +3,7 @@
 @using Radzen.Blazor
 @using SampleOnlineMall.WebLogger.Models
 @using BlazorServerWebLogger.Pages
+@using BlazorServerWebLogger.Components
 
 <PageTitle>LoggerMain</PageTitle>
 
@@ -10,61 +11,69 @@
 
 <div class="main-logger-content">
 
-<div class="main-logger-table">
-    <RadzenDataGrid TItem="LogEntryDbStorable" Data="@FilteredLogEntries" AllowPaging="true" PageSize="20" Count="@FilteredLogEntries.Count()">
-        <Columns>
-            <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="Timestamp" Title="Дата и время"/>
-            <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="80px" Property="ServiceCode" Title="Код сервиса"/>
-            <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="100px" Property="MessageType" Title="Тип сообщения"/>
-            <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="600px" Property="Message" Title="Текст сообщения"/>
-        </Columns>
-    </RadzenDataGrid>
-</div>
-
-<div class="main-logger-widgets">
-    <!-- Фильтр по сервисам -->
-    <div class="main-logger-widget">
-        <h4>Фильтр по сервисам</h4>
-        @foreach (var item in ServiceCodeFilter)
-        {
-            <label style="display: block; margin-bottom: 5px;">
-                    <RadzenCheckBox @bind-Value="item.Selected"
-                                TValue="bool"
-                                    Change="(bool newValue) => SaveSrvCodesFilterAsync(item, newValue)" />
-                    @item.Code
-            </label>
-        }
+    <div class="main-logger-table">
+        <RadzenDataGrid TItem="LogEntryDbStorable" 
+                        Data="@FilteredLogEntries" 
+                        AllowPaging="true" 
+                        PageSize="20" 
+                        Count="@FilteredLogEntries.Count()" 
+                        RowSelect="OnRowSelect">
+            <Columns>
+                <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="100px" Property="Timestamp" Title="Дата и время" />
+                <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="50px" Property="ServiceCode" Title="От" />
+                <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="50px" Property="MessageType" Title="Тип" />
+                <RadzenDataGridColumn TItem="LogEntryDbStorable" Width="500px" Property="Message" Title="Текст" />
+            </Columns>
+        </RadzenDataGrid>
     </div>
-    <div class="main-logger-widget">
-        <h4>Фильтр по сервисам</h4>
-        @foreach (var item in MessageTypeFilter)
-        {
-            <label style="display: block; margin-bottom: 5px;">
-                    <RadzenCheckBox @bind-Value="item.Selected"
-                                TValue="bool"
+
+    <LogMessageViewer LogEntry="@SelectedLogEntry"></LogMessageViewer>
+
+    <div class="main-logger-widgets">
+
+        <LoggerWidget Title="Тип сообщений">
+            @foreach (var item in MessageTypeFilter)
+            {
+                <label style="display: block; margin-bottom: 5px;">
+                    <RadzenCheckBox @bind-Value="item.Selected" TValue="bool"
                                     Change="(bool newValue) => SaveMsgTypeFilterAsync(item, newValue)" />
                     @item.Code
-            </label>
-        }
-    </div>
+                </label>
+            }
+        </LoggerWidget>
 
-    <!-- Общее количество записей -->
-    <div class="main-logger-widget">
-        <h4>Общее количество записей: @TotalLogsCount</h4>
-    </div>
-    <div class="main-logger-widget">
-        <h4>Включение/выключение генерации логов</h4>
+        <LoggerWidget Title="Отправитель">
+            @foreach (var item in ServiceCodeFilter)
+            {
+                <label style="display: block; margin-bottom: 5px;">
+                    <RadzenCheckBox @bind-Value="item.Selected"
+                                    TValue="bool"
+                                    Change="(bool newValue) => SaveSrvCodesFilterAsync(item, newValue)" />
+                    @item.Code
+                </label>
+            }
+
+        </LoggerWidget>
+
+        <LoggerWidget Title="Статистика">
+            <p>Общее количество записей: @TotalLogsCount</p>
+        </LoggerWidget>
+
+        <LoggerWidget Title="Генератор логов">
             <RadzenSwitch TValue="bool" Value="@(LoggerMainViewSettings?.LogGenerationIsOn ?? false)" Change="OnLogGenerationToggle" />
-    </div>
+        </LoggerWidget>
+        
+        <LoggerWidget Title="Удалить все">
+            <button class="btn btn-danger" style="margin-top: 10px;" @onclick="DeleteAllRecords">Удалить все</button>
+        </LoggerWidget>
 
-    <div class="main-logger-widget">
-        <button class="btn btn-danger" style="margin-top: 10px;" @onclick="DeleteAllRecords">Удалить все</button>
-    </div>
-    <div class="main-logger-widget">
+        <LoggerWidget Title="Dubug">
             <p><span>1</span>@SavedCatsDisp</p>
             <p><span>2</span>@SavedCatsNonDisp</p>
             <p><span>3</span>@SavedMsgTypesDisp</p>
             <p><span>4</span>@SavedMsgTypesNonDisp</p>
+        </LoggerWidget>
+
     </div>
-</div>
+
 </div>

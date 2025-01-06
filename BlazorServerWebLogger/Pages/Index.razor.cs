@@ -33,6 +33,8 @@ namespace BlazorServerWebLogger.Pages
         public string SavedMsgTypesDisp => LoggerMainViewSettings?.DisplayedMessageTypes;
         public string SavedMsgTypesNonDisp => LoggerMainViewSettings?.NonDisplayedMessageTypes;
 
+        public LogEntryDbStorable SelectedLogEntry { get; set; }
+
         private Timer _timer;
 
         protected override async Task OnInitializedAsync()
@@ -75,16 +77,16 @@ namespace BlazorServerWebLogger.Pages
 
         private async Task UpdateFilters()
         {
-            
+
             // Обновление ServiceCodes
             ServiceCodeFilter = UpdateFilter(ServiceCodeFilter,
                 s => s.ServiceCode,
-                s => new FilterItem() {Code =s, Selected = GetIsServiceCodeSelected (ServiceCodeFilter,s, LoggerMainViewSettings.NonDisplayedCats)});
+                s => new FilterItem() { Code = s, Selected = GetIsServiceCodeSelected(ServiceCodeFilter, s, LoggerMainViewSettings.NonDisplayedCats) });
 
             // Обновление MessageTypes
             MessageTypeFilter = UpdateFilter(MessageTypeFilter,
                 s => s.MessageType,
-                s => new FilterItem() { Code = s, Selected = GetIsServiceCodeSelected(MessageTypeFilter, s, LoggerMainViewSettings.NonDisplayedMessageTypes)});
+                s => new FilterItem() { Code = s, Selected = GetIsServiceCodeSelected(MessageTypeFilter, s, LoggerMainViewSettings.NonDisplayedMessageTypes) });
 
             // Обновляем настройки на основе выбранных фильтров
             StateHasChanged();
@@ -94,19 +96,19 @@ namespace BlazorServerWebLogger.Pages
         {
             //эта функция апдейтит состояние выбранного фильтра
             //Теперь надо этот фильтра перебрать, и для каждой позиции понять, чекнута или нет
-                return LogEntries
-                .Select(selector1)
-                .Distinct()
-                .Select(selector2)
-                .OrderBy(filter=>filter.Code)
-                .ToList();
+            return LogEntries
+            .Select(selector1)
+            .Distinct()
+            .Select(selector2)
+            .OrderBy(filter => filter.Code)
+            .ToList();
         }
-        private bool GetIsServiceCodeSelected(List<FilterItem>? currentFilter,string code, string nonDisplayedStr)
+        private bool GetIsServiceCodeSelected(List<FilterItem>? currentFilter, string code, string nonDisplayedStr)
         {
             //эта функция возвращает, выделен конктетный пункт меню или нет
             var filterTmp = currentFilter;
             var currentFilterItem = filterTmp.FirstOrDefault(f => f.Code == code);
-            var currentFilterItemExists = currentFilterItem!=null;
+            var currentFilterItemExists = currentFilterItem != null;
             var isNonDisplayed = !string.IsNullOrEmpty(nonDisplayedStr) &&
                                  nonDisplayedStr.Split(";").ToList().Contains(code);
 
@@ -115,7 +117,7 @@ namespace BlazorServerWebLogger.Pages
                 //если он в списке неотоборажаемых, то в любом случае false
                 return false;
             }
-            else if(!isNonDisplayed && currentFilterItemExists)
+            else if (!isNonDisplayed && currentFilterItemExists)
             {
                 //если его нет в списке неоторражаемых, то настройки текущего элемента, которые были перед обновлением
                 return currentFilterItem.Selected;
@@ -136,7 +138,7 @@ namespace BlazorServerWebLogger.Pages
             MessageBus.Current.SendMessage(new LogsGenOnOffMessage { NewState = newState });
 
             // Сохраняем изменения в базе данных через AppSettingsManager
-             await SettingsManager.SaveSettings(LoggerMainViewSettings);
+            await SettingsManager.SaveSettings(LoggerMainViewSettings);
         }
 
         private async Task DeleteAllRecords()
@@ -204,6 +206,12 @@ namespace BlazorServerWebLogger.Pages
 
             // Логируем сохранение (опционально)
             Console.WriteLine("Settings saved.");
+        }
+
+        private void OnRowSelect(LogEntryDbStorable logEntry)
+        {
+            SelectedLogEntry = logEntry;
+            //Console.WriteLine($"Выбранная запись: {SelectedLogEntry.ServiceCode} - {SelectedLogEntry.MessageType}");
         }
 
         public void Dispose()

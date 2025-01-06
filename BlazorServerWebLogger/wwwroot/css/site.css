@@ -6,20 +6,54 @@ html, body {
 
 div.main-logger-content {
     vertical-align: top;
+    flex-direction: row;
 }
 
 div.main-logger-table {
     color: black;
     display: block;
     float: left;
-    width: 75%;
+    width: 60%;
+}
+
+
+div.main-logger-logEntry {
+    color: black;
+    display: block;
+    float: left;
+    width: 23%;
+    flex-direction: column;
+    background-color: #f4f4f9;
+    font-size: 14px;
+    margin-left: 5px;
+    padding: 3px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+div.log-entry-data-line{
+    height: 20px;
+
+}
+div.log-entry-message {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+
+    
 }
 
 div.main-logger-widgets {
     display: block;
     float: left;
-    width: 25%;
+    width: 15%;
     flex-direction: column;
+}
+p.widget-text{
+
 }
 
 div.main-logger-widget {
@@ -28,12 +62,30 @@ div.main-logger-widget {
     display: block;
     float: left;
     border: 1px solid #ccc;
-    border-radius: 5px;
+    border-radius: 3px;
     width: 100%;
-    margin-bottom: 10px;
-    padding:10px;
+    margin-bottom: 5px;
+    padding: 3px;
     margin-left: 5px;
+    flex-direction: column;
 }
+div.main-logger-widget-title {
+    display: block;
+    float: left;
+    border: 0px;
+    width: 100%;
+    height: 20px;
+    font-size: 14px;
+    font-weight:bold;
+}
+div.main-logger-widget-content {
+    float: left;
+    border: 0px;
+    width: 100%;
+    height: 100%;
+    font-size: 14px;
+}
+
 
 
 
