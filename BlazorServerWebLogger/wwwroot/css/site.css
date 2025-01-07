@@ -16,7 +16,6 @@ div.main-logger-table {
     width: 60%;
 }
 
-
 div.main-logger-logEntry {
     color: black;
     display: block;
@@ -42,8 +41,6 @@ div.log-entry-message {
     width: 100%;
     max-width: 100%;
     overflow: hidden;
-
-    
 }
 
 div.main-logger-widgets {
@@ -51,9 +48,6 @@ div.main-logger-widgets {
     float: left;
     width: 15%;
     flex-direction: column;
-}
-p.widget-text{
-
 }
 
 div.main-logger-widget {

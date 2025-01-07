@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace SampleOnlineMall.WebLogger.Models
+namespace SampleOnlineMall.Service.WebLogging
 {
     /// <summary>
     /// Класс для передачи лог-сообщений между сервисами.

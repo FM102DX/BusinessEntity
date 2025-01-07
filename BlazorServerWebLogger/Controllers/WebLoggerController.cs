@@ -43,7 +43,7 @@ namespace BlazorServerWebLogger.Controllers
             catch (Exception ex)
             {
                 // Обработка ошибок
-                return StatusCode(500, $"An error occurred: {ex.Message}");
+                return StatusCode(500, $"An error occurred: err={ex.Message} inn={ex.InnerException}");
             }
         }
 

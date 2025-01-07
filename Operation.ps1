@@ -94,6 +94,11 @@ function Action41 {
 function Action70 {
     ExecExternalScript -scriptPath "Powershell\СontainerManagement.ps1"
 }
+
+function Action75 {
+    ExecExternalScript -scriptPath "Powershell\GenerateTestLoggerMessages.ps1"
+}
+
 function ClearScreen {
     Clear-Host
 }
@@ -106,6 +111,7 @@ function Show-Menu {
     Write-Host "40  -- Скопировать логи ассортиментного контроллера кот из VS2022"
     Write-Host "41  -- Скопировать логи ассортиментного контроллера кот из под Docker"
     Write-Host "70  -- Сделать действия с докер контейнерами"
+    Write-Host "75  -- Сгенерировать тестовые сообщения для логгера"
     Write-Host "80  -- Очистить экран (CLS)"
     Write-Host "99  -- Выход"
 }
@@ -121,6 +127,7 @@ do {
         "40"   { Action40 } #логи 
         "41"   { Action41 } #логи
         "70"   { Action70 } 
+        "75"   { Action75 } 
         "80"   { ClearScreen }
         "99"   { Write-Host "Выход из программы..." -ForegroundColor Red }
         default {

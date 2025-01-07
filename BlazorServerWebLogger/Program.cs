@@ -61,6 +61,7 @@ namespace BlazorServerWebLogger
                 //context.Database.EnsureDeleted();
                 context.Database.EnsureCreated();
             }
+            builder.Services.AddAutoMapper(typeof(Program));
 
             builder.Services.AddSingleton<AppSettingsManager>();
             builder.Services.AddScoped<Contracts.IAsyncRepository<AppSettingsDbStorable>, BlazorServerWebLogger.DataAccess.Repository.EfAsyncRepository<AppSettingsDbStorable>>();
