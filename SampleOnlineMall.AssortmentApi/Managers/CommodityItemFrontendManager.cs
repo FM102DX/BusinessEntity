@@ -23,17 +23,17 @@ namespace SampleOnlineMall.Core.Managers
         private IAsyncRepository<CommodityItem> _repo;
         private Serilog.ILogger _logger;
         private SampleOnlineMallAssortmentApiApp _app;
-        private WebLoggerManager _webLogMgr;
+        
         private CustomMapper _mapper;
         private IAsyncRepository<Supplier> _supplierRepo;
 
-        public CommodityItemFrontendManager(IAsyncRepository<CommodityItem> repo, IAsyncRepository<Supplier> supplierRepo,  Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper, WebLoggerManager webLogMgr)
+        public CommodityItemFrontendManager(IAsyncRepository<CommodityItem> repo, IAsyncRepository<Supplier> supplierRepo,  Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
         {
             _repo = repo;
             _logger = logger;
             _app = app;
             _mapper = mapper;
-            _webLogMgr = webLogMgr;
+            
             _supplierRepo = supplierRepo;
         }
 
@@ -55,19 +55,19 @@ namespace SampleOnlineMall.Core.Managers
             var searchText = repositoryRequest.SearchText?.ToLower();
             if (repositoryRequest.UseSearch)
             {
-                _webLogMgr.Log($"[CommodityItemFrontendManager]: used search");
+                //_webLogMgr.Log($"[CommodityItemFrontendManager]: used search");
                 var searchReq = RepositoryRequestFuncSearch<CommodityItem>.FromTextSearchRequest(repositoryRequest);
                 searchReq.SearchFunc = x => x.Name.ToLower().Contains(searchText) || x.Description.ToLower().Contains(searchText);
                 sourceResponce = await _repo.GetAllByRequestAsync(searchReq);
             }
             else
             {
-                _webLogMgr.Log($"[CommodityItemFrontendManager]: not using search");
+                //_webLogMgr.Log($"[CommodityItemFrontendManager]: not using search");
                 sourceResponce = await _repo.GetAllByRequestAsync(repositoryRequest);
             }
             
             var str = JsonConvert.SerializeObject(sourceResponce);
-            _webLogMgr.Log($"[CommodityItemFrontendManager]: responce is {str}");
+          //  _webLogMgr.Log($"[CommodityItemFrontendManager]: responce is {str}");
 
             var targetResponce = _mapper.ResponceFrontFromResponceCommItem(sourceResponce);
 

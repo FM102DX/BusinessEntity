@@ -8,6 +8,7 @@ using SampleOnlineMall.Service;
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using SampleOnlineMall.WebLogger.Services;
 
 
 
@@ -19,12 +20,12 @@ namespace SampleOnlineMall
     {
         public Serilog.ILogger _logger { get; set; }
         public CommodityItemFrontendManager _itemManager { get; set; }
-        public WebLoggerManager _webLoggerManager { get; set; }
-        public AssortmentReadFrontend(CommodityItemFrontendManager itemManager, WebLoggerManager webLoggerManager, Serilog.ILogger logger)
+        public IWebLoggerService _wLogger { get; set; }
+        public AssortmentReadFrontend(CommodityItemFrontendManager itemManager, IWebLoggerService wLogger, Serilog.ILogger logger)
         {
             _logger = logger;
             _itemManager= itemManager;
-            _webLoggerManager= webLoggerManager;
+            _wLogger = wLogger;
         }
 
         [HttpGet]
@@ -39,7 +40,7 @@ namespace SampleOnlineMall
         public async Task<RepositoryResponce<CommodityItemFrontend>> GetAllByRequest(RepositoryRequestTextSearch request)
         {
             var str = JsonConvert.SerializeObject(request);
-            _webLoggerManager.Log($"Controller: got request {str}");
+            _wLogger.Information($"Controller: got request {str}");
             return await _itemManager.GetAllByRequest(request);
         }
 

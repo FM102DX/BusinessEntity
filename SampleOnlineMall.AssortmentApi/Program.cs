@@ -8,6 +8,8 @@ using SampleOnlineMall.DataAccess;
 using SampleOnlineMall.DataAccess.Abstract;
 using SampleOnlineMall.DataAccess.DataAccess;
 using SampleOnlineMall.Service;
+using SampleOnlineMall.Service.WebLogging;
+using SampleOnlineMall.WebLogger.Services;
 using Serilog;
 
 
@@ -23,6 +25,14 @@ namespace SampleOnlineMall
             builder.Configuration.AddConfiguration(configuration);
             builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 
+
+            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService("ASSORT"));
+
+            var serviceProvider = builder.Services.BuildServiceProvider();
+            var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
+
+            // Используем логгер
+            wLogger.Information("Приложение запущено.");
 
 
             #region бизнес-логика

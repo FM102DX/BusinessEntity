@@ -2,6 +2,7 @@
 using SampleOnlineMall.Core;
 using SampleOnlineMall.Core.Managers;
 using SampleOnlineMall.Service;
+using SampleOnlineMall.WebLogger.Services;
 using System;
 using System.Collections.Generic;
 
@@ -13,13 +14,14 @@ namespace SampleOnlineMall
     {
         public Serilog.ILogger _logger { get; set; }
         public CommodityItemManager _commodityItemManager { get; set; }
-        public WebLoggerManager _webLoggerManager { get; set; }
+        public IWebLoggerService _wLogger { get; set; }
 
-        public AssortmentController(CommodityItemManager commodityItemManager, WebLoggerManager webLoggerManager, Serilog.ILogger logger)
+        public AssortmentController(CommodityItemManager commodityItemManager, Serilog.ILogger logger, IWebLoggerService wLogger)
         {
             _logger = logger;
             _commodityItemManager= commodityItemManager;
-            _webLoggerManager= webLoggerManager;
+            _wLogger= wLogger;
+            _wLogger.SetActiveStatus(true);
         }
 
         [HttpDelete]
@@ -45,12 +47,12 @@ namespace SampleOnlineMall
 
             if (rezult.Success)
             {
-                _webLoggerManager.Information($"Successfully added assortment item name={commodityItem.Name} msg={rezult.Message}");
+                _wLogger.Information($"Successfully added assortment item name={commodityItem.Name} msg={rezult.Message}");
                 return StatusCode(201, CommonOperationResult.SayOk());
             }
             else
             {
-                _webLoggerManager.Error($"Error while adding assort position name={commodityItem.Name} err={rezult.Message}");
+                _wLogger.Error($"Error while adding assort position name={commodityItem.Name} err={rezult.Message}");
                 return StatusCode(501, CommonOperationResult.SayFail(rezult.Message));
             }
 

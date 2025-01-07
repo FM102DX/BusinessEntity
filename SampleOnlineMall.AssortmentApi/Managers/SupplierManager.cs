@@ -21,12 +21,12 @@ namespace SampleOnlineMall.Core.Managers
         private Serilog.ILogger _logger;
         private SampleOnlineMallAssortmentApiApp _app;
         private WebLoggerManager _webLogger;
-        public SupplierManager(IAsyncRepository<Supplier> repo, WebLoggerManager webLogger, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app)
+        public SupplierManager(IAsyncRepository<Supplier> repo, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app)
         {
             _repo = repo;
             _logger = logger;
             _app = app;
-            _webLogger = webLogger;
+
         }
 
         public async Task<IEnumerable<Supplier>> GetAll()

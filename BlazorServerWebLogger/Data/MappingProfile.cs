@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using SampleOnlineMall.Service.WebLogging;
 using SampleOnlineMall.WebLogger.Models;
 namespace BlazorServerWebLogger.Data
 {

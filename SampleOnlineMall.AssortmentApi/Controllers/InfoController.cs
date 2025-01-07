@@ -2,6 +2,7 @@
 using SampleOnlineMall.Core;
 using SampleOnlineMall.Core.Managers;
 using SampleOnlineMall.Service;
+using SampleOnlineMall.WebLogger.Services;
 using System;
 using System.Collections.Generic;
 
@@ -15,13 +16,15 @@ namespace SampleOnlineMall
     {
         public Serilog.ILogger _logger { get; set; }
         public CommodityItemManager _commodityItemManager { get; set; }
+        private IWebLoggerService _wLogger;
 
-        public InfoController(CommodityItemManager commodityItemManager, Serilog.ILogger logger)
+        public InfoController(CommodityItemManager commodityItemManager, Serilog.ILogger logger, IWebLoggerService wLogger)
         {
             
             _logger = logger;
             _logger.Information("InfoController_ctor_0");
             _commodityItemManager = commodityItemManager;
+            _wLogger = wLogger;
         }
 
         [HttpGet]

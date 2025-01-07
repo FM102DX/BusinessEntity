@@ -3,12 +3,20 @@
 # Список контейнеров
 $containers = @(
     [PSCustomObject]@{
+        Name = "SampleOnlineMall.AssortmentApi"
+        PortInt = 80
+        PortExt = 5010
+        ProjectPath = "C:\Develop\Mall2\SampleOnlineMall.AssortmentApi"
+        ContextPath = "C:\Develop\Mall2"
+        LogPath = "C:\Develop\Logs\"
+    },    
+    [PSCustomObject]@{
         Name = "web_logger-container"
         PortInt = 80
         PortExt = 5080
         ProjectPath = "C:\Develop\Mall2\BlazorServerWebLogger"
         ContextPath = "C:\Develop\Mall2"
-        LogPath = "C:\Develop\Logs\WebLogger"
+        LogPath = "C:\Develop\Logs\"
     },
     [PSCustomObject]@{
         Name = "postgres-logger-db"

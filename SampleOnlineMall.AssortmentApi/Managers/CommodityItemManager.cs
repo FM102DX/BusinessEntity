@@ -21,14 +21,13 @@ namespace SampleOnlineMall.Core.Managers
         private SampleOnlineMallAssortmentApiApp _app;
         private CustomMapper _mapper;
         private WebLoggerManager _webLogger;
-        public CommodityItemManager(IAsyncRepository<CommodityItem> repo, WebLoggerManager webLogger, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
+        public CommodityItemManager(IAsyncRepository<CommodityItem> repo, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
         {
             //_logger.Information($"CommodityItemManager_entering_ctor_0");
             _repo = repo;
             _logger = logger;
             _app = app;
             _mapper = mapper;
-            _webLogger = webLogger;
         }
 
         public async Task<IEnumerable<CommodityItem>> GetAll()
