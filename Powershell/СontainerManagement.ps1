@@ -72,56 +72,63 @@ function Action30 {
     $container = Select-Container
     if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
 
-    $projectPath = $container.ProjectPath
-    $contextPath = $container.ContextPath
-    $imageName = "$($container.Name)_image"
-    $dockerfilePath = "$projectPath\Dockerfile"
+      # Подготовка основных путей и переменных
+      $projectPath    = $container.ProjectPath
+      $contextPath    = $container.ContextPath
+      $imageName      = ("{0}_image" -f $container.Name).ToLower()    # приводим к нижнему регистру
+      $dockerfilePath = Join-Path $projectPath 'Dockerfile'
     $portExt = $container.PortExt
     $portInt = $container.PortInt
-
-    if (-not (Test-Path $contextPath)) {
-        Write-Error "Контекст сборки не найден: $contextPath"
-        return
-    }
-
-    Write-Host "Переход в каталог проекта..."
-    Set-Location -Path $projectPath
-
-    Write-Host "Сборка проекта..."
-    dotnet build
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Ошибка сборки проекта. Проверьте код и повторите попытку."
-        return
-    }
-
-    Write-Host "Создание Docker-образа..."
-    docker build -t $imageName -f $dockerfilePath $contextPath
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Ошибка создания Docker-образа. Проверьте Dockerfile и повторите попытку."
-        return
-    }
-
-    Write-Host "Проверка существующего контейнера..."
-    $existingContainer = docker ps -a --filter "name=$($container.Name)" --format "{{.ID}}"
-
-    if ($existingContainer) {
-        Write-Host "Остановка и удаление существующего контейнера..."
-        docker stop $existingContainer
-        docker rm $existingContainer
-    }
-
-    Write-Host "Запуск контейнера..."
-    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-networkmall2 -e 'ASPNETCORE_ENVIRONMENT=Development' -d --name $($container.Name) -p "$($portExt):$($portInt)" $imageName
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
-        return
-    }
-
-    Write-Host "Получение IP-адреса контейнера..."
-    $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container.Name
-    Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
+  
+      # Проверка существования контекста сборки
+      if (-not (Test-Path $contextPath)) {
+          Write-Error "Контекст сборки не найден: $contextPath"
+          return
+      }
+  
+      Write-Host "Переход в каталог проекта..."
+      Set-Location -Path $projectPath
+  
+      Write-Host "Сборка проекта..."
+      dotnet build
+      if ($LASTEXITCODE -ne 0) {
+          Write-Error "Ошибка сборки проекта. Проверьте код и повторите попытку."
+          return
+      }
+  
+      Write-Host "Создание Docker-образа..."
+      docker build -t $imageName -f $dockerfilePath $contextPath
+      if ($LASTEXITCODE -ne 0) {
+          Write-Error "Ошибка создания Docker-образа. Проверьте Dockerfile и повторите попытку."
+          return
+      }
+  
+      Write-Host "Проверка существующего контейнера..."
+      $existingContainer = docker ps -a --filter "name=$($container.Name)" --format "{{.ID}}"
+  
+      if ($existingContainer) {
+          Write-Host "Остановка и удаление существующего контейнера..."
+          docker stop $existingContainer | Out-Null
+          docker rm $existingContainer | Out-Null
+      }
+  
+      Write-Host "Запуск контейнера..."
+      docker run `
+          -e 'ASPNETCORE_URLS=http://*:80' `
+          --network "docker-networkmall2" `
+          -e 'ASPNETCORE_ENVIRONMENT=Development' `
+          -d `
+          --name $($container.Name) `
+          -p "$($portInt):$($port)" `
+          $imageName
+      if ($LASTEXITCODE -ne 0) {
+          Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
+          return
+      }
+  
+      Write-Host "Получение IP-адреса контейнера..."
+      $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $($container.Name)
+      Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
 }
 
 # Основной цикл работы
