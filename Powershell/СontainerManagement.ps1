@@ -77,10 +77,11 @@ function Action30 {
         return
     }
 
-    $projectPath = $container.ProjectPath
-    $contextPath = $container.ContextPath
-    $imageName = "$($container.Name)_image"
-    $dockerfilePath = "$projectPath\Dockerfile"
+      # Подготовка основных путей и переменных
+      $projectPath    = $container.ProjectPath
+      $contextPath    = $container.ContextPath
+      $imageName      = ("{0}_image" -f $container.Name).ToLower()    # приводим к нижнему регистру
+      $dockerfilePath = Join-Path $projectPath 'Dockerfile'
     $portExt = $container.PortExt
     $portInt = $container.PortInt
 
