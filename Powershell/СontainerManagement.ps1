@@ -72,7 +72,10 @@ function Action20 {
 }
 function Action30 {
     $container = Select-Container
-    if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
+    if ($null -eq $container) {
+        Write-Host "Неверный выбор" -ForegroundColor Red
+        return
+    }
 
     $projectPath = $container.ProjectPath
     $contextPath = $container.ContextPath
@@ -84,6 +87,17 @@ function Action30 {
     if (-not (Test-Path $contextPath)) {
         Write-Error "Контекст сборки не найден: $contextPath"
         return
+    }
+
+    # Остановка и удаление существующего контейнера, если он есть
+    Write-Host "Проверка запущенного контейнера с именем $($container.Name)..."
+    $existingContainer = docker ps -q --filter "name=$($container.Name)"
+
+    if ($existingContainer) {
+        Write-Host "Остановка существующего контейнера $($container.Name)..."
+        docker stop $existingContainer
+        Write-Host "Удаление существующего контейнера $($container.Name)..."
+        docker rm $existingContainer
     }
 
     Write-Host "Переход в каталог проекта..."
@@ -105,17 +119,9 @@ function Action30 {
         return
     }
 
-    Write-Host "Проверка существующего контейнера..."
-    $existingContainer = docker ps -a --filter "name=$($container.Name)" --format "{{.ID}}"
-
-    if ($existingContainer) {
-        Write-Host "Остановка и удаление существующего контейнера..."
-        docker stop $existingContainer
-        docker rm $existingContainer
-    }
-
-    Write-Host "Запуск контейнера..."
+    Write-Host "Запуск нового контейнера..."
     docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-networkmall2 -e 'ASPNETCORE_ENVIRONMENT=Development' -d --name $($container.Name) -p "$($portExt):$($portInt)" $imageName
+
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
         return
