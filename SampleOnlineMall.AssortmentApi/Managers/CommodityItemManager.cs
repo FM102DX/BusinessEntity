@@ -11,20 +11,21 @@ using System.IO;
 using Shim= SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.Formats;
 using SampleOnlineMall.Core.Mappers;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.Core.Managers
 {
     public class CommodityItemManager
     {
         private IAsyncRepository<CommodityItem> _repo;
-        private Serilog.ILogger _logger;
+        private IWebLoggerService _wLogger;
         private SampleOnlineMallAssortmentApiApp _app;
         private CustomMapper _mapper;
-        public CommodityItemManager(IAsyncRepository<CommodityItem> repo, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
+        public CommodityItemManager(IAsyncRepository<CommodityItem> repo, IWebLoggerService wLogger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
         {
             //_logger.Information($"CommodityItemManager_entering_ctor_0");
             _repo = repo;
-            _logger = logger;
+            _wLogger = wLogger;
             _app = app;
             _mapper = mapper;
         }
@@ -46,7 +47,7 @@ namespace SampleOnlineMall.Core.Managers
                 await _repo.DeleteAsync(id);
                 var imgPath = _app.GetCommodityItemImageDirectoryFromGuid(id);
                 var exists = Directory.Exists(imgPath);
-                _logger.Information($"trying to delete {imgPath}, it exists: {exists}");
+                _wLogger.Information($"trying to delete {imgPath}, it exists: {exists}");
                 if (exists)
                 {
                     Directory.Delete(imgPath,true);
@@ -55,7 +56,7 @@ namespace SampleOnlineMall.Core.Managers
             }
             catch (Exception ex)
             {
-                _logger.Error($"{ex.Message}");
+                _wLogger.Error($"{ex.Message}");
                 return CommonOperationResult.SayFail($"{ex.Message}");
             }
         }
@@ -74,7 +75,7 @@ namespace SampleOnlineMall.Core.Managers
             }
             catch (Exception ex)
             {
-                _logger.Error($"{ex.Message}");
+                _wLogger.Error($"{ex.Message}");
                 return CommonOperationResult.SayFail($"{ex.Message}");
 
             }
@@ -82,12 +83,12 @@ namespace SampleOnlineMall.Core.Managers
 
         public async Task<CommonOperationResult> InsertFromWebApi (CommodityItemApiFeed item)
         {
-            _logger.Information($"This is ItemManager. Received commodity item name={item.Name}");
+            _wLogger.Information($"This is ItemManager. Received commodity item name={item.Name}");
             //_webLogger.Log($"inserting item name={item.Name}");
             try
             {
                 var exists = await _repo.Exists(item.Id);
-                _logger.Information($"Checking item existance name={item.Name}, result: {exists}");
+                _wLogger.Information($"Checking item existance name={item.Name}, result: {exists}");
                 if (exists)
                 {
                     return CommonOperationResult.SayFail($"Unable to insert assortment item with name={item.Name}");
@@ -149,7 +150,7 @@ namespace SampleOnlineMall.Core.Managers
             }
             catch (Exception ex)
             {
-                _logger.Error($"{ex.Message}");
+                _wLogger.Error($"{ex.Message}");
                 return CommonOperationResult.SayFail($"Ex={ex.Message} InnerEx={ex.InnerException}");
             }
         }

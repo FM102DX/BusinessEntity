@@ -20,7 +20,7 @@ namespace SampleOnlineMall.WebLogger.Services
     {
         private bool _isActive { get; set; } = true;
         private readonly string _serviceCode;
-        private const string LoggerUrl = "http://localhost:5080/api/WebLogger/CreateLogRecord";
+        private const string LoggerUrl = "http://web_logger_container:5080/api/WebLogger/CreateLogRecord";
         public WebLoggerService(string serviceCode)
         {
             _serviceCode = serviceCode ?? throw new ArgumentNullException(nameof(serviceCode));
@@ -47,19 +47,33 @@ namespace SampleOnlineMall.WebLogger.Services
 
         private async Task SendLogAsync(string messageType, string message)
         {
-            var logEntry = new LogEntryTransferDto
+            try
             {
-                Timestamp = DateTime.UtcNow,
-                ServiceCode = _serviceCode,
-                MessageType = messageType,
-                Message = message
-            };
+                var logEntry = new LogEntryTransferDto
+                {
+                    Timestamp = DateTime.UtcNow,
+                    ServiceCode = _serviceCode,
+                    MessageType = messageType,
+                    Message = message
+                };
 
-            using var httpClient = new HttpClient { BaseAddress = new Uri("http://localhost:5080") };
-            var content = new StringContent(JsonSerializer.Serialize(logEntry), Encoding.UTF8, "application/json");
+                Console.WriteLine($"P1");
+                using var httpClient = new HttpClient { BaseAddress = new Uri("http://web_logger_container:5080")};
+                Console.WriteLine($"P2");
+                var content = new StringContent(JsonSerializer.Serialize(logEntry), Encoding.UTF8, "application/json");
+                Console.WriteLine($"P3 url={LoggerUrl} content={content} base={httpClient.BaseAddress}");
 
-            var response = await httpClient.PostAsync(LoggerUrl, content);
-            response.EnsureSuccessStatusCode();
+                var response = await httpClient.PostAsync(LoggerUrl, content);
+
+                Console.WriteLine($"P4");
+
+                response.EnsureSuccessStatusCode();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred: msg={ex.Message} inn={ex.InnerException?.Message}");
+            }
         }
+
     }
 }

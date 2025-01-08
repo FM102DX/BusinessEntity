@@ -26,7 +26,6 @@ namespace SampleOnlineMall
             builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 
             builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService("ASRT"));
-
             var serviceProvider = builder.Services.BuildServiceProvider();
             var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
 

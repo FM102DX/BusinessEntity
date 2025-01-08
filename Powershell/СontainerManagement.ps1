@@ -42,14 +42,6 @@ $containers = @(
         LogPath = "C:\Develop\Logs\PostgresAssort"
     }
 )
-function Show-Menu {
-    Write-Host "Меню:" -ForegroundColor Green
-    Write-Host "10 -- Подключиться к выбранному контейнеру"
-    Write-Host "20 -- Вывести диагностическую информацию для выбранного контейнера"
-    Write-Host "30 -- Сбилдить и запустить контейнер"
-    Write-Host "80 -- Очистить экран (CLS)"
-    Write-Host "99 -- Выход"
-}
 function Select-Container {
     Write-Host "Выберите контейнер:" -ForegroundColor Cyan
     $i = 1
@@ -60,6 +52,24 @@ function Select-Container {
     $choice = Read-Host "Введите номер контейнера"
     return $containers[$choice - 1]
 }
+
+function GetContainerByName {
+    param (
+        [string]$containerName
+    )
+
+    # Поиск контейнера по имени
+    $container = $containers | Where-Object { $_.Name -eq $containerName }
+
+    if ($null -eq $container) {
+        Write-Host "Контейнер с именем '$containerName' не найден." -ForegroundColor Red
+        return $null
+    }
+
+    Write-Host "Контейнер '$containerName' найден." -ForegroundColor Green
+    return $container
+}
+
 function Action10 {
     $container = Select-Container
     if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
@@ -70,20 +80,35 @@ function Action20 {
     if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "docker exec -it $($container.Name) /bin/bash -c 'apt-get update && apt-get install -y procps curl net-tools mc && echo && ps aux | grep -v /bin/bash && echo && (curl -s http://localhost:80 || echo CURLfailed) && echo && netstat -tuln'"
 }
-function Action30 {
+
+function BuildAndRunBusinessLogicContainers {
+    BuildAndRunContainer -container (GetContainerByName -containerName 'admin-node')
+    BuildAndRunContainer -container (GetContainerByName -containerName 'assort-api-container')
+    BuildAndRunContainer -container (GetContainerByName -containerName 'web_logger-container')
+}
+
+function SelectContainerAndRun {
     $container = Select-Container
     if ($null -eq $container) {
-        Write-Host "Неверный выбор" -ForegroundColor Red
-        return
+        Write-Host "Неверный выбор контейнера" -ForegroundColor Red
+        return $null
     }
+    BuildAndRunContainer -container $container
+}
 
-      # Подготовка основных путей и переменных
-      $projectPath    = $container.ProjectPath
-      $contextPath    = $container.ContextPath
-      $imageName      = ("{0}_image" -f $container.Name).ToLower()    # приводим к нижнему регистру
-      $dockerfilePath = Join-Path $projectPath 'Dockerfile'
-    $portExt = $container.PortExt
-    $portInt = $container.PortInt
+
+function BuildAndRunContainer {
+    param (
+        [PSCustomObject]$container
+    )
+
+    # Подготовка основных путей и переменных
+    $projectPath    = $container.ProjectPath
+    $contextPath    = $container.ContextPath
+    $imageName      = ("{0}_image" -f $container.Name).ToLower()
+    $dockerfilePath = Join-Path $projectPath 'Dockerfile'
+    $portExt        = $container.PortExt
+    $portInt        = $container.PortInt
 
     if (-not (Test-Path $contextPath)) {
         Write-Error "Контекст сборки не найден: $contextPath"
@@ -121,7 +146,7 @@ function Action30 {
     }
 
     Write-Host "Запуск нового контейнера..."
-    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-networkmall2 -e 'ASPNETCORE_ENVIRONMENT=Development' -d --name $($container.Name) -p "$($portExt):$($portInt)" $imageName
+    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-networkmall2 -e 'ASPNETCORE_ENVIRONMENT=Development' -d --name $container.Name -p "$($portExt):$($portInt)" $imageName
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
@@ -133,6 +158,16 @@ function Action30 {
     Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
 }
 
+function Show-Menu {
+    Write-Host "Меню:" -ForegroundColor Green
+    Write-Host "10 -- Подключиться к выбранному контейнеру"
+    Write-Host "20 -- Вывести диагностическую информацию для выбранного контейнера"
+    Write-Host "30 -- Сбилдить и запустить контейнер"
+    Write-Host "40 -- Сбилдить и запустить бизнес-логику"
+    Write-Host "80 -- Очистить экран (CLS)"
+    Write-Host "99 -- Выход"
+}
+
 # Основной цикл работы
 do {
     Show-Menu
@@ -142,6 +177,7 @@ do {
         "10" { Action10 }
         "20" { Action20 }
         "30" { Action30 }
+        "40" { BuildAndRunBusinessLogicContainers } 
         "80" { Clear-Host }
         "99" { break }
         default {

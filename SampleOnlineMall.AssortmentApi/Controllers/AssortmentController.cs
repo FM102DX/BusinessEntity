@@ -22,7 +22,30 @@ namespace SampleOnlineMall
             _commodityItemManager= commodityItemManager;
             _wLogger= wLogger;
             _wLogger.SetActiveStatus(true);
+            _wLogger.Information("AssortmentController initialized");
         }
+
+        [HttpGet]
+        [Route("info/")]
+        public async Task<string> Info()
+        {
+            try
+            {
+                _wLogger.Information($"This is assortment controller ping");
+                Console.WriteLine($"This is assortment controller ping");
+                return $"This is assortment controller ping";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+                }
+                return $"An error occurred: {ex.Message}";
+            }
+        }
+
 
         [HttpDelete]
         [Route("deleteallitems/")]
