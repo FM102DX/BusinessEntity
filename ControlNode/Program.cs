@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.DataAccess.DataAccess;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace ControlNode
 {
@@ -19,31 +20,35 @@ namespace ControlNode
             builder.Services.AddRazorPages();
             builder.Services.AddServerSideBlazor();
 
+            //логгирование в веб-логгер
+            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService("CTRL"));
+            var serviceProvider = builder.Services.BuildServiceProvider();
+            var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
+            wLogger.Information("Приложение запущено");
+
             var opts = new WebApiAsyncRepositoryOptions()
-                .SetBaseAddress("http://localhost:5000")
+                .SetBaseAddress("http://localhost:5010")
                 .SetInsertHostPath("insertitem")
                 .SetDeleteAllHostPath("deleteallitems");
+            builder.Services.AddScoped<WebApiAsyncRepository<CommodityItemApiFeed>>(provider =>
+            {
+                return new WebApiAsyncRepository<CommodityItemApiFeed>(opts, wLogger);
+            });
 
             builder.Services.AddScoped<AssortmentLoader>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
-            builder.Services.AddScoped<WebApiAsyncRepository<CommodityItemApiFeed>>(provider =>
-            {
-                return new WebApiAsyncRepository<CommodityItemApiFeed>(opts);
-            });
 
 
 
 
             var app = builder.Build();
-
-            // Configure the HTTP request pipeline.
+            // Configure the HTTP request pipeline
             if (!app.Environment.IsDevelopment())
             {
                 app.UseExceptionHandler("/Error");
-                // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+                // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts
                 app.UseHsts();
             }
-
             app.UseHttpsRedirection();
 
             app.UseStaticFiles();
@@ -51,6 +56,7 @@ namespace ControlNode
             app.UseRouting();
 
             app.MapBlazorHub();
+
             app.MapFallbackToPage("/_Host");
 
             app.Run();

@@ -43,6 +43,7 @@ namespace SampleOnlineMall
         [Route("insertitem/")]
         public async Task<IActionResult> InsertCommodityItem([FromBody] CommodityItemApiFeed commodityItem)
         {
+            _wLogger.Information($"_entering assort api method");
             var rezult = await _commodityItemManager.InsertFromWebApi(commodityItem);
 
             if (rezult.Success)

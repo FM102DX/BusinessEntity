@@ -16,6 +16,11 @@ namespace SampleOnlineMall.Service.WebLogging
         public DateTime Timestamp { get; set; }
 
         /// <summary>
+        /// Тики (Ticks) от начала эпохи времени.
+        /// </summary>
+        public long Ticks => Timestamp.Ticks;
+
+        /// <summary>
         /// Код сервиса, отправившего лог-сообщение.
         /// </summary>
         [Required]
@@ -36,4 +41,3 @@ namespace SampleOnlineMall.Service.WebLogging
         public string Message { get; set; }
     }
 }
-
