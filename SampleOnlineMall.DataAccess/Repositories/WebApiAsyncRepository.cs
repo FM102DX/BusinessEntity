@@ -14,6 +14,8 @@ using SampleOnlineMall.DataAccess.Models;
 using SampleOnlineMall.Service;
 using System.Linq.Expressions;
 using System.Net.Mime;
+using SampleOnlineMall.WebLogger.Services;
+using System.Net.Http.Json;
 
 namespace SampleOnlineMall.DataAccess.DataAccess
 {
@@ -24,6 +26,7 @@ namespace SampleOnlineMall.DataAccess.DataAccess
         private static readonly object _locker = new object();
 
         private HttpClient httpClient;
+        private IWebLoggerService _wLogger;
 
         private Serilog.ILogger _logger
         {
@@ -32,16 +35,14 @@ namespace SampleOnlineMall.DataAccess.DataAccess
 
         private WebApiAsyncRepositoryOptions _options;
 
-        public WebApiAsyncRepository(WebApiAsyncRepositoryOptions options)
+        public WebApiAsyncRepository(WebApiAsyncRepositoryOptions options, IWebLoggerService wLogger)
         {
             _options = options;
             httpClient = new System.Net.Http.HttpClient(new HttpClientHandler());
             httpClient.BaseAddress = new Uri(_options.BaseAddress);
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            _wLogger=wLogger;
         }
-
-
-        //getall
 
         public async Task<int> GetCountAsync()
         {
@@ -167,20 +168,29 @@ namespace SampleOnlineMall.DataAccess.DataAccess
 
                 jsonContent = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = await httpClient.PostAsync($"{_options.InsertHostPath}", jsonContent);
+                _wLogger.Information($"WEBREPO_Sending assort content= {jsonContent}");
 
-                switch (response.StatusCode)
+                var response = await httpClient.PostAsync($"{_options.InsertHostPath}", jsonContent);
+                
+                rez = CommonOperationResult.SayOk(response.Content.ReadAsStringAsync().Result);
+
+                // Логгирование статуса и содержимого ответа
+                if (response.IsSuccessStatusCode)
                 {
-                    case System.Net.HttpStatusCode.OK:
-                        rez = CommonOperationResult.SayOk(response.Content.ReadAsStringAsync().Result);
-                        break;
-                    default:
-                        throw new Exception();
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    _wLogger.Information($"WEBREPO_Response received: StatusCode={response.StatusCode}, Content={responseContent}");
                 }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _wLogger.Error($"WEBREPO_Error: StatusCode={response.StatusCode}, Content={errorContent}");
+                }
+
             }
             catch (Exception ex)
             {
-                rez = CommonOperationResult.SayFail($"WebApiRepository caught an exception: {ex.Message}  {ex.StackTrace}");
+                _wLogger.Error($"WEBREPO_ERROR_"+ $"WebApiRepository caught an exception: msg={ex.Message} inn={ex.InnerException} {ex.StackTrace}");
+                rez = CommonOperationResult.SayFail($"WebApiRepository caught an exception: {ex.Message} inn={ex.InnerException} {ex.StackTrace}");
             }
             return rez;
         }
@@ -201,14 +211,18 @@ namespace SampleOnlineMall.DataAccess.DataAccess
 
                 var response = await httpClient.PutAsync($"{_options.UpdateHostPath}", jsonContent);
 
-                switch (response.StatusCode)
-                {
+                rez = CommonOperationResult.SayOk(response.Content.ReadAsStringAsync().Result);
 
-                    case System.Net.HttpStatusCode.OK:
-                        rez = CommonOperationResult.SayOk(response.Content.ReadAsStringAsync().Result);
-                        break;
-                    default:
-                        throw new Exception();
+                // Логгирование статуса и содержимого ответа
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    _wLogger.Information($"WEBREPO_Response received: StatusCode={response.StatusCode}, Content={responseContent}");
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _wLogger.Error($"WEBREPO_Error: StatusCode={response.StatusCode}, Content={errorContent}");
                 }
             }
             catch (Exception ex)

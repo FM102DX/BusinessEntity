@@ -25,15 +25,13 @@ namespace SampleOnlineMall
             builder.Configuration.AddConfiguration(configuration);
             builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 
-
-            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService("ASSORT"));
+            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService("ASRT"));
 
             var serviceProvider = builder.Services.BuildServiceProvider();
             var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
 
             // Используем логгер
-            wLogger.Information("Приложение запущено.");
-
+            wLogger.Information("Приложение запущено");
 
             #region бизнес-логика
 
@@ -86,22 +84,21 @@ namespace SampleOnlineMall
             builder.Services.AddSwaggerGen();
             _logger.Information("P2");
 
-
             //var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
             //if (!string.IsNullOrEmpty(urls))
             //{
             //    builder.WebHost.UseUrls(urls);
             //}
 
-            builder.WebHost.ConfigureKestrel(options =>
-            {
-                options.ListenAnyIP(5000); // HTTP на всех интерфейсах
-                //нам не нужен сертификат внутри контейнера, это делает шлюз
-                //options.ListenAnyIP(443, listenOptions =>
-                //{
-                //    listenOptions.UseHttps(); // HTTPS на всех интерфейсах
-                //});
-            });
+            //builder.WebHost.ConfigureKestrel(options =>
+            //{
+            //    options.ListenAnyIP(5000); // HTTP на всех интерфейсах
+            //    //нам не нужен сертификат внутри контейнера, это делает шлюз
+            //    //options.ListenAnyIP(443, listenOptions =>
+            //    //{
+            //    //    listenOptions.UseHttps(); // HTTPS на всех интерфейсах
+            //    //});
+            //});
 
             var app = builder.Build();
 
@@ -109,7 +106,6 @@ namespace SampleOnlineMall
 
             app.UseSwagger();
             app.UseSwaggerUI();
-
 
             if (app.Environment.IsDevelopment())
             {

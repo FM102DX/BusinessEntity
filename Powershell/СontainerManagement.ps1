@@ -1,9 +1,16 @@
 # Управление Docker-контейнерами
-
 # Список контейнеров
 $containers = @(
     [PSCustomObject]@{
-        Name = "SampleOnlineMall.AssortmentApi"
+        Name = "admin-node"
+        PortInt = 80
+        PortExt = 5020
+        ProjectPath = "C:\Develop\Mall2\ControlNode"
+        ContextPath = "C:\Develop\Mall2"
+        LogPath = "C:\Develop\Logs\"
+    },  
+[PSCustomObject]@{
+        Name = "assort-api-container"
         PortInt = 80
         PortExt = 5010
         ProjectPath = "C:\Develop\Mall2\SampleOnlineMall.AssortmentApi"
@@ -35,7 +42,6 @@ $containers = @(
         LogPath = "C:\Develop\Logs\PostgresAssort"
     }
 )
-
 function Show-Menu {
     Write-Host "Меню:" -ForegroundColor Green
     Write-Host "10 -- Подключиться к выбранному контейнеру"
@@ -44,7 +50,6 @@ function Show-Menu {
     Write-Host "80 -- Очистить экран (CLS)"
     Write-Host "99 -- Выход"
 }
-
 function Select-Container {
     Write-Host "Выберите контейнер:" -ForegroundColor Cyan
     $i = 1
@@ -55,22 +60,22 @@ function Select-Container {
     $choice = Read-Host "Введите номер контейнера"
     return $containers[$choice - 1]
 }
-
 function Action10 {
     $container = Select-Container
     if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "docker exec -it $($container.Name) sh"
 }
-
 function Action20 {
     $container = Select-Container
     if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "docker exec -it $($container.Name) /bin/bash -c 'apt-get update && apt-get install -y procps curl net-tools mc && echo && ps aux | grep -v /bin/bash && echo && (curl -s http://localhost:80 || echo CURLfailed) && echo && netstat -tuln'"
 }
-
 function Action30 {
     $container = Select-Container
-    if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
+    if ($null -eq $container) {
+        Write-Host "Неверный выбор" -ForegroundColor Red
+        return
+    }
 
       # Подготовка основных путей и переменных
       $projectPath    = $container.ProjectPath
@@ -79,56 +84,53 @@ function Action30 {
       $dockerfilePath = Join-Path $projectPath 'Dockerfile'
     $portExt = $container.PortExt
     $portInt = $container.PortInt
-  
-      # Проверка существования контекста сборки
-      if (-not (Test-Path $contextPath)) {
-          Write-Error "Контекст сборки не найден: $contextPath"
-          return
-      }
-  
-      Write-Host "Переход в каталог проекта..."
-      Set-Location -Path $projectPath
-  
-      Write-Host "Сборка проекта..."
-      dotnet build
-      if ($LASTEXITCODE -ne 0) {
-          Write-Error "Ошибка сборки проекта. Проверьте код и повторите попытку."
-          return
-      }
-  
-      Write-Host "Создание Docker-образа..."
-      docker build -t $imageName -f $dockerfilePath $contextPath
-      if ($LASTEXITCODE -ne 0) {
-          Write-Error "Ошибка создания Docker-образа. Проверьте Dockerfile и повторите попытку."
-          return
-      }
-  
-      Write-Host "Проверка существующего контейнера..."
-      $existingContainer = docker ps -a --filter "name=$($container.Name)" --format "{{.ID}}"
-  
-      if ($existingContainer) {
-          Write-Host "Остановка и удаление существующего контейнера..."
-          docker stop $existingContainer | Out-Null
-          docker rm $existingContainer | Out-Null
-      }
-  
-      Write-Host "Запуск контейнера..."
-      docker run `
-          -e 'ASPNETCORE_URLS=http://*:80' `
-          --network "docker-networkmall2" `
-          -e 'ASPNETCORE_ENVIRONMENT=Development' `
-          -d `
-          --name $($container.Name) `
-          -p "$($portInt):$($port)" `
-          $imageName
-      if ($LASTEXITCODE -ne 0) {
-          Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
-          return
-      }
-  
-      Write-Host "Получение IP-адреса контейнера..."
-      $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $($container.Name)
-      Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
+
+    if (-not (Test-Path $contextPath)) {
+        Write-Error "Контекст сборки не найден: $contextPath"
+        return
+    }
+
+    # Остановка и удаление существующего контейнера, если он есть
+    Write-Host "Проверка запущенного контейнера с именем $($container.Name)..."
+    $existingContainer = docker ps -q --filter "name=$($container.Name)"
+
+    if ($existingContainer) {
+        Write-Host "Остановка существующего контейнера $($container.Name)..."
+        docker stop $existingContainer
+        Write-Host "Удаление существующего контейнера $($container.Name)..."
+        docker rm $existingContainer
+    }
+
+    Write-Host "Переход в каталог проекта..."
+    Set-Location -Path $projectPath
+
+    Write-Host "Сборка проекта..."
+    dotnet build
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Ошибка сборки проекта. Проверьте код и повторите попытку."
+        return
+    }
+
+    Write-Host "Создание Docker-образа..."
+    docker build -t $imageName -f $dockerfilePath $contextPath
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Ошибка создания Docker-образа. Проверьте Dockerfile и повторите попытку."
+        return
+    }
+
+    Write-Host "Запуск нового контейнера..."
+    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-networkmall2 -e 'ASPNETCORE_ENVIRONMENT=Development' -d --name $($container.Name) -p "$($portExt):$($portInt)" $imageName
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
+        return
+    }
+
+    Write-Host "Получение IP-адреса контейнера..."
+    $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container.Name
+    Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
 }
 
 # Основной цикл работы

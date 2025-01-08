@@ -14,4 +14,8 @@
     <ProjectReference Include="..\SampleOnlineMall.DataAccess\SampleOnlineMall.DataAccess.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Managers\" />
+  </ItemGroup>
+
 </Project>

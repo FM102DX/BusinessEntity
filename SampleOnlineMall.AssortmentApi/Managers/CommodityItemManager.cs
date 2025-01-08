@@ -20,7 +20,6 @@ namespace SampleOnlineMall.Core.Managers
         private Serilog.ILogger _logger;
         private SampleOnlineMallAssortmentApiApp _app;
         private CustomMapper _mapper;
-        private WebLoggerManager _webLogger;
         public CommodityItemManager(IAsyncRepository<CommodityItem> repo, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
         {
             //_logger.Information($"CommodityItemManager_entering_ctor_0");
@@ -84,7 +83,7 @@ namespace SampleOnlineMall.Core.Managers
         public async Task<CommonOperationResult> InsertFromWebApi (CommodityItemApiFeed item)
         {
             _logger.Information($"This is ItemManager. Received commodity item name={item.Name}");
-            _webLogger.Log($"inserting item name={item.Name}");
+            //_webLogger.Log($"inserting item name={item.Name}");
             try
             {
                 var exists = await _repo.Exists(item.Id);
@@ -174,7 +173,7 @@ namespace SampleOnlineMall.Core.Managers
             }
 
             var targetHeightVar = source.Height / ratio;
-            _webLogger.Log($"source.Width={source.Width} ratio={ratio} targetWidth={targetWidth} targetHeightVar ={targetHeightVar}");
+          //  _webLogger.Log($"source.Width={source.Width} ratio={ratio} targetWidth={targetWidth} targetHeightVar ={targetHeightVar}");
             int targetHeight32 = Convert.ToInt32(targetHeightVar);
             SixLabors.ImageSharp.Size targetSize = new SixLabors.ImageSharp.Size(targetWidth, targetHeight32);
             source.Mutate(x => x.Resize(targetSize));

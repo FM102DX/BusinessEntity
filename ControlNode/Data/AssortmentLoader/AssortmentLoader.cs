@@ -3,6 +3,7 @@ using ReactiveUI;
 using SampleOnlineMall.Core;
 using System.Reflection;
 using SampleOnlineMall.DataAccess.DataAccess;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace ControlNode.Data.AssortmentLoader
 {
@@ -14,11 +15,18 @@ namespace ControlNode.Data.AssortmentLoader
         private Microsoft.Extensions.Options.IOptions<AppSettings> _settings;
         private readonly IWebHostEnvironment _env;
         private WebApiAsyncRepository<CommodityItemApiFeed> _webRepo;
-        public AssortmentLoader(Microsoft.Extensions.Options.IOptions<AppSettings> settings, WebApiAsyncRepository<CommodityItemApiFeed> webRepo, IWebHostEnvironment env)
+        private IWebLoggerService _wLogger;
+        public AssortmentLoader(
+            Microsoft.Extensions.Options.IOptions<AppSettings> settings, 
+            WebApiAsyncRepository<CommodityItemApiFeed> webRepo, 
+            IWebHostEnvironment env,
+            IWebLoggerService wLogger
+            )
         {
             _settings=settings;
             _env = env;
             _webRepo = webRepo;
+            _wLogger = wLogger;
         }
         public string Status
         {
@@ -50,10 +58,8 @@ namespace ControlNode.Data.AssortmentLoader
 
         public async Task LoadAsync()
         {
-            
             //чистим ассортимент
-
-            
+           
             //берем ассортимент и перебираем там папки внутри
             LoadedPos = 0;
             List<CommodityItemApiFeed> resultFeedSource = new List<CommodityItemApiFeed>();
@@ -104,7 +110,10 @@ namespace ControlNode.Data.AssortmentLoader
 
                 foreach (var item in resultFeedSource)
                 {
+
+                    _wLogger.Information($"ASSRTLDR_Sending assort item {item.Name}");
                     var rezult = await _webRepo.AddAsync(item);
+                    
                     //await Task.Delay(1000);
                     LoadedPos++;
                 }
