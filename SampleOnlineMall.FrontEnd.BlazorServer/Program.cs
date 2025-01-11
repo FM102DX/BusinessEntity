@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using SampleOnlineMall.Core;
-using SampleOnlineMall.Core.Managers;
 using SampleOnlineMall.Core.Mappers;
 using SampleOnlineMall.DataAccess.Abstract;
 using SampleOnlineMall.DataAccess.DataAccess;
 using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 using SampleOnlineMall.Service;
+using SampleOnlineMall.Service.WebLogging;
+using SampleOnlineMall.WebLogger.Services;
 using Serilog;
 using Serilog.Events;
 
@@ -35,17 +36,18 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
                        .WriteTo.File(logFilePath)
                        .CreateLogger();
 
+            // веб-логгер
+            var _webLoggerSettings = new WebLoggerLocalSettings();
+            _webLoggerSettings.ServiceCode = "FRNT";
+            _webLoggerSettings.HostAlias = Environment.GetEnvironmentVariable("IS_DOCKER") == "true"
+                ? builder.Configuration.GetConnectionString("web_logger-container")
+                : builder.Configuration.GetConnectionString("localhost");
+            builder.Services.AddSingleton(typeof(WebLoggerLocalSettings), (x) => _webLoggerSettings);
+            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService(_webLoggerSettings));
 
-            var webLoggerOptions = new WebApiAsyncRepositoryOptions()
-                        .SetLogger(_logger)
-                        .SetBaseAddress("https://weblogger.t109.tech")
-                        .SetInsertHostPath("insertitem/");
-
-            var webLogger = new WebLoggerManager("blazorfrontend", webLoggerOptions);
-            webLogger.Log("Weblogger p1");
-            _logger.Information("Blazor P1");
-
-            _logger.Information("Blazor P2");
+            var serviceProvider = builder.Services.BuildServiceProvider();
+            var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
+            wLogger.Information("Приложение запущено");
 
             builder.Services.AddSingleton(typeof(Serilog.ILogger), (x) => _logger);
 
@@ -57,7 +59,8 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
                 .SetGetAllByRequestHostPath("getallbyrequest/")
                 .SetSearchHostPath("search/");
 
-            builder.Services.AddScoped(typeof(IAsyncRepository<CommodityItemFrontend>), (x) => new WebApiAsyncRepository<CommodityItemFrontend>(webRepoOptions));
+            builder.Services.AddSingleton(typeof(WebApiAsyncRepositoryOptions), (x) => webRepoOptions);
+            builder.Services.AddScoped(typeof(IAsyncRepository<CommodityItemFrontend>), typeof(WebApiAsyncRepositoryOptions));
             builder.Services.AddScoped(typeof(SampleOnlineMallFrontEndBlazorApp), typeof(SampleOnlineMallFrontEndBlazorApp));
 
             FrontEndSettings frontEndSettings = new FrontEndSettings();
@@ -68,7 +71,6 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
             builder.Services.AddScoped(typeof(StoreManager), typeof(StoreManager));
             builder.Services.AddScoped(typeof(CustomMapper), typeof(CustomMapper));
             builder.Services.AddScoped(typeof(ComponentHub), typeof(ComponentHub));
-            _logger.Information("Blazor P3");
 
             #endregion 
 

@@ -80,7 +80,7 @@ namespace ControlNode.Data.AssortmentLoader
                     var commodityItem = JsonConvert.DeserializeObject<CommodityItemApiFeed>(jsonContent);
                     if (commodityItem != null)
                     {
-
+                        // Pic 1
                         string imagePath = Path.Combine(folder, "1.jpg");
                         if (File.Exists(imagePath))
                         {
@@ -106,6 +106,8 @@ namespace ControlNode.Data.AssortmentLoader
 
                         resultFeedSource.Add(commodityItem);
                     }
+
+                    break;
                 }
 
                 foreach (var item in resultFeedSource)

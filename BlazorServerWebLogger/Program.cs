@@ -42,9 +42,13 @@ namespace BlazorServerWebLogger
 
             builder.Services.AddSingleton(typeof(WebLoggerApp), (x) => _app); // само приложение
            
+
+
             var connectionString = Environment.GetEnvironmentVariable("IS_DOCKER") == "true"
                 ? builder.Configuration.GetConnectionString("DockerConnection")
                 : builder.Configuration.GetConnectionString("IisExpressConnection");
+
+
 
             Console.WriteLine($"ConnectionString={connectionString}");
 

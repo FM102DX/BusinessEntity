@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Net.Http;
+using System.Runtime;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using SampleOnlineMall.Service;
 using SampleOnlineMall.Service.WebLogging;
 
 
@@ -19,11 +21,20 @@ namespace SampleOnlineMall.WebLogger.Services
     public class WebLoggerService : IWebLoggerService
     {
         private bool _isActive { get; set; } = true;
-        private readonly string _serviceCode;
-        private const string LoggerUrl = "http://web_logger_container:5080/api/WebLogger/CreateLogRecord";
-        public WebLoggerService(string serviceCode)
+        private string _loggerUrl;
+        private WebLoggerLocalSettings _settings;
+        private GenericAppSettings _genAppSettings;
+        private string _host;
+        public WebLoggerService(WebLoggerLocalSettings settings, GenericAppSettings genAppSettings)
         {
-            _serviceCode = serviceCode ?? throw new ArgumentNullException(nameof(serviceCode));
+            Console.WriteLine($"Constructing class WebLoggerService");
+            _settings = settings;
+            _genAppSettings = genAppSettings;
+
+            _host = _genAppSettings.IsDocker ? _settings.HostAliasWhenDocker : _settings.HostAliasWhenIISExpress;
+            Console.WriteLine($"ServiceCode={_settings.ServiceCode}");
+            _loggerUrl = $"http://{_host}/api/WebLogger/CreateLogRecord";
+            Console.WriteLine($"LoggerUrl={_loggerUrl}");
         }
 
         public void SetActiveStatus(bool newStatus)
@@ -52,22 +63,21 @@ namespace SampleOnlineMall.WebLogger.Services
                 var logEntry = new LogEntryTransferDto
                 {
                     Timestamp = DateTime.UtcNow,
-                    ServiceCode = _serviceCode,
+                    ServiceCode = _settings.ServiceCode,
                     MessageType = messageType,
                     Message = message
                 };
 
-                Console.WriteLine($"P1");
-                using var httpClient = new HttpClient { BaseAddress = new Uri("http://web_logger_container:5080")};
-                Console.WriteLine($"P2");
+                Console.WriteLine($"LGR_P1");
+                using var httpClient = new HttpClient();
+                Console.WriteLine($"LGR_P2");
                 var content = new StringContent(JsonSerializer.Serialize(logEntry), Encoding.UTF8, "application/json");
-                Console.WriteLine($"P3 url={LoggerUrl} content={content} base={httpClient.BaseAddress}");
+                Console.WriteLine($"LGR_P3 url={_loggerUrl} content={content} base={httpClient.BaseAddress}");
 
-                var response = await httpClient.PostAsync(LoggerUrl, content);
+                var response = await httpClient.PostAsync(_loggerUrl, content);
 
-                Console.WriteLine($"P4");
+                Console.WriteLine($"LGR_P4");
 
-                response.EnsureSuccessStatusCode();
             }
             catch (Exception ex)
             {

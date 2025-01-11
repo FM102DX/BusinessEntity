@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.DataAccess.DataAccess;
+using SampleOnlineMall.Service.WebLogging;
 using SampleOnlineMall.WebLogger.Services;
 
 namespace ControlNode
@@ -21,7 +22,17 @@ namespace ControlNode
             builder.Services.AddServerSideBlazor();
 
             //логгирование в веб-логгер
-            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService("CTRL"));
+
+
+            // веб-логгер
+            var _webLoggerSettings = new WebLoggerLocalSettings();
+            _webLoggerSettings.ServiceCode = "CTRL";
+            _webLoggerSettings.HostAlias = Environment.GetEnvironmentVariable("IS_DOCKER") == "true"
+                ? builder.Configuration.GetConnectionString("web_logger-container")
+                : builder.Configuration.GetConnectionString("localhost");
+            builder.Services.AddSingleton(typeof(WebLoggerLocalSettings), (x) => _webLoggerSettings);
+            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService(_webLoggerSettings));
+            
             var serviceProvider = builder.Services.BuildServiceProvider();
             var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
             wLogger.Information("Приложение запущено");

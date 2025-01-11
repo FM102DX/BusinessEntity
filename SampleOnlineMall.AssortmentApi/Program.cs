@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.Core.Appilcation;
 using SampleOnlineMall.Core.Managers;
@@ -11,6 +12,8 @@ using SampleOnlineMall.Service;
 using SampleOnlineMall.Service.WebLogging;
 using SampleOnlineMall.WebLogger.Services;
 using Serilog;
+using System.Runtime;
+using WebLoggerSettings = SampleOnlineMall.Core.WebLoggerSettings;
 
 
 namespace SampleOnlineMall
@@ -25,49 +28,51 @@ namespace SampleOnlineMall
             builder.Configuration.AddConfiguration(configuration);
             builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 
-            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService("ASRT"));
-            var serviceProvider = builder.Services.BuildServiceProvider();
-            var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
-
-            // Используем логгер
-            wLogger.Information("Приложение запущено");
-
             #region бизнес-логика
 
-            var _app = new SampleOnlineMallAssortmentApiApp();
-            _app.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
+            // App class
+            var genApp = new GenericAppSettings();
+            genApp.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
+            builder.Services.AddSingleton(typeof(SampleOnlineMallAssortmentApiApp), (x) => genApp);
+
+
+            // Добавляем в DI секцию WebLoggerLocalSettings из appsettings.json
+            builder.Services.Configure<WebLoggerLocalSettings>(
+                builder.Configuration.GetSection("WebLoggerLocalSettings"));
+
+            // Для прямого использования через конструктор добавляем AddSingleton
+            builder.Services.AddSingleton(resolver =>
+                resolver.GetRequiredService<IOptions<WebLoggerLocalSettings>>().Value);
+
             
-            string logFilePath = System.IO.Path.Combine(_app.LogsDirectory, Functions.GetNextFreeFileName(_app.LogsDirectory, "AssortmentApiLogs", "txt"));
+            builder.Services.AddScoped<IWebLoggerService>();
+            
+            Console.WriteLine($"Configuring DI");
 
-            Serilog.ILogger _logger = new LoggerConfiguration()
-                  .WriteTo.File(logFilePath)
-                  .MinimumLevel.Debug()
-                  .CreateLogger();
 
-            _logger.Information("P1");
-            _logger.Information($"_app.IsDocker={Environment.GetEnvironmentVariable("IS_DOCKER")}");
+            
+            // используем логгер
+            var serviceProvider = builder.Services.BuildServiceProvider();
+            var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
+            wLogger.Information("Приложение запущено");
+
+
 
             foreach (var key in Environment.GetEnvironmentVariables().Keys)
             {
-                _logger.Information($"{key}={Environment.GetEnvironmentVariable(key.ToString())}");
+                wLogger.Information($"{key}={Environment.GetEnvironmentVariable(key.ToString())}");
             }
 
-
             // Add services to the container
-            builder.Services.AddSingleton(typeof(SampleOnlineMallAssortmentApiApp), (x) => _app);//само приложение
+
             builder.Services.AddSingleton(typeof(Microsoft.Extensions.Configuration.ConfigurationManager), (x) => builder.Configuration);
             builder.Services.AddScoped(typeof(DbContext), typeof(EfPostgresDbContext));
             builder.Services.AddScoped(typeof(CommodityItemManager));
             builder.Services.AddScoped(typeof(CommodityItemFrontendManager));
             builder.Services.AddScoped(typeof(SupplierManager));
-            builder.Services.AddSingleton(typeof(Serilog.ILogger), (x) => _logger);
             builder.Services.AddScoped(typeof(IAsyncRepository<CommodityItem>), typeof(EfAsyncRepository<CommodityItem>));
             builder.Services.AddScoped(typeof(IAsyncRepository<Supplier>), typeof(EfAsyncRepository<Supplier>));
-
             builder.Services.AddScoped<CustomMapper>();
-            //builder.Services.AddScoped(typeof(WebLoggerManager), (x) => new WebLoggerManager("assortment", loggerOptions));
-
-
 
             #endregion
 
@@ -78,39 +83,20 @@ namespace SampleOnlineMall
                 .AllowAnyHeader()));
 
             builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
-            _logger.Information("P2");
 
-            //var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
-            //if (!string.IsNullOrEmpty(urls))
-            //{
-            //    builder.WebHost.UseUrls(urls);
-            //}
 
-            //builder.WebHost.ConfigureKestrel(options =>
-            //{
-            //    options.ListenAnyIP(5000); // HTTP на всех интерфейсах
-            //    //нам не нужен сертификат внутри контейнера, это делает шлюз
-            //    //options.ListenAnyIP(443, listenOptions =>
-            //    //{
-            //    //    listenOptions.UseHttps(); // HTTPS на всех интерфейсах
-            //    //});
-            //});
+
+
 
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
 
             app.UseSwagger();
+
             app.UseSwaggerUI();
-
-            if (app.Environment.IsDevelopment())
-            {
-            }
-
-            _logger.Information("P3");
 
             app.UseHttpsRedirection();
 
@@ -120,11 +106,7 @@ namespace SampleOnlineMall
 
             app.UseCors("AllowAll");
 
-            _logger.Information("P4");
-
             app.Run();
-
-            _logger.Information("P5");
         }
     }
 }
