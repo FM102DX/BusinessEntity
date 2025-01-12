@@ -115,16 +115,30 @@ function BuildAndRunContainer {
         return
     }
 
-    # Остановка и удаление существующего контейнера, если он есть
-    Write-Host "Проверка запущенного контейнера с именем $($container.Name)..."
-    $existingContainer = docker ps -q --filter "name=$($container.Name)"
+    
+# Проверка и удаление существующего контейнера, если он есть
+Write-Host "Проверка запущенного контейнера с именем $($container.Name)..."
+$existingContainer = docker ps -a -q --filter "name=$($container.Name)"
 
-    if ($existingContainer) {
-        Write-Host "Остановка существующего контейнера $($container.Name)..."
-        docker stop $existingContainer
-        Write-Host "Удаление существующего контейнера $($container.Name)..."
-        docker rm $existingContainer
+if ($existingContainer) {
+    Write-Host "Остановка существующего контейнера $($container.Name)..."
+    docker stop $existingContainer
+
+    Write-Host "Удаление существующего контейнера $($container.Name)..."
+    docker rm $existingContainer
+
+    # Проверка, что контейнер действительно удалён
+    $checkContainer = docker ps -a -q --filter "name=$($container.Name)"
+    if ($checkContainer) {
+        Write-Host "Ошибка: не удалось удалить контейнер с именем $($container.Name)!" -ForegroundColor Red
+        throw "Не удалось удалить контейнер. Скрипт завершён."
+    } else {
+        Write-Host "Контейнер $($container.Name) успешно удалён." -ForegroundColor Green
     }
+} else {
+    Write-Host "Контейнер с именем $($container.Name) не найден."
+}
+
 
     Write-Host "Переход в каталог проекта..."
     Set-Location -Path $projectPath
@@ -176,7 +190,7 @@ do {
     switch ($choice) {
         "10" { Action10 }
         "20" { Action20 }
-        "30" { Action30 }
+        "30" { SelectContainerAndRun }
         "40" { BuildAndRunBusinessLogicContainers } 
         "80" { Clear-Host }
         "99" { break }

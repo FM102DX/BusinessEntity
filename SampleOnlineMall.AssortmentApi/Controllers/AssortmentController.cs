@@ -12,17 +12,16 @@ namespace SampleOnlineMall
     [Route("")]
     public class AssortmentController : Controller
     {
-        public Serilog.ILogger _logger { get; set; }
         public CommodityItemManager _commodityItemManager { get; set; }
-        public IWebLoggerService _wLogger { get; set; }
+        public IWebLoggerService _logger { get; set; }
 
-        public AssortmentController(CommodityItemManager commodityItemManager, Serilog.ILogger logger, IWebLoggerService wLogger)
+        public AssortmentController(CommodityItemManager commodityItemManager, 
+                                    IWebLoggerService logger)
         {
             _logger = logger;
             _commodityItemManager= commodityItemManager;
-            _wLogger= wLogger;
-            _wLogger.SetActiveStatus(true);
-            _wLogger.Information("AssortmentController initialized");
+            _logger.SetActiveStatus(true);
+            _logger.Information("AssortmentController initialized");
         }
 
         [HttpGet]
@@ -31,7 +30,7 @@ namespace SampleOnlineMall
         {
             try
             {
-                _wLogger.Information($"This is assortment controller ping");
+                _logger.Information($"This is assortment controller ping");
                 Console.WriteLine($"This is assortment controller ping");
                 return $"This is assortment controller ping";
             }
@@ -45,7 +44,6 @@ namespace SampleOnlineMall
                 return $"An error occurred: {ex.Message}";
             }
         }
-
 
         [HttpDelete]
         [Route("deleteallitems/")]
@@ -66,17 +64,17 @@ namespace SampleOnlineMall
         [Route("insertitem/")]
         public async Task<IActionResult> InsertCommodityItem([FromBody] CommodityItemApiFeed commodityItem)
         {
-            _wLogger.Information($"_entering assort api method");
+            _logger.Information($"_entering assort api method");
             var rezult = await _commodityItemManager.InsertFromWebApi(commodityItem);
 
             if (rezult.Success)
             {
-                _wLogger.Information($"Successfully added assortment item name={commodityItem.Name} msg={rezult.Message}");
+                _logger.Information($"Successfully added assortment item name={commodityItem.Name} msg={rezult.Message}");
                 return StatusCode(201, CommonOperationResult.SayOk());
             }
             else
             {
-                _wLogger.Error($"Error while adding assort position name={commodityItem.Name} err={rezult.Message}");
+                _logger.Error($"Error while adding assort position name={commodityItem.Name} err={rezult.Message}");
                 return StatusCode(501, CommonOperationResult.SayFail(rezult.Message));
             }
 

@@ -34,7 +34,7 @@ namespace ControlNode.Pages
             {
                 Content = AssortLoader.Content.Split(';').ToList();
             }
-            if (e.PropertyName == nameof(AssortLoader.LoadedPos))
+            if (e.PropertyName == nameof(AssortLoader.LastFeedPosCount))
             {
                 Content = AssortLoader.Content.Split(';').ToList();
             }
@@ -43,7 +43,7 @@ namespace ControlNode.Pages
 
         private async void OnLoadAssortClick()
         {
-            await AssortLoader.LoadAsync();
+            await AssortLoader.PerformFeedAsync();
         }
     }
 }

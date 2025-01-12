@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.DataAccess.DataAccess;
+using SampleOnlineMall.Service;
 using SampleOnlineMall.Service.WebLogging;
 using SampleOnlineMall.WebLogger.Services;
 
@@ -23,34 +25,38 @@ namespace ControlNode
 
             //логгирование в веб-логгер
 
+            // App classes
+            var genApp = new GenericAppSettings();
+            genApp.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
+            builder.Services.AddSingleton(typeof(GenericAppSettings), (x) => genApp);
 
-            // веб-логгер
-            var _webLoggerSettings = new WebLoggerLocalSettings();
-            _webLoggerSettings.ServiceCode = "CTRL";
-            _webLoggerSettings.HostAlias = Environment.GetEnvironmentVariable("IS_DOCKER") == "true"
-                ? builder.Configuration.GetConnectionString("web_logger-container")
-                : builder.Configuration.GetConnectionString("localhost");
-            builder.Services.AddSingleton(typeof(WebLoggerLocalSettings), (x) => _webLoggerSettings);
-            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService(_webLoggerSettings));
-            
+            // Регистрация WebLoggerLocalSettings в DI
+            var webLoggerSettings = new WebLoggerLocalSettings();
+            builder.Configuration.GetSection("WebLoggerLocalSettings").Bind(webLoggerSettings);
+            builder.Services.AddSingleton(webLoggerSettings);
+            builder.Services.AddScoped<IWebLoggerService, WebLoggerService>();
+
+            // используем логгер
             var serviceProvider = builder.Services.BuildServiceProvider();
             var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
-            wLogger.Information("Приложение запущено");
+            wLogger.Information("App launched");
 
-            var opts = new WebApiAsyncRepositoryOptions()
-                .SetBaseAddress("http://localhost:5010")
-                .SetInsertHostPath("insertitem")
-                .SetDeleteAllHostPath("deleteallitems");
-            builder.Services.AddScoped<WebApiAsyncRepository<CommodityItemApiFeed>>(provider =>
+            builder.Services.AddScoped<WebApiAsyncRepository<CommodityItemApiFeed>>(serviceProvider =>
             {
-                return new WebApiAsyncRepository<CommodityItemApiFeed>(opts, wLogger);
+                var baseAddress = genApp.IsDocker ? "http://assort-api-container:80/" : "http://localhost:5010/";
+                var options = new WebApiAsyncRepositoryOptions()
+                    .SetBaseAddress(baseAddress)
+                    .SetGetAllHostPath("getall")
+                    .SetGetAllByRequestHostPath("getall")
+                    .SetInsertHostPath("insertitem")
+                    .SetDeleteAllHostPath("deleteallitems");
+                return new WebApiAsyncRepository<CommodityItemApiFeed>(options, wLogger);
             });
-
             builder.Services.AddScoped<AssortmentLoader>();
             builder.Services.Configure<AppSettings>(builder.Configuration);
 
-
             var app = builder.Build();
+
             // Configure the HTTP request pipeline
             if (!app.Environment.IsDevelopment())
             {

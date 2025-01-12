@@ -4,6 +4,8 @@ using SampleOnlineMall.Core;
 using System.Reflection;
 using SampleOnlineMall.DataAccess.DataAccess;
 using SampleOnlineMall.WebLogger.Services;
+using DynamicData;
+using ControlNode.Pages;
 
 namespace ControlNode.Data.AssortmentLoader
 {
@@ -11,19 +13,21 @@ namespace ControlNode.Data.AssortmentLoader
     {
         private string _status = "Idle";
         private string _content = "Idle";
-        private int _loadedPos = 0;
+        private int _lastFeedPosCount = 0;
         private Microsoft.Extensions.Options.IOptions<AppSettings> _settings;
         private readonly IWebHostEnvironment _env;
         private WebApiAsyncRepository<CommodityItemApiFeed> _webRepo;
         private IWebLoggerService _wLogger;
+        public SourceList<CommodityItemApiFeed> Assortment { get; } = new SourceList<CommodityItemApiFeed>();
+        public int LoadedPosCount => Assortment.Count;
         public AssortmentLoader(
-            Microsoft.Extensions.Options.IOptions<AppSettings> settings, 
-            WebApiAsyncRepository<CommodityItemApiFeed> webRepo, 
+            Microsoft.Extensions.Options.IOptions<AppSettings> settings,
+            WebApiAsyncRepository<CommodityItemApiFeed> webRepo,
             IWebHostEnvironment env,
             IWebLoggerService wLogger
             )
         {
-            _settings=settings;
+            _settings = settings;
             _env = env;
             _webRepo = webRepo;
             _wLogger = wLogger;
@@ -31,12 +35,12 @@ namespace ControlNode.Data.AssortmentLoader
         public string Status
         {
             get => _status;
-            set => this.RaiseAndSetIfChanged(ref _status, value); 
+            set => this.RaiseAndSetIfChanged(ref _status, value);
         }
-        public int LoadedPos
+        public int LastFeedPosCount
         {
-            get => _loadedPos;
-            set => this.RaiseAndSetIfChanged(ref _loadedPos, value);
+            get => _lastFeedPosCount;
+            set => this.RaiseAndSetIfChanged(ref _lastFeedPosCount, value);
         }
 
         public string Content
@@ -50,22 +54,40 @@ namespace ControlNode.Data.AssortmentLoader
             return 0;
         }
 
-
         public async Task ClearAsync()
         {
 
         }
 
-        public async Task LoadAsync()
+        public async Task GetAsync()
+        {
+            Assortment.Clear();
+            _wLogger.Information("Gonna get assortment here");
+            var result = await _webRepo.GetAllAsync();
+            if (result != null)
+            {
+                Assortment.AddRange(result);
+                _wLogger.Information($"Retrived {result.Count()} запискей");
+            }
+            else
+            {
+                _wLogger.Information($"Get query returned null");
+            }
+
+
+            this.RaisePropertyChanged(nameof(Assortment));
+        }
+
+        public async Task PerformFeedAsync()
         {
             //чистим ассортимент
-           
             //берем ассортимент и перебираем там папки внутри
-            LoadedPos = 0;
+
+            LastFeedPosCount = 0;
             List<CommodityItemApiFeed> resultFeedSource = new List<CommodityItemApiFeed>();
 
             // Получаем физический путь к wwwroot
-            string wwwrootPath = Path.Combine(_env.WebRootPath, _settings.Value.AssortDataPath) ;
+            string wwwrootPath = Path.Combine(_env.WebRootPath, _settings.Value.AssortDataPath);
 
             if (Directory.Exists(wwwrootPath))
             {
@@ -115,9 +137,9 @@ namespace ControlNode.Data.AssortmentLoader
 
                     _wLogger.Information($"ASSRTLDR_Sending assort item {item.Name}");
                     var rezult = await _webRepo.AddAsync(item);
-                    
+
                     //await Task.Delay(1000);
-                    LoadedPos++;
+                    LastFeedPosCount++;
                 }
 
 
@@ -130,7 +152,7 @@ namespace ControlNode.Data.AssortmentLoader
             //string executableDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             //string[] files = Directory.GetFiles(executableDirectory);
             //Content = string.Join(";", files);
-            
+
             Status = "Preparing";
             //await Task.Delay(500); // Асинхронная пауза
             //Status = "Loading";

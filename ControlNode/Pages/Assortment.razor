@@ -6,9 +6,29 @@
 <p>@Message</p>
 <RadzenButton Text="Загрузить ассортимент" Click="OnLoadAssortClick" Style="margin: 10px;" />
 <p>@Message</p>
-<p>@AssortLoader.LoadedPos</p>
+<p>@AssortLoader.LastFeedPosCount</p>
 <p>Content</p>
-@foreach (var line in Content)
-{
-    <p>@line</p>
-}
+
+<div class="assort-table">
+    <div class="assort-table-top-menu">
+        <div class="assort-table-top-menu-item">
+            <RadzenButton Text="Загрузить ассортимент 2" Click="@AssortLoader.GetAsync" Style="margin: 10px;" />
+        </div>
+        <div class="assort-table-top-menu-item">
+            <p>@AssortLoader.LoadedPosCount</p>
+        </div>
+    </div>
+    <div class="assort-table-content">
+        @foreach (var item in AssortLoader.Assortment.Items)
+        {
+            <div class="assort-item">
+                <p>Id: @item.Id</p>
+                <p>Name: @item.Name</p>
+                <p>Price: @item.Price</p>
+            </div>
+        }
+    </div>
+</div>
+
+
+

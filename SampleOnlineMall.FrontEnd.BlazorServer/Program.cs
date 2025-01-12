@@ -36,14 +36,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
                        .WriteTo.File(logFilePath)
                        .CreateLogger();
 
-            // גוב-כמדדונ
-            var _webLoggerSettings = new WebLoggerLocalSettings();
-            _webLoggerSettings.ServiceCode = "FRNT";
-            _webLoggerSettings.HostAlias = Environment.GetEnvironmentVariable("IS_DOCKER") == "true"
-                ? builder.Configuration.GetConnectionString("web_logger-container")
-                : builder.Configuration.GetConnectionString("localhost");
-            builder.Services.AddSingleton(typeof(WebLoggerLocalSettings), (x) => _webLoggerSettings);
-            builder.Services.AddScoped<IWebLoggerService>(provider => new WebLoggerService(_webLoggerSettings));
+
 
             var serviceProvider = builder.Services.BuildServiceProvider();
             var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();

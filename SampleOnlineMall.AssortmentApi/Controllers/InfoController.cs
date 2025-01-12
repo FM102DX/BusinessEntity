@@ -14,17 +14,15 @@ namespace SampleOnlineMall
     [Route("")]
     public class InfoController : Controller
     {
-        public Serilog.ILogger _logger { get; set; }
+        public IWebLoggerService _logger { get; set; }
         public CommodityItemManager _commodityItemManager { get; set; }
-        private IWebLoggerService _wLogger;
 
-        public InfoController(CommodityItemManager commodityItemManager, Serilog.ILogger logger, IWebLoggerService wLogger)
+        public InfoController(CommodityItemManager commodityItemManager, IWebLoggerService logger)
         {
             
             _logger = logger;
             _logger.Information("InfoController_ctor_0");
             _commodityItemManager = commodityItemManager;
-            _wLogger = wLogger;
         }
 
         [HttpGet]

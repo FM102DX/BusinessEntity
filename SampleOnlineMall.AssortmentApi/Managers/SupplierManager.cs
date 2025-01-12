@@ -2,15 +2,16 @@
 using SampleOnlineMall.DataAccess.Abstract;
 using SampleOnlineMall.Service;
 using SampleOnlineMall.Core.Models;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.Core.Managers
 {
     public class SupplierManager
     {
         private IAsyncRepository<Supplier> _repo;
-        private Serilog.ILogger _logger;
+        private IWebLoggerService _logger;
         private SampleOnlineMallAssortmentApiApp _app;
-        public SupplierManager(IAsyncRepository<Supplier> repo, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app)
+        public SupplierManager(IAsyncRepository<Supplier> repo, IWebLoggerService logger, SampleOnlineMallAssortmentApiApp app)
         {
             _repo = repo;
             _logger = logger;

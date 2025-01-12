@@ -21,4 +21,8 @@ RUN dotnet publish "./ControlNode.csproj" -c $BUILD_CONFIGURATION -o /app/publis
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+# ”станавливаем переменную окружени€ дл€ маркера Docker
+ENV IS_DOCKER=true
+
 ENTRYPOINT ["dotnet", "ControlNode.dll"]

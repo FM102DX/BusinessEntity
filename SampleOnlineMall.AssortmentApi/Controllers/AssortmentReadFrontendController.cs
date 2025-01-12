@@ -16,16 +16,14 @@ namespace SampleOnlineMall
 {
     [ApiController]
     [Route("")]
-    public class AssortmentReadFrontend : Controller
+    public class AssortmentReadFrontendController : Controller
     {
-        public Serilog.ILogger _logger { get; set; }
+        public IWebLoggerService _logger { get; set; }
         public CommodityItemFrontendManager _itemManager { get; set; }
-        public IWebLoggerService _wLogger { get; set; }
-        public AssortmentReadFrontend(CommodityItemFrontendManager itemManager, IWebLoggerService wLogger, Serilog.ILogger logger)
+        public AssortmentReadFrontendController(CommodityItemFrontendManager itemManager, IWebLoggerService logger)
         {
             _logger = logger;
             _itemManager= itemManager;
-            _wLogger = wLogger;
         }
 
         [HttpGet]
@@ -40,7 +38,7 @@ namespace SampleOnlineMall
         public async Task<RepositoryResponce<CommodityItemFrontend>> GetAllByRequest(RepositoryRequestTextSearch request)
         {
             var str = JsonConvert.SerializeObject(request);
-            _wLogger.Information($"Controller: got request {str}");
+            _logger.Information($"Controller: got request {str}");
             return await _itemManager.GetAllByRequest(request);
         }
 

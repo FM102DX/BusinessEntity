@@ -15,6 +15,9 @@ namespace SampleOnlineMall.WebLogger.Services
         Task Information(string text);
         Task Warning(string text);
         Task Error(string text);
+        Task Error(Exception ex);
+
+        Task Debug(string text);
         void SetActiveStatus(bool newStatus);
     }
 
@@ -41,6 +44,11 @@ namespace SampleOnlineMall.WebLogger.Services
         {
             _isActive = newStatus;
         }
+        public async Task Debug(string text)
+        {
+            await SendLogAsync("Debug", text);
+        }
+
         public async Task Information(string text)
         {
             await SendLogAsync("Info", text);
@@ -50,12 +58,14 @@ namespace SampleOnlineMall.WebLogger.Services
         {
             await SendLogAsync("Warning", text);
         }
-
         public async Task Error(string text)
         {
             await SendLogAsync("Error", text);
         }
-
+        public async Task Error(Exception ex)
+        {
+            await SendLogAsync("Error", $"Error occured messgae={ex.Message} inner exception={ex.InnerException}");
+        }
         private async Task SendLogAsync(string messageType, string message)
         {
             try
@@ -67,17 +77,13 @@ namespace SampleOnlineMall.WebLogger.Services
                     MessageType = messageType,
                     Message = message
                 };
-
-                Console.WriteLine($"LGR_P1");
+                Console.WriteLine($"LGR_P1 -- sending message {message}");
                 using var httpClient = new HttpClient();
                 Console.WriteLine($"LGR_P2");
                 var content = new StringContent(JsonSerializer.Serialize(logEntry), Encoding.UTF8, "application/json");
                 Console.WriteLine($"LGR_P3 url={_loggerUrl} content={content} base={httpClient.BaseAddress}");
-
                 var response = await httpClient.PostAsync(_loggerUrl, content);
-
                 Console.WriteLine($"LGR_P4");
-
             }
             catch (Exception ex)
             {

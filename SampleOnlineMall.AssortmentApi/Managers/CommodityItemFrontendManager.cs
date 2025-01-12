@@ -1,19 +1,10 @@
 ﻿using SampleOnlineMall.Core.Appilcation;
 using SampleOnlineMall.DataAccess.Abstract;
-using SampleOnlineMall.Service;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Drawing;
-using System.IO;
-using Shim= SixLabors.ImageSharp.Image;
-using SixLabors.ImageSharp.Formats;
 using SampleOnlineMall.Core.Mappers;
 using SampleOnlineMall.Core.Models;
 using SampleOnlineMall.DataAccess.Models;
 using Newtonsoft.Json;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.Core.Managers
 {
@@ -21,19 +12,22 @@ namespace SampleOnlineMall.Core.Managers
     public class CommodityItemFrontendManager
     {
         private IAsyncRepository<CommodityItem> _repo;
-        private Serilog.ILogger _logger;
+        private IWebLoggerService _logger;
         private SampleOnlineMallAssortmentApiApp _app;
         
         private CustomMapper _mapper;
         private IAsyncRepository<Supplier> _supplierRepo;
 
-        public CommodityItemFrontendManager(IAsyncRepository<CommodityItem> repo, IAsyncRepository<Supplier> supplierRepo,  Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, CustomMapper mapper)
+        public CommodityItemFrontendManager(IAsyncRepository<CommodityItem> repo, 
+                                            IAsyncRepository<Supplier> supplierRepo, 
+                                            IWebLoggerService logger, 
+                                            SampleOnlineMallAssortmentApiApp app, 
+                                            CustomMapper mapper)
         {
             _repo = repo;
             _logger = logger;
             _app = app;
             _mapper = mapper;
-            
             _supplierRepo = supplierRepo;
         }
 
@@ -45,7 +39,6 @@ namespace SampleOnlineMall.Core.Managers
                 var x = GetPictureInfoListForItem(item);
                 item.Pictures = x;
             }
-           // _webLogMgr.Log($"{items[0].Pictures.Count()}");
             return items;
         }
 

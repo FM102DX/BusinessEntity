@@ -28,39 +28,35 @@ namespace SampleOnlineMall
             builder.Configuration.AddConfiguration(configuration);
             builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 
+
             #region бизнес-логика
 
-            // App class
+            // App classes
+            builder.Services.AddScoped<SampleOnlineMallAssortmentApiApp>();
+
             var genApp = new GenericAppSettings();
             genApp.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
-            builder.Services.AddSingleton(typeof(SampleOnlineMallAssortmentApiApp), (x) => genApp);
+            builder.Services.AddSingleton(typeof(GenericAppSettings), (x) => genApp);
 
+            // Регистрация WebLoggerLocalSettings в DI
+            var webLoggerSettings = new WebLoggerLocalSettings();
+            builder.Configuration.GetSection("WebLoggerLocalSettings").Bind(webLoggerSettings);
+            builder.Services.AddSingleton(webLoggerSettings);
 
-            // Добавляем в DI секцию WebLoggerLocalSettings из appsettings.json
-            builder.Services.Configure<WebLoggerLocalSettings>(
-                builder.Configuration.GetSection("WebLoggerLocalSettings"));
+            builder.Services.AddScoped<IWebLoggerService, WebLoggerService>();
 
-            // Для прямого использования через конструктор добавляем AddSingleton
-            builder.Services.AddSingleton(resolver =>
-                resolver.GetRequiredService<IOptions<WebLoggerLocalSettings>>().Value);
+            Console.WriteLine($"ASRT_P3");
 
-            
-            builder.Services.AddScoped<IWebLoggerService>();
-            
-            Console.WriteLine($"Configuring DI");
-
-
-            
             // используем логгер
             var serviceProvider = builder.Services.BuildServiceProvider();
             var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
-            wLogger.Information("Приложение запущено");
+            wLogger.Information("App launched");
 
-
+            Console.WriteLine($"ASRT_P4");
 
             foreach (var key in Environment.GetEnvironmentVariables().Keys)
             {
-                wLogger.Information($"{key}={Environment.GetEnvironmentVariable(key.ToString())}");
+               // wLogger.Information($"{key}={Environment.GetEnvironmentVariable(key.ToString())}");
             }
 
             // Add services to the container
@@ -75,7 +71,7 @@ namespace SampleOnlineMall
             builder.Services.AddScoped<CustomMapper>();
 
             #endregion
-
+            Console.WriteLine($"ASRT_P5");
             builder.Services.AddCors(confg =>
                 confg.AddPolicy("AllowAll",
                 p => p.AllowAnyOrigin()
@@ -89,23 +85,23 @@ namespace SampleOnlineMall
 
 
 
-
+            Console.WriteLine($"ASRT_P50");
             var app = builder.Build();
-
+            Console.WriteLine($"ASRT_P51");
             // Configure the HTTP request pipeline.
-
+            Console.WriteLine($"ASRT_P52");
             app.UseSwagger();
-
+            Console.WriteLine($"ASRT_P53");
             app.UseSwaggerUI();
-
+            Console.WriteLine($"ASRT_P54");
             app.UseHttpsRedirection();
-
+            Console.WriteLine($"ASRT_P55");
             app.UseAuthorization();
-
+            Console.WriteLine($"ASRT_P56");
             app.MapControllers();
-
+            Console.WriteLine($"ASRT_P57");
             app.UseCors("AllowAll");
-
+            Console.WriteLine($"ASRT_P6");
             app.Run();
         }
     }
