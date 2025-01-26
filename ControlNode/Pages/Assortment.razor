@@ -1,40 +1,50 @@
 ﻿@page "/assortment"
 @using SampleOnlineMall.Core
+@using ControlNode.Components
 
 <h3>Assortment</h3>
+<div class="assort-mgmt-page">
+    <AssortMgmtSection Title="Закидывание ассортимента">
+        <div class="assort-mgmt-section-content-item">
+            <RadzenButton Text="Закинуть ассортимент" Click="OnLoadAssortClick" Style="margin: 10px;" />
+        </div>
+        <div class="assort-mgmt-section-content-item">
+            <p>Загружено позиций @AssortLoader.LastFeedPosCount</p>
+        </div>
+    </AssortMgmtSection>
 
-<RadzenButton Text="Узнать количество позиций ассортимента" Click="OnLoadAssortClick" Style="margin: 10px;" />
-<p>@Message</p>
-<RadzenButton Text="Загрузить ассортимент" Click="OnLoadAssortClick" Style="margin: 10px;" />
-<p>@Message</p>
-<p>@AssortLoader.LastFeedPosCount</p>
-<p>Content</p>
 
-<div class="assort-table">
-    <div class="assort-table-top-menu">
-        <div class="assort-table-top-menu-item">
-            <RadzenButton Text="Загрузить ассортимент 2" Click="@AssortLoader.GetAsync" Style="margin: 10px;" />
+    <AssortMgmtSection Title="Просмотр ассортимента">
+        <div class="assort-mgmt-section-content-item">
+        </div>
+        <div class="assort-mgmt-section-content-item">
+            <RadzenButton Text="Скачать ассортимент" Click="@AssortLoader.GetAsync" Style="margin: 10px;" />
+        </div>
+        <div class="assort-mgmt-section-content-item">
             <RadzenButton Text="Очистить ассортимент" Click="@AssortLoader.ClearAsync" Style="margin: 10px;" />
         </div>
-        <div class="assort-table-top-menu-item">
+        <div class="assort-mgmt-section-content-item">
             <p>@AssortLoader.LoadedPosCount</p>
         </div>
-    </div>
+
+
+    </AssortMgmtSection>
+
     <div class="assort-table">
-        <RadzenDataGrid Data="@AssortLoader.Assortment.Items" TItem="CommodityItemApiFeed" >
+        <RadzenDataGrid Data="@AssortLoader.Assortment.Items" TItem="CommodityItemApiFeed">
             <Columns>
-                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Title="Image">
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Title="Image" Width="10%">
                     <Template Context="item">
-                        <img src="@($"{item.FirstPic}")" alt="Image" style="width: 100px; height: auto;"/>
+                        <img src="@($"{item.FirstPic}")" alt="Image" style="height: 100px;" />
                     </Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Id" Title="Id" />
-                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Name" Title="Name" />
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Id" Title="Id" Width="20%" />
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Name" Title="Name" Width="20%" />
                 <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Price" Title="Price" />
             </Columns>
         </RadzenDataGrid>
     </div>
+
+
 </div>
-
-
 

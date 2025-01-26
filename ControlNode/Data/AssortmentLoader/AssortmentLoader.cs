@@ -132,8 +132,6 @@ namespace ControlNode.Data.AssortmentLoader
 
                         resultFeedSource.Add(commodityItem);
                     }
-
-                    break;
                 }
 
                 foreach (var item in resultFeedSource)

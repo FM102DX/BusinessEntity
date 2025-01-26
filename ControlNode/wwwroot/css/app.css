@@ -18,3 +18,30 @@ div.assort-table-content{
     
 }
 
+div.assort-mgmt-section {
+    flex-direction: column;
+    display: flex;
+    margin-bottom: 30px;
+}
+div.assort-mgmt-section-header {
+    background-color: blueviolet;
+    color: white;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+div.assort-mgmt-section-content {
+    flex-direction: row;
+    display: flex;
+}
+
+div.assort-mgmt-section-content-item {
+    height: 50px;
+    text-align:left;
+    vertical-align:middle;
+
+}
+
+
+div.assort-mgmt-page {
+    flex-direction: column;
+}
