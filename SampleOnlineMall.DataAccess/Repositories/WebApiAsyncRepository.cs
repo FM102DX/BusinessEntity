@@ -28,7 +28,6 @@ namespace SampleOnlineMall.DataAccess.DataAccess
         private HttpClient httpClient;
         private IWebLoggerService _wLogger;
 
-
         private WebApiAsyncRepositoryOptions _options;
 
         public WebApiAsyncRepository(WebApiAsyncRepositoryOptions options, IWebLoggerService wLogger)
@@ -37,7 +36,8 @@ namespace SampleOnlineMall.DataAccess.DataAccess
             httpClient = new System.Net.Http.HttpClient(new HttpClientHandler());
             httpClient.BaseAddress = new Uri(_options.BaseAddress);
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            _wLogger=wLogger;
+            _wLogger = wLogger;
+            _wLogger.SetActiveStatus(false);
         }
 
         public async Task<int> GetCountAsync()
@@ -65,7 +65,7 @@ namespace SampleOnlineMall.DataAccess.DataAccess
 
         public async Task<IEnumerable<T>> SearchAsync(string searchText)
         {
-            IEnumerable<T> items =  new List<T>();
+            IEnumerable<T> items = new List<T>();
             try
             {
                 _wLogger.Information($"This is WebApiAsyncRepository.search searchText={searchText}");
@@ -73,7 +73,7 @@ namespace SampleOnlineMall.DataAccess.DataAccess
                 _wLogger.Information($"Sending request to {httpClient.BaseAddress}");
 
                 var response = await httpClient.GetAsync($"{_options.SearchHostPath}/{searchText}");
-                
+
                 var json = await response.Content.ReadAsStringAsync();
 
                 _wLogger.Information($"Received json {json}");
@@ -109,7 +109,7 @@ namespace SampleOnlineMall.DataAccess.DataAccess
                 var response = await httpClient.GetAsync(requestUri);
 
                 var json = await response.Content.ReadAsStringAsync();
-                
+
                 switch (response.StatusCode)
                 {
                     case System.Net.HttpStatusCode.OK:
@@ -170,28 +170,28 @@ namespace SampleOnlineMall.DataAccess.DataAccess
 
                 jsonContent = new StringContent(json, Encoding.UTF8, "application/json");
 
-                _wLogger.Information($"WEBREPO_Sending assort content= {jsonContent}");
+                _wLogger.Information($"[WEBREPO]_Sending assort content= {t}");
 
                 var response = await httpClient.PostAsync($"{_options.InsertHostPath}", jsonContent);
-                
+
                 rez = CommonOperationResult.SayOk(response.Content.ReadAsStringAsync().Result);
 
                 // Логгирование статуса и содержимого ответа
                 if (response.IsSuccessStatusCode)
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    _wLogger.Information($"WEBREPO_Response received: StatusCode={response.StatusCode}, Content={responseContent}");
+                    _wLogger.Information($"[WEBREPO]_Response received: StatusCode={response.StatusCode}, Content={responseContent}");
                 }
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    _wLogger.Error($"WEBREPO_Error: StatusCode={response.StatusCode}, Content={errorContent}");
+                    _wLogger.Error($"[WEBREPO]_Error: StatusCode={response.StatusCode}, Content={errorContent}");
                 }
 
             }
             catch (Exception ex)
             {
-                _wLogger.Error($"WEBREPO_ERROR_"+ $"WebApiRepository caught an exception: msg={ex.Message} inn={ex.InnerException} {ex.StackTrace}");
+                _wLogger.Error($"[WEBREPO]_ERROR_" + $"WebApiRepository caught an exception: msg={ex.Message} inn={ex.InnerException} {ex.StackTrace}");
                 rez = CommonOperationResult.SayFail($"WebApiRepository caught an exception: {ex.Message} inn={ex.InnerException} {ex.StackTrace}");
             }
             return rez;
@@ -219,12 +219,12 @@ namespace SampleOnlineMall.DataAccess.DataAccess
                 if (response.IsSuccessStatusCode)
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    _wLogger.Information($"WEBREPO_Response received: StatusCode={response.StatusCode}, Content={responseContent}");
+                    _wLogger.Information($"[WEBREPO]_Response received: StatusCode={response.StatusCode}, Content={responseContent}");
                 }
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    _wLogger.Error($"WEBREPO_Error: StatusCode={response.StatusCode}, Content={errorContent}");
+                    _wLogger.Error($"[WEBREPO]_Error: StatusCode={response.StatusCode}, Content={errorContent}");
                 }
             }
             catch (Exception ex)
@@ -271,7 +271,7 @@ namespace SampleOnlineMall.DataAccess.DataAccess
 
         public async Task<RepositoryResponce<T>> GetAllByRequestAsync(RepositoryRequestFuncSearch<T> repositoryRequest)
         {
-           //web api repository not intended to make a func search because func cant be passed through api
+            //web api repository not intended to make a func search because func cant be passed through api
             throw new NotImplementedException();
         }
 
@@ -283,7 +283,7 @@ namespace SampleOnlineMall.DataAccess.DataAccess
             httpRequest.Method = HttpMethod.Post;
             httpRequest.RequestUri = new System.Uri($"{httpClient.BaseAddress}{_options.GetAllByRequestHostPath}");
             httpRequest.Content = new StringContent(repositoryRequestJson, Encoding.UTF8, MediaTypeNames.Application.Json);
-            
+
             try
             {
                 var response = await httpClient.SendAsync(httpRequest);
@@ -299,6 +299,30 @@ namespace SampleOnlineMall.DataAccess.DataAccess
                 repositoryResponce.Result = CommonOperationResult.SayOk(msg);
             }
             return repositoryResponce;
+        }
+
+        public async Task<CommonOperationResult> ClearAsync()
+        {
+            CommonOperationResult rez;
+            try
+            {
+                var response = await httpClient.DeleteAsync($"{_options.ClearHostPath}");
+
+                switch (response.StatusCode)
+                {
+                    case System.Net.HttpStatusCode.OK:
+                        rez = CommonOperationResult.SayOk(response.Content.ReadAsStringAsync().Result);
+                        break;
+                    default:
+                        rez = CommonOperationResult.SayFail($"Operation completed with code {response.StatusCode}");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                rez = CommonOperationResult.SayFail($"Operation completed with exception ex={ex.Message} innex={ex.InnerException}");
+            }
+            return rez;
         }
     }
 }

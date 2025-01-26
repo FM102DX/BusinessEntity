@@ -15,7 +15,7 @@ using SampleOnlineMall.WebLogger.Services;
 namespace SampleOnlineMall
 {
     [ApiController]
-    [Route("")]
+    [Route("frontend")]
     public class AssortmentReadFrontendController : Controller
     {
         public IWebLoggerService _logger { get; set; }
@@ -26,12 +26,28 @@ namespace SampleOnlineMall
             _itemManager= itemManager;
         }
 
+
         [HttpGet]
         [Route("getall/")]
-        public async Task<IEnumerable<CommodityItemFrontend>> GetAllItems()
+        public async Task<IActionResult> GetAllItems()
         {
-            return await _itemManager.GetAll();
+            string reply;
+            try
+            {
+                
+                var items = await _itemManager.GetAll();
+                reply = $"[AssortApi] giving away {items.Count()} items";
+                Console.WriteLine(reply);
+                await _logger.Information(reply);
+                return Ok(items); // Возвращаем статус 200 и список items
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred: {ex.Message} {ex.InnerException?.Message}");
+                return StatusCode(500, $"An error occurred: {ex.Message}");
+            }
         }
+
 
         [HttpPost]
         [Route("getallbyrequest/")]

@@ -28,6 +28,8 @@ namespace SampleOnlineMall.Core.Managers
             _wLogger = wLogger;
             _app = app;
             _mapper = mapper;
+            _wLogger.SetActiveStatus(true);
+           // _wLogger.Information($"[ASSORT][ITEMMGR][INIT]");
         }
 
         public async Task<IEnumerable<CommodityItem>> GetAll()
@@ -83,15 +85,14 @@ namespace SampleOnlineMall.Core.Managers
 
         public async Task<CommonOperationResult> InsertFromWebApi (CommodityItemApiFeed item)
         {
-            _wLogger.Information($"This is ItemManager. Received commodity item name={item.Name}");
+            await _wLogger.Information($"[ASSORT][ITEMMGR][INS] This is ItemManager. Trying to insert item name={item.Name}");
             //_webLogger.Log($"inserting item name={item.Name}");
             try
             {
                 var exists = await _repo.Exists(item.Id);
-                _wLogger.Information($"Checking item existance name={item.Name}, result: {exists}");
                 if (exists)
                 {
-                    return CommonOperationResult.SayFail($"Unable to insert assortment item with name={item.Name}");
+                    return CommonOperationResult.SayFail($"[ASSORT][ITEMMGR][INS] Unable to insert assortment item with name={item.Name} because item with this id already exists");
                 }
 
                 //saving object
@@ -115,6 +116,8 @@ namespace SampleOnlineMall.Core.Managers
                 var firstPicPathS = Path.Combine(picDirectory, "1s.jpg");
                 var secondPicPathS = Path.Combine(picDirectory, "2s.jpg");
                 var thirdPicPathS= Path.Combine(picDirectory, "3s.jpg");
+
+                _wLogger.Information($"Picture path: {firstPicPath} {secondPicPath} {thirdPicPath}");
 
                 //pic1
                 if (!string.IsNullOrEmpty(item.FirstPic))
@@ -150,7 +153,16 @@ namespace SampleOnlineMall.Core.Managers
             }
             catch (Exception ex)
             {
-                _wLogger.Error($"{ex.Message}");
+                Console.WriteLine($"Gonna log an err to weblgr");
+                try
+                {
+                    await _wLogger.Error($"[ASSORT][ITEMMGR][INS] Ex={ex.Message} InnerEx={ex.InnerException}");
+                }
+                catch
+                {
+                    Console.WriteLine($"ERR!!! --- Gonna log an err to weblgr");
+                }
+                Console.WriteLine($"FIN --- Gonna log an err to weblgr");
                 return CommonOperationResult.SayFail($"Ex={ex.Message} InnerEx={ex.InnerException}");
             }
         }

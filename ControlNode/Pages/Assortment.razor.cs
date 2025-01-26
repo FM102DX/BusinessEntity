@@ -28,7 +28,6 @@ namespace ControlNode.Pages
             if (e.PropertyName == nameof(AssortLoader.Status))
             {
                 Message=AssortLoader.Status;
-
             }
             if (e.PropertyName == nameof(AssortLoader.Content))
             {
@@ -38,6 +37,11 @@ namespace ControlNode.Pages
             {
                 Content = AssortLoader.Content.Split(';').ToList();
             }
+            if (e.PropertyName == nameof(AssortLoader.Assortment))
+            {
+                var x = 10;
+            }
+            
             StateHasChanged();
         }
 

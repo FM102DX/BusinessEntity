@@ -1,4 +1,5 @@
 ﻿@page "/assortment"
+@using SampleOnlineMall.Core
 
 <h3>Assortment</h3>
 
@@ -13,20 +14,25 @@
     <div class="assort-table-top-menu">
         <div class="assort-table-top-menu-item">
             <RadzenButton Text="Загрузить ассортимент 2" Click="@AssortLoader.GetAsync" Style="margin: 10px;" />
+            <RadzenButton Text="Очистить ассортимент" Click="@AssortLoader.ClearAsync" Style="margin: 10px;" />
         </div>
         <div class="assort-table-top-menu-item">
             <p>@AssortLoader.LoadedPosCount</p>
         </div>
     </div>
-    <div class="assort-table-content">
-        @foreach (var item in AssortLoader.Assortment.Items)
-        {
-            <div class="assort-item">
-                <p>Id: @item.Id</p>
-                <p>Name: @item.Name</p>
-                <p>Price: @item.Price</p>
-            </div>
-        }
+    <div class="assort-table">
+        <RadzenDataGrid Data="@AssortLoader.Assortment.Items" TItem="CommodityItemApiFeed" >
+            <Columns>
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Title="Image">
+                    <Template Context="item">
+                        <img src="@($"{item.FirstPic}")" alt="Image" style="width: 100px; height: auto;"/>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Id" Title="Id" />
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Name" Title="Name" />
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Price" Title="Price" />
+            </Columns>
+        </RadzenDataGrid>
     </div>
 </div>
 

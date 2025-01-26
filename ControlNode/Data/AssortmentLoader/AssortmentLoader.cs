@@ -18,7 +18,7 @@ namespace ControlNode.Data.AssortmentLoader
         private readonly IWebHostEnvironment _env;
         private WebApiAsyncRepository<CommodityItemApiFeed> _webRepo;
         private IWebLoggerService _wLogger;
-        public SourceList<CommodityItemApiFeed> Assortment { get; } = new SourceList<CommodityItemApiFeed>();
+        public SourceList<CommodityItemApiFeed> Assortment { get; }=new();
         public int LoadedPosCount => Assortment.Count;
         public AssortmentLoader(
             Microsoft.Extensions.Options.IOptions<AppSettings> settings,
@@ -31,6 +31,7 @@ namespace ControlNode.Data.AssortmentLoader
             _env = env;
             _webRepo = webRepo;
             _wLogger = wLogger;
+            _wLogger.SetActiveStatus(true);
         }
         public string Status
         {
@@ -56,16 +57,19 @@ namespace ControlNode.Data.AssortmentLoader
 
         public async Task ClearAsync()
         {
-
+            //очистить ассортимент
+            await _webRepo.ClearAsync();
         }
 
         public async Task GetAsync()
         {
             Assortment.Clear();
             _wLogger.Information("Gonna get assortment here");
+
             var result = await _webRepo.GetAllAsync();
             if (result != null)
             {
+                await _wLogger.SendObject(result);
                 Assortment.AddRange(result);
                 _wLogger.Information($"Retrived {result.Count()} запискей");
             }
@@ -134,10 +138,9 @@ namespace ControlNode.Data.AssortmentLoader
 
                 foreach (var item in resultFeedSource)
                 {
-
-                    _wLogger.Information($"ASSRTLDR_Sending assort item {item.Name}");
+                    _wLogger.Information($"[ASSRTLDR]_Sending assort item {item.Name}");
+                    _wLogger.SendObject(item);
                     var rezult = await _webRepo.AddAsync(item);
-
                     //await Task.Delay(1000);
                     LastFeedPosCount++;
                 }

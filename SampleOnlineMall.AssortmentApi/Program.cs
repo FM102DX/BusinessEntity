@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.Core.Appilcation;
@@ -56,7 +57,7 @@ namespace SampleOnlineMall
 
             foreach (var key in Environment.GetEnvironmentVariables().Keys)
             {
-               // wLogger.Information($"{key}={Environment.GetEnvironmentVariable(key.ToString())}");
+                // wLogger.Information($"{key}={Environment.GetEnvironmentVariable(key.ToString())}");
             }
 
             // Add services to the container
@@ -82,26 +83,30 @@ namespace SampleOnlineMall
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
-
-
-
-            Console.WriteLine($"ASRT_P50");
             var app = builder.Build();
-            Console.WriteLine($"ASRT_P51");
-            // Configure the HTTP request pipeline.
-            Console.WriteLine($"ASRT_P52");
+
+            var imgPath = Path.Combine(Directory.GetCurrentDirectory(), "CommodityItemImages");
+            Directory.CreateDirectory(imgPath);
+
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                /*
+                    В этом случае ваши изображения будут доступны по URL: http://<host>:<port>/images/<file_name>, где:
+                    < host > — IP - адрес или домен контейнера,
+                    < port > — порт, который вы пробросили для микросервиса,
+                    < file_name > — имя файла(например, 1.jpg).
+                */
+
+                FileProvider = new PhysicalFileProvider(imgPath),
+                RequestPath = "/images"
+            });
+
             app.UseSwagger();
-            Console.WriteLine($"ASRT_P53");
             app.UseSwaggerUI();
-            Console.WriteLine($"ASRT_P54");
             app.UseHttpsRedirection();
-            Console.WriteLine($"ASRT_P55");
             app.UseAuthorization();
-            Console.WriteLine($"ASRT_P56");
             app.MapControllers();
-            Console.WriteLine($"ASRT_P57");
             app.UseCors("AllowAll");
-            Console.WriteLine($"ASRT_P6");
             app.Run();
         }
     }

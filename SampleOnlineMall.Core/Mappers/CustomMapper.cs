@@ -3,6 +3,7 @@ using SampleOnlineMall.DataAccess.Abstract;
 using SampleOnlineMall.DataAccess.Models;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,7 +12,6 @@ namespace SampleOnlineMall.Core.Mappers
 {
     public class CustomMapper
     {
-        private object _locker = new object();
         public CommodityItem CommodityItemFromCommodityItemApiFeed(CommodityItemApiFeed item)
         {
             var newItem = new CommodityItem();
@@ -20,6 +20,19 @@ namespace SampleOnlineMall.Core.Mappers
             newItem.Description = item.Description;
             newItem.Price = item.Price;
             newItem.SupplierId = item.SupplierId;
+            return newItem;
+        }
+
+        public CommodityItemApiFeed CommodityItemToCommodityItemApiFeed(CommodityItem item)
+        {
+            var newItem = new CommodityItemApiFeed();
+            newItem.Id = item.Id;
+            newItem.Name = item.Name;
+            newItem.Price = item.Price;
+            newItem.Description = item.Description;
+            newItem.FirstPic =  Path.Combine("http://localhost:5010/images/", item.Id.ToString(), "1m.jpg");
+            newItem.SecondPic = Path.Combine("http://localhost:5010/images/", item.Id.ToString(), "2m.jpg");
+            newItem.ThirdPic =  Path.Combine("http://localhost:5010/images/", item.Id.ToString(), "3m.jpg");
             return newItem;
         }
 

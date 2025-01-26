@@ -115,7 +115,7 @@ function BuildAndRunContainer {
         return
     }
 
-    
+
 # Проверка и удаление существующего контейнера, если он есть
 Write-Host "Проверка запущенного контейнера с именем $($container.Name)..."
 $existingContainer = docker ps -a -q --filter "name=$($container.Name)"
@@ -171,7 +171,6 @@ if ($existingContainer) {
     $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container.Name
     Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
 }
-
 function Show-Menu {
     Write-Host "Меню:" -ForegroundColor Green
     Write-Host "10 -- Подключиться к выбранному контейнеру"

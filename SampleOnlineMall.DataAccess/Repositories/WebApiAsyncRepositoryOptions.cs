@@ -25,7 +25,7 @@ namespace SampleOnlineMall.DataAccess.DataAccess
         public string InsertHostPath { get; set; }
         public string UpdateHostPath { get; set; }
         public string DeleteHostPath { get; set; }
-        public string DeleteAllHostPath { get; set; }
+        public string ClearHostPath { get; set; }
         public string SearchHostPath { get; set; }
         public string GetByIdOrNullHostPath { get; set; }
         public string BaseAddress { get; set; }
@@ -64,9 +64,9 @@ namespace SampleOnlineMall.DataAccess.DataAccess
             DeleteHostPath = text;
             return this;
         }
-        public WebApiAsyncRepositoryOptions SetDeleteAllHostPath(string text)
+        public WebApiAsyncRepositoryOptions SetClearHostPath(string text)
         {
-            DeleteAllHostPath = text;
+            ClearHostPath = text;
             return this;
         }
         

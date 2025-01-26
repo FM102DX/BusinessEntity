@@ -49,7 +49,7 @@ namespace ControlNode
                     .SetGetAllHostPath("getall")
                     .SetGetAllByRequestHostPath("getall")
                     .SetInsertHostPath("insertitem")
-                    .SetDeleteAllHostPath("deleteallitems");
+                    .SetClearHostPath("clear");
                 return new WebApiAsyncRepository<CommodityItemApiFeed>(options, wLogger);
             });
             builder.Services.AddScoped<AssortmentLoader>();
