@@ -6,6 +6,7 @@ using SampleOnlineMall.DataAccess.Abstract;
 using SampleOnlineMall.DataAccess.DataAccess;
 using SampleOnlineMall.DataAccess.Models;
 using System;
+using SampleOnlineMall.WebLogger.Services;
 
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
@@ -19,13 +20,19 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
         private CustomMapper _mapper { get; set; }
 
         public string StoreBaseUrl { get; set; }
+        private IWebLoggerService _webLogger;
 
-        public StoreManager(NavigationManager Navi, IAsyncRepository<CommodityItemFrontend> repo, SampleOnlineMallFrontEndBlazorApp app, CustomMapper mapper)
+        public StoreManager(NavigationManager Navi, 
+                IAsyncRepository<CommodityItemFrontend> repo, 
+                SampleOnlineMallFrontEndBlazorApp app, 
+                CustomMapper mapper,
+                IWebLoggerService webLogger)
         {
             StoreBaseUrl = Navi.BaseUri;
             _repo = repo;
             _app = app;
             _mapper = mapper;
+            _webLogger = webLogger;
         }
         public string GetItemPageFullAddress(Guid itemId)
         {

@@ -8,6 +8,7 @@ using SampleOnlineMall.DataAccess.Models;
 using Newtonsoft.Json;
 using SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator;
 using SampleOnlineMall.FrontEnd.BlazorServer.Data;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection
 {
@@ -17,7 +18,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection
         public StoreManager Manager { get; set; }
 
         [Inject]
-        public Serilog.ILogger Logger { get; set; }
+        public IWebLoggerService Logger { get; set; }
 
         [Inject]
         ComponentHub CompHub { get; set; }
@@ -53,7 +54,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection
         {
             Logger.Information($"OnParametersSetAsync");
             
-            await DoPageLoadWithPagination(Page, SearchText);
+          //  await DoPageLoadWithPagination(Page, SearchText);
 
         }
 
@@ -65,14 +66,14 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection
         protected override async Task OnInitializedAsync()
         {
             Logger.Information($"OnInitializedAsync");
-            //await DoPageLoadWithPagination(Page);
+            await DoPageLoadWithPagination(Page);
             //CompHub.SetPaginatonState(Page, ItemsTotalCount, ItemsPerPage);
         }
 
         private async void CompHub_DoingSearch(string searchText)
         {
             Logger.Information("Searching from comphub with text: " + searchText);
-            await DoPageLoadWithPagination(1, searchText);
+            //await DoPageLoadWithPagination(1, searchText);
         }
 
         protected async Task DoPageLoadWithPagination(int pageNo = 1, string searchText="")
@@ -89,17 +90,15 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection
 
                 var responce = await Manager.GetAllAsync(req);
 
-                Logger.Information($"Go");
-
                 Logger.Information($"{JsonConvert.SerializeObject(responce)}");
 
                 ItemsTotalCount = responce.TotalCount;
 
                 ItemsDisplayed = responce.Items.ToList();
+                
+                // StateHasChanged();
 
-                StateHasChanged();
-
-                CompHub.SetPaginatonState(Page, ItemsTotalCount, ItemsPerPage, PaginatorUsageCaseEnum.Regular);
+                // CompHub.SetPaginatonState(Page, ItemsTotalCount, ItemsPerPage, PaginatorUsageCaseEnum.Regular);
             }
             else if (UsageCase == ShopItemCollectionUsageCaseEnum.MainBarSearch)
             {

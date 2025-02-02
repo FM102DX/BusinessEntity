@@ -100,9 +100,9 @@ namespace SampleOnlineMall.Core.Managers
             for (int i = 1; i <= 3; i++)
             {
                 var pic = new PictureInfo();
-                pic.BigPictureFullPath = $"{_app.BaseUrl}/CommodityItemImages/{item.Id}/{i}.jpg";
-                pic.MediumPictureFullPath = $"{_app.BaseUrl}/CommodityItemImages/{item.Id}/{i}m.jpg";
-                pic.SmallPictureFullPath = $"{_app.BaseUrl}/CommodityItemImages/{item.Id}/{i}s.jpg";
+                pic.BigPictureFullPath = $"{_app.BaseUrl}/Images/{item.Id}/{i}.jpg";
+                pic.MediumPictureFullPath = $"{_app.BaseUrl}/Images/{item.Id}/{i}m.jpg";
+                pic.SmallPictureFullPath = $"{_app.BaseUrl}/Images/{item.Id}/{i}s.jpg";
                 picLst.Add(pic);
             }
             return picLst;

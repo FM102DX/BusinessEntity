@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using SampleOnlineMall.FrontEnd.BlazorServer.Components.ImageSelector;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.DisplayImageWithSelector
 {
@@ -9,7 +10,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.DisplayImageWithSele
     {
 
         [Inject]
-        public Serilog.ILogger Logger { get; set; }
+        public IWebLoggerService Logger { get; set; }
 
         [Parameter]
         public int ContainerWidth { get; set; }

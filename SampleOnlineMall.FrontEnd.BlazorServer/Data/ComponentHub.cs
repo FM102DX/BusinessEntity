@@ -1,18 +1,19 @@
 ﻿using SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
 {
     public class ComponentHub
     {
+        //class to organize component interaction
 
-        Serilog.ILogger _logger;
-
-        //class to organize component interactio
+        private IWebLoggerService _webLogger;
+        
         public string SearchText { get; set; }
 
-        public ComponentHub(Serilog.ILogger logger)
+        public ComponentHub(IWebLoggerService webLogger)
         {
-            _logger = logger;
+            _webLogger = webLogger;
         }
         
         //search
@@ -25,8 +26,6 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
 
         public delegate void DoingSearchHandler(string SearchText);
 
-
-
         // PaginatorStateSet
         public delegate void SetPaginatorStateHandler(int selectedPage, int count, int itemsPerPage, SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator.PaginatorUsageCaseEnum usageCase);
 
@@ -34,7 +33,8 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Data
 
         public void SetPaginatonState(int selectedPage, int count, int itemsPerPage, SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator.PaginatorUsageCaseEnum usageCase)
         {
-            PaginatorStateSet (selectedPage,count, itemsPerPage, usageCase);
+            if(PaginatorStateSet!=null)
+                PaginatorStateSet (selectedPage,count, itemsPerPage, usageCase);
         }
     }
 }

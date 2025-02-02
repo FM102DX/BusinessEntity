@@ -1,12 +1,13 @@
 ﻿using Microsoft.AspNetCore.Components;
 using SampleOnlineMall.FrontEnd.BlazorServer.Data;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.Paginator
 {
     public partial class Paginator : ComponentBase
     {
         [Inject]
-        Serilog.ILogger Logger { get; set; }
+        IWebLoggerService Logger { get; set; }
 
         [Inject]
         NavigationManager Navi { get; set; }

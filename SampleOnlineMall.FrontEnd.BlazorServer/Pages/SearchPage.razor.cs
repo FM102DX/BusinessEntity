@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using SampleOnlineMall.WebLogger.Services;
 using static SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection.ShopItemCollection;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Pages
@@ -9,7 +10,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Pages
     {
 
         [Inject]
-        public Serilog.ILogger Logger { get; set; }
+        public IWebLoggerService Logger { get; set; }
 
         [Parameter]
         public string SearchText { get; set; }

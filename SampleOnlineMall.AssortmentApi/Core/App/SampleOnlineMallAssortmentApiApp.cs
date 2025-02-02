@@ -20,7 +20,7 @@ namespace SampleOnlineMall.Core.Appilcation
 
         public bool IsDocker { get; set; } = false;
 
-        public String BaseUrl { get => "https://mallassortapi01.t109.tech/"; }
+        public String BaseUrl { get => "http://localhost:5010"; }
         
 
         public String? BaseDirectory { get => System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location); }

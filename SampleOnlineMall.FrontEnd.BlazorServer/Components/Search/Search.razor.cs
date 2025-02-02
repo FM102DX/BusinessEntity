@@ -3,13 +3,14 @@ using Microsoft.AspNetCore.Components.Web;
 using System;
 using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 using SampleOnlineMall.FrontEnd.BlazorServer.Data;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.Search
 {
     public partial class Search : ComponentBase
     {
         [Inject]
-        public Serilog.ILogger Logger { get; set; }
+        public IWebLoggerService Logger { get; set; }
 
         [Inject]
         public  StoreManager MyStoreManager { get; set; }

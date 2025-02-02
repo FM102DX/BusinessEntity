@@ -8,6 +8,7 @@ using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.Core.Models;
 using SampleOnlineMall.Core.Mappers;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Pages
 
@@ -22,7 +23,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Pages
         public CustomMapper Mpr { get; set; }
 
         [Inject]
-        public Serilog.ILogger Logger { get; set; }
+        public IWebLoggerService Logger { get; set; }
 
         [Inject]
         public NavigationManager Navigation { get; set; }

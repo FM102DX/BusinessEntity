@@ -26,43 +26,52 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
 
             #region custom calls
 
-            var _app = new SampleOnlineMallFrontEndBlazorApp();
-            string logFilePath = System.IO.Path.Combine(_app.LogsDirectory, Functions.GetNextFreeFileName(_app.LogsDirectory, "SampleMallBlazorFrontend", "txt"));
+            // App classes
+            var genApp = new GenericAppSettings();
+            genApp.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
+            builder.Services.AddSingleton(typeof(GenericAppSettings), (x) => genApp);
 
-            Serilog.ILogger _logger = new LoggerConfiguration()
-                       .MinimumLevel.Override("Microsoft", LogEventLevel.Debug)
-                       .Enrich.FromLogContext()
-                       //.WriteTo.BrowserConsole()
-                       .WriteTo.File(logFilePath)
-                       .CreateLogger();
+            // Регистрация WebLoggerLocalSettings в DI
+            var webLoggerSettings = new WebLoggerLocalSettings();
+            builder.Configuration.GetSection("WebLoggerLocalSettings").Bind(webLoggerSettings);
+            builder.Services.AddSingleton(webLoggerSettings);
+            builder.Services.AddScoped<IWebLoggerService, WebLoggerService>();
 
-
-
+            // используем логгер
             var serviceProvider = builder.Services.BuildServiceProvider();
             var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
-            wLogger.Information("Приложение запущено");
+            wLogger.Information("App launched");
 
-            builder.Services.AddSingleton(typeof(Serilog.ILogger), (x) => _logger);
+            var _app = new SampleOnlineMallFrontEndBlazorApp();
 
-            var webRepoOptions = new WebApiAsyncRepositoryOptions()
-                .SetLogger(_logger)
-                .SetBaseAddress("https://mallassortapi01.t109.tech/")
-                .SetGetAllHostPath("getall/")
-                .SetGetByIdOrNullHostPath("GetByIdOrNull/")
-                .SetGetAllByRequestHostPath("getallbyrequest/")
-                .SetSearchHostPath("search/");
+            builder.Services.AddScoped<IAsyncRepository<CommodityItemFrontend>>(serviceProvider =>
+            {
+                wLogger.Information($"INTRO");
+                var baseAddress = genApp.IsDocker ? "http://assort-api-container:80/" : "http://localhost:5010/";
+                wLogger.Information($"B_ADDR={baseAddress}");
+                var options = new WebApiAsyncRepositoryOptions()
+                    .SetBaseAddress(baseAddress)
+                    .SetGetAllHostPath("frontend/getall/")
+                    .SetGetByIdOrNullHostPath("frontend/GetByIdOrNull/")
+                    .SetGetAllByRequestHostPath("frontend/getallbyrequest/")
+                    .SetSearchHostPath("frontend/search/");
+                wLogger.SendObject($"{options}");
+                return new WebApiAsyncRepository<CommodityItemFrontend>(options, wLogger);
+            });
 
-            builder.Services.AddSingleton(typeof(WebApiAsyncRepositoryOptions), (x) => webRepoOptions);
-            builder.Services.AddScoped(typeof(IAsyncRepository<CommodityItemFrontend>), typeof(WebApiAsyncRepositoryOptions));
+
             builder.Services.AddScoped(typeof(SampleOnlineMallFrontEndBlazorApp), typeof(SampleOnlineMallFrontEndBlazorApp));
+            builder.Services.AddScoped(provider => new FrontEndSettings()
+            {
+                DisplayMainHorizontalMenu = false,
+                DisplayNavBar = false, 
+                DisplayTopHorizontalMenu = false
 
-            FrontEndSettings frontEndSettings = new FrontEndSettings();
-            frontEndSettings.DisplayTopHorizontalMenu = false;
-            frontEndSettings.DisplayMainHorizontalMenu = false;
-            frontEndSettings.DisplayNavBar = false;
-            builder.Services.AddScoped(typeof(FrontEndSettings), (x) => frontEndSettings);
+            });
             builder.Services.AddScoped(typeof(StoreManager), typeof(StoreManager));
+            
             builder.Services.AddScoped(typeof(CustomMapper), typeof(CustomMapper));
+            
             builder.Services.AddScoped(typeof(ComponentHub), typeof(ComponentHub));
 
             #endregion 

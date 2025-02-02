@@ -1,13 +1,14 @@
 ﻿using Microsoft.AspNetCore.Components;
 using System.Collections.Generic;
 using System.Linq;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.FrontEnd.BlazorServer.Components.ImageSelector
 {
     public partial class ImageSelector : ComponentBase
     {
         [Inject]
-        public Serilog.ILogger Logger { get; set; }
+        public IWebLoggerService Logger { get; set; }
 
         [Parameter]
         public List<SelectableImage> Items { get; set; } = new List<SelectableImage>();
