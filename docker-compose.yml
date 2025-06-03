@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sampleonlinemall-postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - sampleonlinemall-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Web Logger Service
+  weblogger:
+    build:
+      context: .
+      dockerfile: SampleOnlineMall.WebLogger/Dockerfile
+    container_name: sampleonlinemall-weblogger
+    environment:
+      - ASPNET_ENVIRONMENT=Production
+      - ConnectionStrings__PostgreConnection=Host=postgres;Port=5432;Database=weblogger;Username=postgres;Password=123
+    ports:
+      - "7000:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sampleonlinemall-network
+    volumes:
+      - weblogger_logs:/app/logs
+
+  # Assortment API Service
+  assortmentapi:
+    build:
+      context: .
+      dockerfile: SampleOnlineMall.AssortmentApi/Dockerfile
+    container_name: sampleonlinemall-assortmentapi
+    environment:
+      - ASPNET_ENVIRONMENT=Production
+      - ConnectionStrings__PostgreConnection=Host=postgres;Port=5432;Database=assortment;Username=postgres;Password=123
+      - WebLogger__BaseAddress=http://weblogger
+    ports:
+      - "8000:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      weblogger:
+        condition: service_started
+    networks:
+      - sampleonlinemall-network
+    volumes:
+      - assortmentapi_logs:/app/logs
+
+  # Blazor Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: SampleOnlineMall.FrontEnd.Blazor/Dockerfile
+    container_name: sampleonlinemall-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - assortmentapi
+    networks:
+      - sampleonlinemall-network
+
+volumes:
+  postgres_data:
+  weblogger_logs:
+  assortmentapi_logs:
+
+networks:
+  sampleonlinemall-network:
+    driver: bridge

@@ -22,6 +22,11 @@ namespace SampleOnlineMall.FrontEnd.Blazor
             builder.RootComponents.Add<HeadOutlet>("head::after");
             builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
+            // Load configuration from appsettings.json
+            using var http = new HttpClient() { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
+            var configurationJson = await http.GetStringAsync("appsettings.json");
+            var config = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(configurationJson);
+
             var _app = new SampleOnlineMallFrontEndBlazorApp();
             string logFilePath = System.IO.Path.Combine(_app.LogsDirectory, Functions.GetNextFreeFileName(_app.LogsDirectory, "SampleMallBlazorFrontend", "txt"));
 
@@ -33,9 +38,13 @@ namespace SampleOnlineMall.FrontEnd.Blazor
                        .CreateLogger();
 
 
+            // Get configuration values
+            var webLoggerBaseAddress = GetConfigValue(config, "WebLogger:BaseAddress", "https://weblogger.t109.tech");
+            var assortmentApiBaseAddress = GetConfigValue(config, "AssortmentApi:BaseAddress", "https://mallassortapi01.t109.tech/");
+
             var webLoggerOptions = new WebApiAsyncRepositoryOptions()
                         .SetLogger(_logger)
-                        .SetBaseAddress("https://weblogger.t109.tech")
+                        .SetBaseAddress(webLoggerBaseAddress)
                         .SetInsertHostPath("insertitem/");
 
             var webLogger = new WebLoggerManager("blazorfrontend", webLoggerOptions);
@@ -48,7 +57,7 @@ namespace SampleOnlineMall.FrontEnd.Blazor
 
             var webRepoOptions = new WebApiAsyncRepositoryOptions()
                 .SetLogger(_logger)
-                .SetBaseAddress("https://mallassortapi01.t109.tech/")
+                .SetBaseAddress(assortmentApiBaseAddress)
                 .SetGetAllHostPath("getall/")
                 .SetGetByIdOrNullHostPath("GetByIdOrNull/")
                 .SetGetAllByRequestHostPath("getallbyrequest/")
@@ -70,6 +79,56 @@ namespace SampleOnlineMall.FrontEnd.Blazor
             var host = builder.Build();
             
             await host.RunAsync();
+        }
+
+        private static string GetConfigValue(Dictionary<string, object> config, string key, string defaultValue)
+        {
+            try
+            {
+                var keys = key.Split(':');
+                object current = config;
+                
+                foreach (var k in keys)
+                {
+                    if (current is System.Text.Json.JsonElement element)
+                    {
+                        if (element.TryGetProperty(k, out var prop))
+                        {
+                            current = prop;
+                        }
+                        else
+                        {
+                            return defaultValue;
+                        }
+                    }
+                    else if (current is Dictionary<string, object> dict)
+                    {
+                        if (dict.TryGetValue(k, out var value))
+                        {
+                            current = value;
+                        }
+                        else
+                        {
+                            return defaultValue;
+                        }
+                    }
+                    else
+                    {
+                        return defaultValue;
+                    }
+                }
+                
+                if (current is System.Text.Json.JsonElement jsonElement)
+                {
+                    return jsonElement.GetString() ?? defaultValue;
+                }
+                
+                return current?.ToString() ?? defaultValue;
+            }
+            catch
+            {
+                return defaultValue;
+            }
         }
     }
 }
