@@ -37,7 +37,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorServerWebLogger", "BlazorServerWebLogger\BlazorServerWebLogger.csproj", "{0BB14D07-9F88-4C98-AB08-40726AC01EFE}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "KMS", "KMS", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BusinessEntity", "BusinessEntity", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BusinessEntity", "BusinessEntity\BusinessEntity.csproj", "{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -77,6 +79,10 @@ Global
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -87,6 +93,7 @@ Global
 		{5B4413A9-F4B8-4B97-9EC8-870338F08C66} = {F04FE8F8-22D7-4E50-AF62-FEE1BE7EBC5B}
 		{C28543E9-C736-4B78-843F-A86DF9BDC9F9} = {E5BC70C6-4830-4558-9551-2392590E4BF0}
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE} = {73E58599-8E32-4A18-88AF-DA652E84AF6B}
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0C280E46-39B2-4D5B-977F-38B4085CD8ED}
