@@ -7,10 +7,55 @@
 
 <PageTitle>KMS-Business-Entities-Main</PageTitle>
 
+<div class="user-info-container">
+    <div class="user-welcome">
+        @if (!string.IsNullOrEmpty(CurrentUserName))
+        {
+            <h3>Добро пожаловать в KMS Business Entity, @CurrentUserName!</h3>
+            @if (!string.IsNullOrEmpty(CurrentUserEmail))
+            {
+                <p class="user-email">Email: @CurrentUserEmail</p>
+            }
+            <button class="btn btn-outline-secondary btn-sm" @onclick="SignOut">Выйти</button>
+        }
+        else
+        {
+            <p>Загрузка информации о пользователе...</p>
+        }
+    </div>
+</div>
+
 <h1>KMS-Business-Entities-Main</h1>
 
 <div class="main-logger-content">
-    
-    
-
+    <div class="alert alert-info">
+        <h4>Система управления бизнес-сущностями</h4>
+        <p>Добро пожаловать в систему управления бизнес-сущностями KMS. Вы успешно авторизованы через Auterlink.</p>
+    </div>
 </div>
+
+<style>
+    .user-info-container {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .user-welcome h3 {
+        color: #28a745;
+        margin-bottom: 10px;
+    }
+
+    .user-email {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
+
+    .btn-outline-secondary {
+        font-size: 0.8rem;
+        padding: 5px 10px;
+    }
+</style>

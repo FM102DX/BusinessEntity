@@ -1,0 +1,80 @@
+@page "/unauthorized"
+@layout BusinessEntity.Shared.MainLayout
+
+<PageTitle>Unauthorized</PageTitle>
+
+<div class="unauthorized-container">
+    <div class="unauthorized-content">
+        <h1 class="error-title">ERROR: UNAUTHORIZED</h1>
+        <p class="error-message">У вас нет доступа к системе KMS Business Entity. Пожалуйста, авторизуйтесь через Auterlink.</p>
+        <div class="error-actions">
+            <a href="/auterlink/login" class="btn btn-primary">Войти через Auterlink</a>
+            <a href="/" class="btn btn-secondary">На главную</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .unauthorized-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 60vh;
+        padding: 20px;
+    }
+
+    .unauthorized-content {
+        text-align: center;
+        max-width: 500px;
+    }
+
+    .error-title {
+        color: #dc3545;
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 20px;
+    }
+
+    .error-message {
+        font-size: 1.2rem;
+        margin-bottom: 30px;
+        color: #6c757d;
+    }
+
+    .error-actions {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+        background-color: #007bff;
+        color: white;
+        border: 1px solid #007bff;
+    }
+
+    .btn-primary:hover {
+        background-color: #0056b3;
+        border-color: #0056b3;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+        border: 1px solid #6c757d;
+    }
+
+    .btn-secondary:hover {
+        background-color: #545b62;
+        border-color: #545b62;
+    }
+</style>

@@ -5,8 +5,11 @@ using BusinessEntity.Data.App;
 using BusinessEntity.Data.Services;
 using BusinessEntity.Data.Services.HostedServices;
 using BusinessEntity.DataAccess.Repository;
+using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
@@ -33,6 +36,34 @@ namespace BusinessEntity
 			builder.Services.AddServerSideBlazor();
 			builder.Services.AddEndpointsApiExplorer();
 			builder.Services.AddAutoMapper(typeof(Program));
+
+			// Добавляем авторизацию и аутентификацию
+			builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+				.AddCookie(options =>
+				{
+					options.LoginPath = "/auterlink/login";
+					options.LogoutPath = "/auterlink/logout";
+					options.AccessDeniedPath = "/unauthorized";
+					options.ExpireTimeSpan = TimeSpan.FromHours(24);
+					options.SlidingExpiration = true;
+				});
+
+			builder.Services.AddAuthorization(options =>
+			{
+				options.FallbackPolicy = new AuthorizationPolicyBuilder()
+					.RequireAuthenticatedUser()
+					.Build();
+			});
+
+			// Добавляем HttpContextAccessor для доступа к контексту запроса
+			builder.Services.AddHttpContextAccessor();
+
+			// Добавляем HttpClient для сервиса авторизации
+			builder.Services.AddHttpClient();
+
+			// Регистрируем наш сервис авторизации
+			builder.Services.AddScoped<IAuterlinkAuthService, AuterlinkAuthService>();
+
 			var _app = new WebLoggerApp();
 
 			// read settings from appsettings.json
@@ -91,6 +122,11 @@ namespace BusinessEntity
 			app.UseStaticFiles();
 
 			app.UseRouting();
+
+			// Добавляем middleware для аутентификации и авторизации
+			app.UseAuthentication();
+			app.UseAuthorization();
+
 			app.MapControllers();
 			app.MapBlazorHub();
 			app.MapFallbackToPage("/_Host");
