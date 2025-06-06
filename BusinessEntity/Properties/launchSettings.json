@@ -27,13 +27,16 @@
     "Docker (dev-mall2)": {
       "commandName": "Docker",
       "launchBrowser": true,
+      "httpPort": 5010,
+
+      "containerName": "business-entity-container",
+      "containerRunArguments": "--rm --network docker-networkmall2",
+
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ASPNETCORE_URLS": "http://*:80"
-      },
-      "httpPort": 5010,
-      "containerName": "business-entity-container",
-      "containerRunArguments": "--network docker-networkmall2"
+      }
     }
+
   }
 }

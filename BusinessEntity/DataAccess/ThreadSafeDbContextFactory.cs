@@ -9,12 +9,12 @@ using SampleOnlineMall.WebLogger.DataAccess;
 
 public class ThreadSafeDbContextFactory
 {
-    private readonly DbContextOptions<WebLoggerDbContext> _options;
+    private readonly DbContextOptions<KmsBusinessEntityDbContext> _options;
     private readonly ConcurrentDictionary<string, DbContextPool> _pools = new();
     private readonly int _dbContextLifeTimeMs;
     private readonly DebugLogger _logger;
 
-    public ThreadSafeDbContextFactory(DbContextOptions<WebLoggerDbContext> options, int dbContextLifeTimeMs = 30000)
+    public ThreadSafeDbContextFactory(DbContextOptions<KmsBusinessEntityDbContext> options, int dbContextLifeTimeMs = 30000)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
@@ -63,7 +63,7 @@ public class ThreadSafeDbContextFactory
         return cleanedKey.ToLower();
     }
 
-    private void FreeUpDbContext(WebLoggerDbContext context)
+    private void FreeUpDbContext(KmsBusinessEntityDbContext context)
     {
         foreach (var pool in _pools.Values)
         {
@@ -110,15 +110,15 @@ public class ThreadSafeDbContextFactory
 public class DbContextPool
 {
     private readonly int _dbContextLifeTimeMs;
-    private readonly DbContextOptions<WebLoggerDbContext> _options;
-    private readonly Action<WebLoggerDbContext> _freeUpFunc;
+    private readonly DbContextOptions<KmsBusinessEntityDbContext> _options;
+    private readonly Action<KmsBusinessEntityDbContext> _freeUpFunc;
     private readonly DebugLogger _logger;
     private readonly SemaphoreSlim _semaphore;
     public ConcurrentDictionary<Guid, DbContextPoolRecord> PoolRecords { get; } = new();
 
     private readonly Timer _cleanupTimer;
 
-    public DbContextPool(int dbContextLifeTimeMs, DbContextOptions<WebLoggerDbContext> options, Action<WebLoggerDbContext> freeUpFunc, DebugLogger logger, int maxPoolSize)
+    public DbContextPool(int dbContextLifeTimeMs, DbContextOptions<KmsBusinessEntityDbContext> options, Action<KmsBusinessEntityDbContext> freeUpFunc, DebugLogger logger, int maxPoolSize)
     {
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -169,7 +169,7 @@ public class DbContextPool
                 {
                     TimeStamp = DateTime.UtcNow,
                     Busy = true,
-                    Context = new WebLoggerDbContext(_options)
+                    Context = new KmsBusinessEntityDbContext(_options)
                 };
                 Console.WriteLine($"P212");
                 PoolRecords.TryAdd(id, newRecord);
@@ -227,7 +227,7 @@ public class DbContextPool
 public class DbContextPoolRecord
 {
     public Guid Id { get; }
-    public WebLoggerDbContext Context { get; set; }
+    public KmsBusinessEntityDbContext Context { get; set; }
     public DateTime TimeStamp { get; set; }
     public bool Busy { get; set; }
     public bool Disposed { get; set; }
@@ -246,18 +246,18 @@ public class DbContextPoolRecord
 
 public class DbContextWrap : IDisposable
 {
-    private readonly WebLoggerDbContext _context;
-    private readonly Action<WebLoggerDbContext> _freeUpFunc;
+    private readonly KmsBusinessEntityDbContext _context;
+    private readonly Action<KmsBusinessEntityDbContext> _freeUpFunc;
     private readonly DbContextPoolRecord _record;
 
-    public DbContextWrap(WebLoggerDbContext context, Action<WebLoggerDbContext> freeUpFunc, DbContextPoolRecord record)
+    public DbContextWrap(KmsBusinessEntityDbContext context, Action<KmsBusinessEntityDbContext> freeUpFunc, DbContextPoolRecord record)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _freeUpFunc = freeUpFunc ?? throw new ArgumentNullException(nameof(freeUpFunc));
         _record = record ?? throw new ArgumentNullException(nameof(record));
     }
 
-    public WebLoggerDbContext Context => _context;
+    public KmsBusinessEntityDbContext Context => _context;
 
     public string DemoStr => $"id={_record.Id} busy={_record.Busy} issued={_record.IssuedCount}";
 

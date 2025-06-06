@@ -1,5 +1,8 @@
 # Управление Docker-контейнерами
 
+. "$PSScriptRoot\DockerNetworkInfo.ps1"
+
+
 # Список контейнеров
 $containers = @(
     [PSCustomObject]@{
@@ -15,6 +18,14 @@ $containers = @(
         PortInt = 80
         PortExt = 5010
         ProjectPath = "C:\Develop\Mall2\SampleOnlineMall.AssortmentApi"
+        ContextPath = "C:\Develop\Mall2"
+        LogPath = "C:\Develop\Logs\"
+    },
+    [PSCustomObject]@{
+        Name = "business-entity-container"
+        PortInt = 80
+        PortExt = 7000
+        ProjectPath = "C:\Develop\Mall2\BusinessEntity"
         ContextPath = "C:\Develop\Mall2"
         LogPath = "C:\Develop\Logs\"
     },
@@ -323,6 +334,7 @@ function Action371 {
 
 function Show-Menu {
     Write-Host "Меню:" -ForegroundColor Green
+    Write-Host "00   -- Вывести статус докер-сетей"
     Write-Host "10   -- Подключиться к выбранному контейнеру"
     Write-Host "20   -- Вывести диагностическую информацию для выбранного контейнера"
     Write-Host "30   -- Сбилдить и запустить контейнер"
@@ -340,6 +352,7 @@ do {
     $choice = Read-Host "Выберите пункт меню"
 
     switch ($choice) {
+        "00"  { Show-MultipleContainersNetworks }
         "10"  { Action10 }
         "20"  { Action20 }
         "30"  { SelectContainerAndRun }
