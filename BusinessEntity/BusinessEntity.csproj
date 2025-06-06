@@ -19,5 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SampleOnlineMall.Core\SampleOnlineMall.Core.csproj" />
   </ItemGroup>
-
+  <PropertyGroup>
+    <DockerDisableTLS>true</DockerDisableTLS>
+  </PropertyGroup>
 </Project>

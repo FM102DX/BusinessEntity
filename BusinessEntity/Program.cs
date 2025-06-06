@@ -26,6 +26,12 @@ namespace BusinessEntity
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // РЇРІРЅРѕ РЅР°СЃС‚СЂР°РёРІР°РµРј С‚РѕР»СЊРєРѕ HTTP
+            builder.WebHost.ConfigureKestrel(serverOptions =>
+            {
+                serverOptions.ListenAnyIP(80);
+            });
+
             // Add services to the container.
             builder.Services.AddControllers();
             builder.Services.AddRazorPages();
@@ -34,32 +40,28 @@ namespace BusinessEntity
             builder.Services.AddAutoMapper(typeof(Program));
             var _app = new WebLoggerApp();
 
-            // Чтение настроек из appsettings.json
+            // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ appsettings.json
             builder.Services.Configure<LogEraserSettings>(
                 builder.Configuration.GetSection("LogEraserSettings"));
             builder.Services.Configure<SampleLogSettings>(
                 builder.Configuration.GetSection("SampleLogSettings"));
 
-            builder.Services.AddSingleton(typeof(WebLoggerApp), (x) => _app); // само приложение
-           
-
+            builder.Services.AddSingleton(typeof(WebLoggerApp), (x) => _app); // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
             var connectionString = Environment.GetEnvironmentVariable("IS_DOCKER") == "true"
                 ? builder.Configuration.GetConnectionString("DockerConnection")
                 : builder.Configuration.GetConnectionString("IisExpressConnection");
 
-
-
             Console.WriteLine($"ConnectionString={connectionString}");
 
-            //Создаем опции
+            //пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
             var optionsBuilder = new DbContextOptionsBuilder<WebLoggerDbContext>();
-            optionsBuilder.UseNpgsql(connectionString); // Указываем использование PostgreSQL
+            optionsBuilder.UseNpgsql(connectionString); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ PostgreSQL
 
-            // Регистрируем DbContextOptions<WebLoggerDbContext> в DI
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ DbContextOptions<WebLoggerDbContext> пїЅ DI
             builder.Services.AddSingleton(provider => optionsBuilder.Options);
 
-            // Убедитесь, что база данных и таблицы созданы
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             using (var context = new WebLoggerDbContext(optionsBuilder.Options))
             {
                 //context.Database.EnsureDeleted();
@@ -70,14 +72,16 @@ namespace BusinessEntity
             builder.Services.AddSingleton<AppSettingsManager>();
             builder.Services.AddScoped<Contracts.IAsyncRepository<AppSettingsDbStorable>, BusinessEntity.DataAccess.Repository.EfAsyncRepository<AppSettingsDbStorable>>();
             builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, BusinessEntity.DataAccess.Repository.EfAsyncRepository<LogEntryDbStorable>>();
-            builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // Регистрация фабрики дбконтекстов
-            builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>(); // Регистрация фабрики репозиториев
-            builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>(); // Регистрация фабрики репозиториев
-            builder.Services.AddScoped<LogReaderService>();
-            builder.Services.AddHostedService<SampleLogGeneratorService>();
-            builder.Services.AddHostedService<LogEraserService>();
+            builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            
+            //builder.Services.AddScoped<LogReaderService>();
 
-            // Добавление Swagger
+            //builder.Services.AddHostedService<SampleLogGeneratorService>();
+            //builder.Services.AddHostedService<LogEraserService>();
+
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Swagger
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
@@ -87,6 +91,7 @@ namespace BusinessEntity
             if (!app.Environment.IsDevelopment())
             {
                 app.UseExceptionHandler("/Error");
+                // РќРµ РёСЃРїРѕР»СЊР·СѓРµРј HSTS РІ РїСЂРѕРґР°РєС€РµРЅРµ РґР»СЏ РѕС‚РєР»СЋС‡РµРЅРёСЏ HTTPS
             }
             else
             {

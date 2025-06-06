@@ -1,4 +1,5 @@
 # Управление Docker-контейнерами
+
 # Список контейнеров
 $containers = @(
     [PSCustomObject]@{
@@ -8,15 +9,15 @@ $containers = @(
         ProjectPath = "C:\Develop\Mall2\ControlNode"
         ContextPath = "C:\Develop\Mall2"
         LogPath = "C:\Develop\Logs\"
-    },  
-[PSCustomObject]@{
+    },
+    [PSCustomObject]@{
         Name = "assort-api-container"
         PortInt = 80
         PortExt = 5010
         ProjectPath = "C:\Develop\Mall2\SampleOnlineMall.AssortmentApi"
         ContextPath = "C:\Develop\Mall2"
         LogPath = "C:\Develop\Logs\"
-    },    
+    },
     [PSCustomObject]@{
         Name = "web_logger-container"
         PortInt = 80
@@ -36,6 +37,7 @@ $containers = @(
         LogPath = "C:\Develop\Logs\PostgresAssort"
     }
 )
+
 function Select-Container {
     Write-Host "Выберите контейнер:" -ForegroundColor Cyan
     $i = 1
@@ -66,12 +68,19 @@ function GetContainerByName {
 
 function Action10 {
     $container = Select-Container
-    if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
+    if ($null -eq $container) {
+        Write-Host "Неверный выбор" -ForegroundColor Red
+        return
+    }
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "docker exec -it $($container.Name) sh"
 }
+
 function Action20 {
     $container = Select-Container
-    if ($null -eq $container) { Write-Host "Неверный выбор" -ForegroundColor Red; return }
+    if ($null -eq $container) {
+        Write-Host "Неверный выбор" -ForegroundColor Red
+        return
+    }
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "docker exec -it $($container.Name) /bin/bash -c 'apt-get update && apt-get install -y procps curl net-tools mc && echo && ps aux | grep -v /bin/bash && echo && (curl -s http://localhost:80 || echo CURLfailed) && echo && netstat -tuln'"
 }
 
@@ -164,9 +173,6 @@ function BuildAndRunPostgresContainer {
     }
 }
 
-
-
-
 function BuildAndRunContainer {
     param (
         [PSCustomObject]$container
@@ -185,30 +191,28 @@ function BuildAndRunContainer {
         return
     }
 
+    # Проверка и удаление существующего контейнера, если он есть
+    Write-Host "Проверка запущенного контейнера с именем $($container.Name)..."
+    $existingContainer = docker ps -a -q --filter "name=$($container.Name)"
 
-# Проверка и удаление существующего контейнера, если он есть
-Write-Host "Проверка запущенного контейнера с именем $($container.Name)..."
-$existingContainer = docker ps -a -q --filter "name=$($container.Name)"
+    if ($existingContainer) {
+        Write-Host "Остановка существующего контейнера $($container.Name)..."
+        docker stop $existingContainer
 
-if ($existingContainer) {
-    Write-Host "Остановка существующего контейнера $($container.Name)..."
-    docker stop $existingContainer
+        Write-Host "Удаление существующего контейнера $($container.Name)..."
+        docker rm $existingContainer
 
-    Write-Host "Удаление существующего контейнера $($container.Name)..."
-    docker rm $existingContainer
-
-    # Проверка, что контейнер действительно удалён
-    $checkContainer = docker ps -a -q --filter "name=$($container.Name)"
-    if ($checkContainer) {
-        Write-Host "Ошибка: не удалось удалить контейнер с именем $($container.Name)!" -ForegroundColor Red
-        throw "Не удалось удалить контейнер. Скрипт завершён."
+        # Проверка, что контейнер действительно удалён
+        $checkContainer = docker ps -a -q --filter "name=$($container.Name)"
+        if ($checkContainer) {
+            Write-Host "Ошибка: не удалось удалить контейнер с именем $($container.Name)!" -ForegroundColor Red
+            throw "Не удалось удалить контейнер. Скрипт завершён."
+        } else {
+            Write-Host "Контейнер $($container.Name) успешно удалён." -ForegroundColor Green
+        }
     } else {
-        Write-Host "Контейнер $($container.Name) успешно удалён." -ForegroundColor Green
+        Write-Host "Контейнер с именем $($container.Name) не найден."
     }
-} else {
-    Write-Host "Контейнер с именем $($container.Name) не найден."
-}
-
 
     Write-Host "Переход в каталог проекта..."
     Set-Location -Path $projectPath
@@ -245,22 +249,89 @@ if ($existingContainer) {
 function BuildAndRunPostgresAssortDb {
     Write-Host "Сборка и запуск PostgreSQL Assort DB..." -ForegroundColor Cyan
     $container = GetContainerByName -containerName 'postgres-production-db'
-    if ($null -eq $container) { 
+    if ($null -eq $container) {
         Write-Host "Контейнер postgres-assort-db не найден" -ForegroundColor Red
-        return 
+        return
     }
     BuildAndRunPostgresContainer -container $container
 }
 
+function Action37 {
+    Write-Host "Запуск сервиса Authentik..." -ForegroundColor Cyan
+    $authPath = "C:\Develop\Mall2\Authentic"
+    if (-not (Test-Path $authPath)) {
+        Write-Error "Путь '$authPath' не найден."
+        return
+    }
+
+    Push-Location $authPath
+    try {
+        Write-Host "Выполняется 'docker-compose pull' и 'docker-compose up -d' в '$authPath'..."
+        docker-compose pull
+        docker-compose up -d
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Не удалось запустить Authentik. Проверьте docker-compose.yml."
+        } else {
+            Write-Host "Сервис Authentik успешно запущен." -ForegroundColor Green
+        }
+    }
+    catch {
+        Write-Error $_
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Action371 {
+    Write-Host "Генерация файла .env для Authentik..." -ForegroundColor Cyan
+
+    $authPath = "C:\Develop\Mall2\Authentic"
+    if (-not (Test-Path $authPath)) {
+        Write-Error "Путь '$authPath' не найден."
+        return
+    }
+
+    Push-Location $authPath
+    try {
+        # Генерируем 36 случайных байт и кодируем Base64 для PG_PASS
+        $bytesPG = New-Object byte[] 36
+        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytesPG)
+        $PG_PASS = [Convert]::ToBase64String($bytesPG)
+
+        # Генерируем 60 случайных байт и кодируем Base64 для AUTHENTIK_SECRET_KEY
+        $bytesAK = New-Object byte[] 60
+        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytesAK)
+        $AUTHENTIK_SECRET_KEY = [Convert]::ToBase64String($bytesAK)
+
+        # Записываем в .env (перезаписываем, если уже есть)
+        "PG_PASS=$PG_PASS" | Out-File -Encoding utf8 .env
+        "AUTHENTIK_SECRET_KEY=$AUTHENTIK_SECRET_KEY" | Add-Content -Encoding utf8 .env
+
+        Write-Host "Файл .env успешно создан и сохранён в '$authPath'." -ForegroundColor Green
+        Write-Host "Содержимое .env:"
+        Get-Content .env | ForEach-Object { Write-Host "  $_" }
+    }
+    catch {
+        Write-Error $_
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Show-Menu {
     Write-Host "Меню:" -ForegroundColor Green
-    Write-Host "10 -- Подключиться к выбранному контейнеру"
-    Write-Host "20 -- Вывести диагностическую информацию для выбранного контейнера"
-    Write-Host "30 -- Сбилдить и запустить контейнер"
-    Write-Host "35 -- Сбилдить и запустить production_db контейнер"
-    Write-Host "40 -- Сбилдить и запустить бизнес-логику"
-    Write-Host "80 -- Очистить экран (CLS)"
-    Write-Host "99 -- Выход"
+    Write-Host "10   -- Подключиться к выбранному контейнеру"
+    Write-Host "20   -- Вывести диагностическую информацию для выбранного контейнера"
+    Write-Host "30   -- Сбилдить и запустить контейнер"
+    Write-Host "35   -- Сбилдить и запустить production_db контейнер"
+    Write-Host "37   -- Запустить сервис Authentik"
+    Write-Host "371  -- Сгенерировать .env для Authentik"
+    Write-Host "40   -- Сбилдить и запустить бизнес-логику"
+    Write-Host "80   -- Очистить экран (CLS)"
+    Write-Host "99   -- Выход"
 }
 
 # Основной цикл работы
@@ -269,17 +340,19 @@ do {
     $choice = Read-Host "Выберите пункт меню"
 
     switch ($choice) {
-        "10" { Action10 }
-        "20" { Action20 }
-        "30" { SelectContainerAndRun }
-        "35" { BuildAndRunPostgresAssortDb }
-        "40" { BuildAndRunBusinessLogicContainers } 
-        "80" { Clear-Host }
-        "99" { break }
+        "10"  { Action10 }
+        "20"  { Action20 }
+        "30"  { SelectContainerAndRun }
+        "35"  { BuildAndRunPostgresAssortDb }
+        "37"  { Action37 }
+        "371" { Action371 }
+        "40"  { BuildAndRunBusinessLogicContainers }
+        "80"  { Clear-Host }
+        "99"  { break }
         default {
             Write-Host "Некорректный выбор. Повторите ввод." -ForegroundColor Red
         }
     }
-}while ($choice -ne "99")
+} while ($choice -ne "99")
 
 Write-Host "Программа завершена." -ForegroundColor Green
