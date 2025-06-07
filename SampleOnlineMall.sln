@@ -32,7 +32,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleOnlineMall.Service", 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{61FD257A-7315-4EBF-B5A2-9D1856E18C5F}"
 	ProjectSection(SolutionItems) = preProject
-		TechNotes.txt = TechNotes.txt
+		CHANGELOG.md = CHANGELOG.md
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorServerWebLogger", "BlazorServerWebLogger\BlazorServerWebLogger.csproj", "{0BB14D07-9F88-4C98-AB08-40726AC01EFE}"
