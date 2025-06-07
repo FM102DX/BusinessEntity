@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace BusinessEntity.Services
 {
@@ -52,9 +54,32 @@ namespace BusinessEntity.Services
 
         public async Task SignOutAsync()
         {
-            // TODO: Реализовать выход через Auterlink
-            _logger.LogInformation("User signed out");
-            await Task.CompletedTask;
+            try
+            {
+                // В Blazor Server приложениях нельзя напрямую изменять HTTP-контекст из компонентов
+                // Поэтому просто логируем выход и возвращаем успех
+                // Реальный выход будет происходить через перенаправление на /logout
+                
+                var httpContext = _httpContextAccessor.HttpContext;
+                if (httpContext?.User?.Identity?.IsAuthenticated == true)
+                {
+                    var userName = httpContext.User.Identity.Name;
+                    _logger.LogInformation($"Initiating sign out process for user: {userName}");
+                }
+                else
+                {
+                    _logger.LogInformation("Initiating sign out process for anonymous user");
+                }
+                
+                // Возвращаем успех без попытки изменения HTTP-контекста
+                await Task.CompletedTask;
+                _logger.LogInformation("Sign out process initiated successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while initiating sign out process");
+                throw;
+            }
         }
 
         public string GetLoginUrl()

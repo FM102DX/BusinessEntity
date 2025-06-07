@@ -44,17 +44,32 @@ namespace BusinessEntity.Pages
             }
         }
 
-        private async Task SignOut()
+        private Task SignOut()
         {
             try
             {
-                await AuthService.SignOutAsync();
-                Navigation.NavigateTo("/logout", false);
+                Logger.LogInformation($"User {CurrentUserName} is requesting sign out");
+                
+                // Очищаем локальные данные
+                CurrentUserName = null;
+                CurrentUserEmail = null;
+                
+                // Принудительно обновляем компонент
+                StateHasChanged();
+                
+                Logger.LogInformation("Redirecting to sign out page");
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error during sign out");
+                Logger.LogError(ex, "Error during sign out preparation");
             }
+            finally
+            {
+                // Перенаправляем на страницу выхода, которая выполнит реальный выход
+                Navigation.NavigateTo("/signout", forceLoad: true);
+            }
+            
+            return Task.CompletedTask;
         }
     }
 }
