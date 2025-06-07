@@ -27,19 +27,30 @@ namespace BusinessEntity.Controllers
                 return LocalRedirect(returnUrl ?? "/");
             }
 
-            // В реальной реализации здесь должен быть редирект на Auterlink
-            return View("Login", returnUrl);
+            // Перенаправляем на Razor страницу вместо View
+            var loginUrl = "/auterlink/login";
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                loginUrl += $"?returnUrl={Uri.EscapeDataString(returnUrl)}";
+            }
+            
+            return Redirect(loginUrl);
         }
 
-        [HttpPost("login")]
-        public async Task<IActionResult> ProcessLogin(string username, string email, string? returnUrl = null)
+        [HttpGet("processlogin")]
+        public async Task<IActionResult> ProcessLogin(string username, string? email = null, string? returnUrl = null)
         {
             // TODO: В реальной реализации здесь должна быть валидация токена от Auterlink
             
             if (string.IsNullOrEmpty(username))
             {
-                ViewBag.Error = "Имя пользователя обязательно";
-                return View("Login", returnUrl);
+                _logger.LogWarning("Login attempt with empty username");
+                var errorUrl = "/auterlink/login";
+                if (!string.IsNullOrEmpty(returnUrl))
+                {
+                    errorUrl += $"?returnUrl={Uri.EscapeDataString(returnUrl)}";
+                }
+                return Redirect(errorUrl);
             }
 
             var claims = new List<Claim>
@@ -82,13 +93,13 @@ namespace BusinessEntity.Controllers
 
             // TODO: В реальной реализации здесь может быть редирект на Auterlink для глобального выхода
             
-            return RedirectToAction("LoggedOut");
+            return Redirect("/auterlink/loggedout");
         }
 
         [HttpGet("logged-out")]
         public IActionResult LoggedOut()
         {
-            return View("LoggedOut");
+            return Redirect("/auterlink/loggedout");
         }
 
         [HttpGet("callback")]

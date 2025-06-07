@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
-using BusinessEntity.Service.Logger;
+using BusinessEntity.Services;
 using Microsoft.EntityFrameworkCore;
 using SampleOnlineMall.WebLogger.DataAccess;
 

@@ -1,17 +1,17 @@
-﻿namespace BusinessEntity.Service.Logger
+﻿namespace BusinessEntity.Services
 {
     /*
-     * DebugLogger - A lightweight file-based logger.
-     * 
-     * Features:
-     * 1. Can be instantiated with a prefix, active state, and working directory.
-     * 2. Creates log files dynamically when the write method is called for the first time.
-     * 3. Supports both instance-based and static logging.
-     * 4. Ensures platform-independent newline characters in log files.
-     * 5. Automatically manages unique file naming using GUIDs.
-     * 6. Throws exceptions when unable to create directories or write to files.
-     * 7. Static method maintains separate loggers for unique prefix-workingDir combinations.
-     */
+* DebugLogger - A lightweight file-based logger.
+* 
+* Features:
+* 1. Can be instantiated with a prefix, active state, and working directory.
+* 2. Creates log files dynamically when the write method is called for the first time.
+* 3. Supports both instance-based and static logging.
+* 4. Ensures platform-independent newline characters in log files.
+* 5. Automatically manages unique file naming using GUIDs.
+* 6. Throws exceptions when unable to create directories or write to files.
+* 7. Static method maintains separate loggers for unique prefix-workingDir combinations.
+*/
 
     using System;
     using System.Collections.Concurrent;

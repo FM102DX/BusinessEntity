@@ -1,31 +1,127 @@
-@page "/login"
+@page "/auterlink/login"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @layout BusinessEntity.Shared.MainLayout
 @attribute [AllowAnonymous]
 
-<PageTitle>Вход в систему</PageTitle>
+<PageTitle>Вход через Auterlink</PageTitle>
 
-<div class="container mt-5">
+<div class="container">
     <div class="row justify-content-center">
         <div class="col-md-6">
-            <div class="card">
+            <div class="card mt-5">
                 <div class="card-header">
                     <h3 class="text-center">Вход в KMS Business Entity</h3>
+                    <p class="text-center text-muted">Аутентификация через Auterlink</p>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-info">
-                        <strong>Демо-режим:</strong> Система авторизации через Auterlink находится в демо-режиме.
-                    </div>
+                    @if (!string.IsNullOrEmpty(ErrorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @ErrorMessage
+                        </div>
+                    }
                     
-                    <div class="d-grid gap-2">
-                        <a href="/auterlink/login" class="btn btn-primary btn-lg">
-                            Войти через Auterlink
-                        </a>
-                        <a href="/" class="btn btn-outline-secondary">
-                            На главную
-                        </a>
+                    <div class="alert alert-info" role="alert">
+                        <strong>Демо-режим:</strong> Введите любые данные для входа. В реальной системе здесь будет интеграция с Auterlink.
+                    </div>
+
+                    <EditForm Model="@loginModel" OnValidSubmit="@HandleLogin">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+                        
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Имя пользователя</label>
+                            <InputText @bind-Value="loginModel.Username" class="form-control" id="username" placeholder="Введите имя пользователя" />
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email (необязательно)</label>
+                            <InputText @bind-Value="loginModel.Email" class="form-control" id="email" placeholder="user@example.com" />
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Вход...</span>
+                                }
+                                else
+                                {
+                                    <span>Войти через Auterlink</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                    
+                    <hr>
+                    
+                    <div class="text-center">
+                        <small class="text-muted">
+                            В производственной версии здесь будет кнопка "Войти через Auterlink"
+                        </small>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    [Parameter] 
+    [SupplyParameterFromQuery] 
+    public string? ReturnUrl { get; set; }
+
+    private LoginModel loginModel = new();
+    private bool isLoading = false;
+    private string? ErrorMessage;
+
+    protected override void OnInitialized()
+    {
+        if (string.IsNullOrEmpty(ReturnUrl))
+        {
+            ReturnUrl = "/";
+        }
+    }
+
+    private void HandleLogin()
+    {
+        try
+        {
+            isLoading = true;
+            ErrorMessage = null;
+            StateHasChanged();
+
+            if (string.IsNullOrWhiteSpace(loginModel.Username))
+            {
+                ErrorMessage = "Имя пользователя обязательно для заполнения";
+                return;
+            }
+
+            // Перенаправляем на контроллер для обработки логина
+            var loginUrl = $"/auterlink/processlogin?username={Uri.EscapeDataString(loginModel.Username)}&email={Uri.EscapeDataString(loginModel.Email ?? "")}&returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+            Navigation.NavigateTo(loginUrl, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error during login attempt");
+            ErrorMessage = "Произошла ошибка при входе в систему. Попробуйте еще раз.";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    [Inject] public NavigationManager Navigation { get; set; } = default!;
+    [Inject] public ILogger<Login> Logger { get; set; } = default!;
+
+    public class LoginModel
+    {
+        public string Username { get; set; } = string.Empty;
+        public string? Email { get; set; }
+    }
+}
