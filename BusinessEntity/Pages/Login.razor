@@ -1,0 +1,31 @@
+@page "/login"
+@layout BusinessEntity.Shared.MainLayout
+@attribute [AllowAnonymous]
+
+<PageTitle>Вход в систему</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-center">Вход в KMS Business Entity</h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <strong>Демо-режим:</strong> Система авторизации через Auterlink находится в демо-режиме.
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="/auterlink/login" class="btn btn-primary btn-lg">
+                            Войти через Auterlink
+                        </a>
+                        <a href="/" class="btn btn-outline-secondary">
+                            На главную
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

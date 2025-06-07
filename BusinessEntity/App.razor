@@ -1,27 +1,14 @@
 ﻿@using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
 @using BusinessEntity.Components
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <AuthorizeView>
-                <Authorized>
-                    <RouteView RouteData="@routeData" DefaultLayout="@typeof(BusinessEntity.Shared.MainLayout)" />
-                    <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-                </Authorized>
-                <NotAuthorized>
-                    @{
-                        var returnUrl = $"/{routeData.PageType.Name}";
-                        if (routeData.RouteValues.Any())
-                        {
-                            var routeParams = string.Join("/", routeData.RouteValues.Values);
-                            returnUrl = $"/{routeParams}";
-                        }
-                    }
-                    <RedirectToLogin ReturnUrl="@returnUrl" />
-                </NotAuthorized>
-            </AuthorizeView>
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(BusinessEntity.Shared.MainLayout)" />
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>
             <PageTitle>Not found</PageTitle>

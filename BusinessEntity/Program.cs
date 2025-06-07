@@ -41,19 +41,31 @@ namespace BusinessEntity
 			builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
 				.AddCookie(options =>
 				{
-					options.LoginPath = "/auterlink/login";
-					options.LogoutPath = "/auterlink/logout";
-					options.AccessDeniedPath = "/unauthorized";
+					options.LoginPath = PathString.Empty; // Убираем автоматический редирект на логин
+					options.LogoutPath = PathString.Empty; // Убираем автоматический редирект на логаут
+					options.AccessDeniedPath = PathString.Empty; // Убираем автоматический редирект на access denied
 					options.ExpireTimeSpan = TimeSpan.FromHours(24);
 					options.SlidingExpiration = true;
+					// Важно: полностью отключаем автоматические редиректы
+					options.Events.OnRedirectToLogin = context =>
+					{
+						context.Response.StatusCode = 401;
+						return Task.CompletedTask;
+					};
+					options.Events.OnRedirectToAccessDenied = context =>
+					{
+						context.Response.StatusCode = 403;
+						return Task.CompletedTask;
+					};
+					options.Events.OnRedirectToLogout = context =>
+					{
+						context.Response.StatusCode = 200;
+						return Task.CompletedTask;
+					};
 				});
 
-			builder.Services.AddAuthorization(options =>
-			{
-				options.FallbackPolicy = new AuthorizationPolicyBuilder()
-					.RequireAuthenticatedUser()
-					.Build();
-			});
+			// Убираем принудительную авторизацию совсем
+			builder.Services.AddAuthorization();
 
 			// Добавляем HttpContextAccessor для доступа к контексту запроса
 			builder.Services.AddHttpContextAccessor();
@@ -88,12 +100,12 @@ namespace BusinessEntity
 			}
 			builder.Services.AddAutoMapper(typeof(Program));
 
-			builder.Services.AddSingleton<AppSettingsManager>();
-			builder.Services.AddScoped<Contracts.IAsyncRepository<AppSettingsDbStorable>, BusinessEntity.DataAccess.Repository.EfAsyncRepository<AppSettingsDbStorable>>();
-			builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, BusinessEntity.DataAccess.Repository.EfAsyncRepository<LogEntryDbStorable>>();
-			builder.Services.AddSingleton<ThreadSafeDbContextFactory>();
-            builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>();
-			builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>();
+			//builder.Services.AddSingleton<AppSettingsManager>();
+			//builder.Services.AddScoped<Contracts.IAsyncRepository<AppSettingsDbStorable>, BusinessEntity.DataAccess.Repository.EfAsyncRepository<AppSettingsDbStorable>>();
+			//builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, BusinessEntity.DataAccess.Repository.EfAsyncRepository<LogEntryDbStorable>>();
+			//builder.Services.AddSingleton<ThreadSafeDbContextFactory>();
+   //         builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>();
+			//builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>();
 			
 			//builder.Services.AddScoped<LogReaderService>();
 

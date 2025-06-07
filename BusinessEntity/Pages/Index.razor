@@ -1,38 +1,54 @@
 ﻿@page "/"
-@using Radzen
-@using Radzen.Blazor
-@using SampleOnlineMall.WebLogger.Models
-@using BusinessEntity.Pages
-@using BusinessEntity.Components
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [AllowAnonymous]
 
 <PageTitle>KMS-Business-Entities-Main</PageTitle>
 
-<div class="user-info-container">
-    <div class="user-welcome">
-        @if (!string.IsNullOrEmpty(CurrentUserName))
-        {
-            <h3>Добро пожаловать в KMS Business Entity, @CurrentUserName!</h3>
-            @if (!string.IsNullOrEmpty(CurrentUserEmail))
-            {
-                <p class="user-email">Email: @CurrentUserEmail</p>
-            }
-            <button class="btn btn-outline-secondary btn-sm" @onclick="SignOut">Выйти</button>
-        }
-        else
-        {
-            <p>Загрузка информации о пользователе...</p>
-        }
-    </div>
-</div>
+<AuthorizeView>
+    <Authorized>
+        <div class="user-info-container">
+            <div class="user-welcome">
+                @if (!string.IsNullOrEmpty(CurrentUserName))
+                {
+                    <h3>Добро пожаловать в KMS Business Entity, @CurrentUserName!</h3>
+                    @if (!string.IsNullOrEmpty(CurrentUserEmail))
+                    {
+                        <p class="user-email">Email: @CurrentUserEmail</p>
+                    }
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="SignOut">Выйти</button>
+                }
+                else
+                {
+                    <p>Загрузка информации о пользователе...</p>
+                }
+            </div>
+        </div>
 
-<h1>KMS-Business-Entities-Main</h1>
+        <h1>KMS-Business-Entities-Main</h1>
 
-<div class="main-logger-content">
-    <div class="alert alert-info">
-        <h4>Система управления бизнес-сущностями</h4>
-        <p>Добро пожаловать в систему управления бизнес-сущностями KMS. Вы успешно авторизованы через Auterlink.</p>
-    </div>
-</div>
+        <div class="main-logger-content">
+            <div class="alert alert-success">
+                <h4>Система управления бизнес-сущностями</h4>
+                <p>Добро пожаловать в систему управления бизнес-сущностями KMS. Вы успешно авторизованы через Auterlink.</p>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <h1>KMS Business Entity</h1>
+                    <div class="alert alert-warning">
+                        <h4>Требуется авторизация</h4>
+                        <p>Для доступа к системе KMS Business Entity необходимо войти в систему.</p>
+                        <a href="/login" class="btn btn-primary">Войти в систему</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
 
 <style>
     .user-info-container {

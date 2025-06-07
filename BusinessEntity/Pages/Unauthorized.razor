@@ -1,80 +1,50 @@
 @page "/unauthorized"
 @layout BusinessEntity.Shared.MainLayout
+@attribute [AllowAnonymous]
 
-<PageTitle>Unauthorized</PageTitle>
+<PageTitle>Доступ запрещен</PageTitle>
 
-<div class="unauthorized-container">
-    <div class="unauthorized-content">
-        <h1 class="error-title">ERROR: UNAUTHORIZED</h1>
-        <p class="error-message">У вас нет доступа к системе KMS Business Entity. Пожалуйста, авторизуйтесь через Auterlink.</p>
-        <div class="error-actions">
-            <a href="/auterlink/login" class="btn btn-primary">Войти через Auterlink</a>
-            <a href="/" class="btn btn-secondary">На главную</a>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-ban me-2"></i>
+                        Доступ запрещен
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger" role="alert">
+                        <h4 class="alert-heading">Доступ запрещен</h4>
+                        <p>У вас нет доступа к системе KMS Business Entity. Для работы с системой необходимо войти через Auterlink.</p>
+                        <hr>
+                        <p class="mb-0">Пожалуйста, авторизуйтесь для продолжения работы.</p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <a href="/login" class="btn btn-primary me-2">
+                            Войти через Auterlink
+                        </a>
+                        <a href="/" class="btn btn-outline-secondary">
+                            На главную
+                        </a>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6>Информация:</h6>
+                                <small class="text-muted">
+                                    <strong>Время:</strong> @DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss")<br>
+                                    <strong>Статус:</strong> Пользователь не авторизован<br>
+                                    <strong>Приложение:</strong> KMS Business Entity
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-
-<style>
-    .unauthorized-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 60vh;
-        padding: 20px;
-    }
-
-    .unauthorized-content {
-        text-align: center;
-        max-width: 500px;
-    }
-
-    .error-title {
-        color: #dc3545;
-        font-size: 2.5rem;
-        font-weight: bold;
-        margin-bottom: 20px;
-    }
-
-    .error-message {
-        font-size: 1.2rem;
-        margin-bottom: 30px;
-        color: #6c757d;
-    }
-
-    .error-actions {
-        display: flex;
-        gap: 15px;
-        justify-content: center;
-        flex-wrap: wrap;
-    }
-
-    .btn {
-        padding: 10px 20px;
-        text-decoration: none;
-        border-radius: 5px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
-
-    .btn-primary {
-        background-color: #007bff;
-        color: white;
-        border: 1px solid #007bff;
-    }
-
-    .btn-primary:hover {
-        background-color: #0056b3;
-        border-color: #0056b3;
-    }
-
-    .btn-secondary {
-        background-color: #6c757d;
-        color: white;
-        border: 1px solid #6c757d;
-    }
-
-    .btn-secondary:hover {
-        background-color: #545b62;
-        border-color: #545b62;
-    }
-</style>
