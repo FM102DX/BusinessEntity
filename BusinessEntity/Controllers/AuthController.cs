@@ -45,23 +45,31 @@ namespace BusinessEntity.Controllers
         public async Task<IActionResult> Callback(string? code, string? state, string? error, string? token)
         {
 
+
+            // Шаг 1. Обрабатываем код авторизации
             _logger.LogInformation("[AuthController.Callback] Received callback from Authentic");
             _logger.LogInformation($"[AuthController.Callback] Code: {code}, State: {state}, Token: {token}, Error: {error}");
 
             if (!string.IsNullOrEmpty(error))
             {
+                // Если есть ошибка, перенаправляем на страницу ошибки
                 _logger.LogError($"[AuthController.Callback] Authentication error from Authentic: {error}");
                 return Redirect($"/auth/error?message={Uri.EscapeDataString(error)}");
             }
             _logger.LogInformation("[AuthController.Callback] P1");
             if (string.IsNullOrEmpty(token) && string.IsNullOrEmpty(code))
             {
+                // Если не получен ни код авторизации, ни токен, возвращаем ошибку
                 _logger.LogError("[AuthController.Callback] No authorization code or token received from Authentic");
                 return Redirect("/auth/error?message=Authorization failed");
             }
             _logger.LogInformation("[AuthController.Callback] P2");
             try
             {
+
+                
+                // Шаг 2. Меняем код на токен
+
                 string? jwtToken = token;
 
                 // Если получили код авторизации, обмениваем его на токен
@@ -79,7 +87,11 @@ namespace BusinessEntity.Controllers
                     return Redirect("/auth/error?message=Failed to obtain access token");
                 }
                 _logger.LogInformation("[AuthController.Callback] P4 -- теперь полученный токен надо валидировать");
-                // Валидируем токен
+                
+                
+                
+                
+                // Шаг 3.  Валидируем токен
                 var isValid = await _authService.ValidateTokenAsync(jwtToken);
                 if (!isValid)
                 {
