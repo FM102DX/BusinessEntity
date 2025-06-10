@@ -174,6 +174,9 @@ function BuildAndRunPostgresContainer {
             throw "Ошибка при запуске контейнера. См. лог: $runLog"
         }
 
+        # Автоматически подключаем контейнер к общей сети
+        Connect-ContainerToSharedNetwork -containerName $name
+
         Write-Host "Контейнер '$name' успешно запущен в сети '$networkName'."
         Write-Host "Логи сохранены в:"
         Write-Host "  Build: $buildLog"
@@ -183,7 +186,6 @@ function BuildAndRunPostgresContainer {
         Write-Error $_
     }
 }
-
 function BuildAndRunContainer {
     param (
         [PSCustomObject]$container
@@ -252,89 +254,81 @@ function BuildAndRunContainer {
         return
     }
 
+    # Автоматически подключаем контейнер к общей сети
+    Connect-ContainerToSharedNetwork -containerName $container.Name
+
     Write-Host "Получение IP-адреса контейнера..."
     $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container.Name
     Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
 }
 
-function BuildAndRunPostgresAssortDb {
-    Write-Host "Сборка и запуск PostgreSQL Assort DB..." -ForegroundColor Cyan
-    $container = GetContainerByName -containerName 'postgres-production-db'
-    if ($null -eq $container) {
-        Write-Host "Контейнер postgres-assort-db не найден" -ForegroundColor Red
-        return
-    }
-    BuildAndRunPostgresContainer -container $container
-}
-
-function Action37 {
-    Write-Host "Запуск сервиса Authentik..." -ForegroundColor Cyan
-    $authPath = "C:\Develop\Mall2\Authentic"
-    if (-not (Test-Path $authPath)) {
-        Write-Error "Путь '$authPath' не найден."
-        return
-    }
-
-    Push-Location $authPath
-    try {
-        Write-Host "Выполняется 'docker-compose pull' и 'docker-compose up -d' в '$authPath'..."
-        docker-compose pull
-        docker-compose up -d
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Не удалось запустить Authentik. Проверьте docker-compose.yml."
-        } else {
-            Write-Host "Сервис Authentik успешно запущен." -ForegroundColor Green
+# Функция для автоматического подключения контейнера к общей сети
+function Connect-ContainerToSharedNetwork {
+    param(
+        [string]$containerName
+    )
+    
+    $bridgeNetwork = "shared-bridge-network"
+    
+    # Проверяем, существует ли общая сеть
+    $existingNetwork = docker network ls --filter "name=$bridgeNetwork" --format "{{.Name}}"
+    
+    if ($existingNetwork) {
+        # Проверяем, не подключен ли уже контейнер
+        $networkInfo = docker network inspect $bridgeNetwork | ConvertFrom-Json
+        $isConnected = $false
+        
+        if ($networkInfo[0].Containers) {
+            foreach ($container in $networkInfo[0].Containers.PSObject.Properties.Value) {
+                if ($container.Name -eq $containerName) {
+                    $isConnected = $true
+                    break
+                }
+            }
         }
-    }
-    catch {
-        Write-Error $_
-    }
-    finally {
-        Pop-Location
+        
+        if (-not $isConnected) {
+            Write-Host "Подключаем контейнер '$containerName' к общей сети '$bridgeNetwork'..." -ForegroundColor Yellow
+            docker network connect $bridgeNetwork $containerName
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "✓ Контейнер подключен к общей сети." -ForegroundColor Green
+            } else {
+                Write-Host "⚠ Не удалось подключить к общей сети." -ForegroundColor Yellow
+            }
+        }
+    } else {
+        Write-Host "⚠ Общая сеть не найдена. Запустите ConnectDockerNetworks.ps1 для её создания." -ForegroundColor Yellow
     }
 }
 
-function Action371 {
-    Write-Host "Генерация файла .env для Authentik..." -ForegroundColor Cyan
-
-    $authPath = "C:\Develop\Mall2\Authentic"
-    if (-not (Test-Path $authPath)) {
-        Write-Error "Путь '$authPath' не найден."
-        return
+# Новая функция для объединения сетей
+function Action01 {
+    Write-Host "Объединение Docker сетей..." -ForegroundColor Cyan
+    $scriptPath = Join-Path $PSScriptRoot "ConnectDockerNetworks.ps1"
+    if (Test-Path $scriptPath) {
+        & $scriptPath
+    } else {
+        Write-Host "Скрипт ConnectDockerNetworks.ps1 не найден." -ForegroundColor Red
     }
+}
 
-    Push-Location $authPath
-    try {
-        # Генерируем 36 случайных байт и кодируем Base64 для PG_PASS
-        $bytesPG = New-Object byte[] 36
-        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytesPG)
-        $PG_PASS = [Convert]::ToBase64String($bytesPG)
-
-        # Генерируем 60 случайных байт и кодируем Base64 для AUTHENTIK_SECRET_KEY
-        $bytesAK = New-Object byte[] 60
-        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytesAK)
-        $AUTHENTIK_SECRET_KEY = [Convert]::ToBase64String($bytesAK)
-
-        # Записываем в .env (перезаписываем, если уже есть)
-        "PG_PASS=$PG_PASS" | Out-File -Encoding utf8 .env
-        "AUTHENTIK_SECRET_KEY=$AUTHENTIK_SECRET_KEY" | Add-Content -Encoding utf8 .env
-
-        Write-Host "Файл .env успешно создан и сохранён в '$authPath'." -ForegroundColor Green
-        Write-Host "Содержимое .env:"
-        Get-Content .env | ForEach-Object { Write-Host "  $_" }
-    }
-    catch {
-        Write-Error $_
-    }
-    finally {
-        Pop-Location
+# Новая функция для автоподключения контейнеров
+function Action02 {
+    Write-Host "Автоподключение контейнеров к общей сети..." -ForegroundColor Cyan
+    $scriptPath = Join-Path $PSScriptRoot "AutoConnectContainers.ps1"
+    if (Test-Path $scriptPath) {
+        & $scriptPath
+    } else {
+        Write-Host "Скрипт AutoConnectContainers.ps1 не найден." -ForegroundColor Red
     }
 }
 
 function Show-Menu {
     Write-Host "Меню:" -ForegroundColor Green
     Write-Host "00   -- Вывести статус докер-сетей"
+    Write-Host "01   -- Объединить Docker сети (создать общую сеть)"
+    Write-Host "02   -- Автоподключение контейнеров к общей сети"
     Write-Host "10   -- Подключиться к выбранному контейнеру"
     Write-Host "20   -- Вывести диагностическую информацию для выбранного контейнера"
     Write-Host "30   -- Сбилдить и запустить контейнер"
@@ -353,6 +347,8 @@ do {
 
     switch ($choice) {
         "00"  { Show-MultipleContainersNetworks }
+        "01"  { Action01 }
+        "02"  { Action02 }
         "10"  { Action10 }
         "20"  { Action20 }
         "30"  { SelectContainerAndRun }

@@ -1,6 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Text.Json;
+using System.Text;
+using Microsoft.Extensions.Options;
 
 namespace BusinessEntity.Services
 {
@@ -11,21 +15,29 @@ namespace BusinessEntity.Services
         Task<string?> GetUserNameAsync();
         Task<string?> GetUserEmailAsync();
         Task SignOutAsync();
-        string GetLoginUrl();
+        string GetLoginUrl(string? returnUrl = null);
         Task<bool> IsServiceAvailableAsync();
+        Task<string?> GetJwtTokenAsync();
+        Task<bool> ValidateTokenAsync(string token);
     }
 
     public class AuterlinkAuthService : IAuterlinkAuthService
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AuterlinkAuthService> _logger;
-        private readonly HttpClient _httpClient;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
 
-        public AuterlinkAuthService(IHttpContextAccessor httpContextAccessor, ILogger<AuterlinkAuthService> logger, HttpClient httpClient)
+        public AuterlinkAuthService(
+            IHttpContextAccessor httpContextAccessor, 
+            ILogger<AuterlinkAuthService> logger, 
+            IHttpClientFactory httpClientFactory,
+            IConfiguration configuration)
         {
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
-            _httpClient = httpClient;
+            _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
 
         public async Task<bool> IsUserAuthenticatedAsync()
@@ -36,7 +48,7 @@ namespace BusinessEntity.Services
 
         public async Task<ClaimsPrincipal?> GetCurrentUserAsync()
         {
-            await Task.CompletedTask; // Для async совместимости
+            await Task.CompletedTask;
             return _httpContextAccessor.HttpContext?.User;
         }
 
@@ -52,77 +64,137 @@ namespace BusinessEntity.Services
             return user?.FindFirst(ClaimTypes.Email)?.Value;
         }
 
+        public async Task<string?> GetJwtTokenAsync()
+        {
+            var httpContext = _httpContextAccessor.HttpContext;
+            if (httpContext == null) return null;
+
+            // Проверяем токен в куки
+            var token = httpContext.Request.Cookies["jwt_token"];
+            if (!string.IsNullOrEmpty(token))
+            {
+                return token;
+            }
+
+            // Проверяем в заголовке Authorization
+            var authHeader = httpContext.Request.Headers["Authorization"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer "))
+            {
+                return authHeader.Substring("Bearer ".Length).Trim();
+            }
+
+            return null;
+        }
+
+        public async Task<bool> ValidateTokenAsync(string token)
+        {
+            try
+            {
+                var httpClient = _httpClientFactory.CreateClient("AuthentIC");
+                var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/validate");
+                request.Headers.Add("Authorization", $"Bearer {token}");
+
+                var response = await httpClient.SendAsync(request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating JWT token");
+                return false;
+            }
+        }
+
         public async Task SignOutAsync()
         {
             try
             {
-                // В Blazor Server приложениях нельзя напрямую изменять HTTP-контекст из компонентов
-                // Поэтому просто логируем выход и возвращаем успех
-                // Реальный выход будет происходить через перенаправление на /logout
-                
                 var httpContext = _httpContextAccessor.HttpContext;
                 if (httpContext?.User?.Identity?.IsAuthenticated == true)
                 {
                     var userName = httpContext.User.Identity.Name;
                     _logger.LogInformation($"Initiating sign out process for user: {userName}");
-                }
-                else
-                {
-                    _logger.LogInformation("Initiating sign out process for anonymous user");
+
+                    // Выполняем выход из Cookie аутентификации
+                    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+                    // Удаляем JWT токен из куки
+                    httpContext.Response.Cookies.Delete("jwt_token");
+                    
+                    // Уведомляем Authentic о выходе (опционально)
+                    try
+                    {
+                        var token = httpContext.Request.Cookies["jwt_token"];
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            var httpClient = _httpClientFactory.CreateClient("AuthentIC");
+                            var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+                            request.Headers.Add("Authorization", $"Bearer {token}");
+                            await httpClient.SendAsync(request);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to notify Authentic about logout");
+                    }
                 }
                 
-                // Возвращаем успех без попытки изменения HTTP-контекста
-                await Task.CompletedTask;
-                _logger.LogInformation("Sign out process initiated successfully");
+                _logger.LogInformation("Sign out process completed successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while initiating sign out process");
+                _logger.LogError(ex, "Error occurred while performing sign out");
                 throw;
             }
         }
 
-        public string GetLoginUrl()
+        public string GetLoginUrl(string? returnUrl = null)
         {
-            // TODO: Настроить URL для входа через Auterlink
-            return "/auterlink/login";
+            var authenticBaseUrl = _configuration["AuthentIC:BaseUrl"] ?? "http://localhost:9000";
+            var clientId = _configuration["AuthentIC:ClientId"] ?? "business-entity";
+            var redirectUri = _configuration["AuthentIC:RedirectUri"]!; // Убираем fallback
+            
+            var loginUrl = $"{authenticBaseUrl}/application/o/authorize/?client_id={clientId}&redirect_uri={Uri.EscapeDataString(redirectUri)}";
+            
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                loginUrl += $"&state={Uri.EscapeDataString(returnUrl)}";
+            }
+            
+            return loginUrl;
         }
 
         public async Task<bool> IsServiceAvailableAsync()
         {
             try
             {
-                // Проверяем доступность сервиса Auterlink через простой HTTP-запрос
-                // В реальной реализации это должен быть endpoint для проверки здоровья сервиса
-                var healthCheckUrl = "http://localhost:5080/api/health"; // Пример URL для проверки
-                
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // Таймаут 5 секунд
-                var response = await _httpClient.GetAsync(healthCheckUrl, cts.Token);
+                var httpClient = _httpClientFactory.CreateClient("AuthentIC");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var response = await httpClient.GetAsync("/health", cts.Token);
                 
                 if (response.IsSuccessStatusCode)
                 {
-                    _logger.LogInformation("Auterlink auth service is available");
+                    _logger.LogInformation("Authentic auth service is available");
                     return true;
                 }
                 else
                 {
-                    _logger.LogWarning($"Auterlink auth service returned status: {response.StatusCode}");
+                    _logger.LogWarning($"Authentic auth service returned status: {response.StatusCode}");
                     return false;
                 }
             }
             catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
             {
-                _logger.LogError("Timeout while checking Auterlink auth service availability");
+                _logger.LogError("Timeout while checking Authentic auth service availability");
                 return false;
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "Network error while checking Auterlink auth service availability");
+                _logger.LogError(ex, "Network error while checking Authentic auth service availability");
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error while checking Auterlink auth service availability");
+                _logger.LogError(ex, "Unexpected error while checking Authentic auth service availability");
                 return false;
             }
         }

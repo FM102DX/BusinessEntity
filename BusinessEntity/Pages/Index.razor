@@ -30,7 +30,7 @@
         <div class="main-logger-content">
             <div class="alert alert-success">
                 <h4>Система управления бизнес-сущностями</h4>
-                <p>Добро пожаловать в систему управления бизнес-сущностями KMS. Вы успешно авторизованы через Auterlink.</p>
+                <p>Добро пожаловать в систему управления бизнес-сущностями KMS. Вы успешно авторизованы через Authentic.</p>
             </div>
         </div>
     </Authorized>
@@ -41,8 +41,8 @@
                     <h1>KMS Business Entity</h1>
                     <div class="alert alert-warning">
                         <h4>Требуется авторизация</h4>
-                        <p>Для доступа к системе KMS Business Entity необходимо войти в систему.</p>
-                        <a href="/auterlink/login" class="btn btn-primary">Войти в систему</a>
+                        <p>Для доступа к системе KMS Business Entity необходимо войти в систему через Authentic.</p>
+                        <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentic</button>
                     </div>
                 </div>
             </div>

@@ -6,7 +6,7 @@ namespace BusinessEntity.Components
 {
     public partial class RedirectToLogin : ComponentBase
     {
-        [Inject] public IAuterlinkAuthService AuthService { get; set; } = default!;
+        [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<RedirectToLogin> Logger { get; set; } = default!;
 

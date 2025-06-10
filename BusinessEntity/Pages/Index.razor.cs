@@ -14,7 +14,7 @@ namespace BusinessEntity.Pages
 {
     public partial class Index : ComponentBase
     {
-        [Inject] public IAuterlinkAuthService AuthService { get; set; } = default!;
+        [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
 
@@ -44,6 +44,20 @@ namespace BusinessEntity.Pages
             }
         }
 
+        private void RedirectToLogin()
+        {
+            try
+            {
+                var loginUrl = AuthService.GetLoginUrl("/");
+                Logger.LogInformation($"Redirecting user to Authentic login url={loginUrl}");
+                Navigation.NavigateTo(loginUrl, forceLoad: true);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error redirecting to login");
+            }
+        }
+
         private Task SignOut()
         {
             try
@@ -65,8 +79,8 @@ namespace BusinessEntity.Pages
             }
             finally
             {
-                // Перенаправляем на страницу выхода, которая выполнит реальный выход
-                Navigation.NavigateTo("/signout", forceLoad: true);
+                // Перенаправляем на страницу выхода
+                Navigation.NavigateTo("/auth/logout", forceLoad: true);
             }
             
             return Task.CompletedTask;

@@ -5,7 +5,7 @@ namespace BusinessEntity.Pages
 {
     public partial class Unauthorized : ComponentBase
     {
-        [Inject] public IAuterlinkAuthService AuthService { get; set; } = default!;
+        [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
         [Inject] public ILogger<Unauthorized> Logger { get; set; } = default!;
 
         protected string LoginUrl => AuthService.GetLoginUrl();
