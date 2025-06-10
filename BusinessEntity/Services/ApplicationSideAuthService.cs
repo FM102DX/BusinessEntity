@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Security.Claims;
+using BusinessEntity.Controllers;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -24,18 +25,23 @@ namespace BusinessEntity.Services
         Task<string?> GetUserEmailAsync();
         Task<string?> GetJwtTokenAsync();
         Task<bool> ValidateTokenAsync(string token);
-        Task<string?> ExchangeCodeAsync(string code);
+        Task<TokenResponseAuthenticCustom> ExchangeCodeAsync(string code);
         Task SignOutAsync();
         string GetLoginUrl(string? returnUrl = null);
         Task<bool> IsServiceAvailableAsync();
     }
-
+    public record TokenResponseAuthenticCustom(
+        string AccessToken,
+        string IdToken,
+        string? RefreshToken = null
+    );
     public class ApplicationSideAuthService : IApplicationSideAuthService
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<ApplicationSideAuthService> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
+
 
         public ApplicationSideAuthService(
             IHttpContextAccessor httpContextAccessor,
@@ -141,7 +147,7 @@ namespace BusinessEntity.Services
         }
 
 
-        public async Task<string?> ExchangeCodeAsync(string code)
+        public async Task<TokenResponseAuthenticCustom> ExchangeCodeAsync(string code)
         {
             _logger.LogInformation("P2.1");
             var cfg = _configuration.GetSection("AuthentIC2");
@@ -156,17 +162,18 @@ namespace BusinessEntity.Services
                 ["code"] = code,
                 ["redirect_uri"] = cfg["RedirectUri"],
                 ["client_id"] = cfg["ClientId"]
-                // client_secret убираем из тела
             };
             var content = new FormUrlEncodedContent(form);
 
             _logger.LogInformation("P2.3");
             _logger.LogInformation(
-                $"base={client.BaseAddress} /application/o/token/  content={content}");
+                "base={Base} POST /application/o/token/  form-fields=[{Fields}]",
+                client.BaseAddress,
+                string.Join(", ", form.Keys));
 
-            // 2) Добавляем Basic-авторизацию клиентом
+            // 2) Добавляем Basic-авторизацию
             var creds = $"{cfg["ClientId"]}:{cfg["ClientSecret"]}";
-            var header = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(creds));
+            var header = Convert.ToBase64String(Encoding.UTF8.GetBytes(creds));
             client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", header);
 
@@ -183,15 +190,24 @@ namespace BusinessEntity.Services
                     "Token endpoint returned HTTP {StatusCode}. Response body: {Body}",
                     (int)response.StatusCode,
                     responseBody);
+                response.EnsureSuccessStatusCode();
             }
-            response.EnsureSuccessStatusCode();
 
             _logger.LogInformation("P2.5");
 
-            // 5) Парсим и возвращаем id_token
-            var payload = JsonSerializer.Deserialize<JsonElement>(responseBody);
-            return payload.GetProperty("id_token").GetString();
+            // 5) Парсим и возвращаем сразу access_token, id_token и (опционально) refresh_token
+            var doc = JsonDocument.Parse(responseBody);
+            var at = doc.RootElement.GetProperty("access_token").GetString()!;
+            var idt = doc.RootElement.GetProperty("id_token").GetString()!;
+            string? rft = null;
+            if (doc.RootElement.TryGetProperty("refresh_token", out var p))
+            {
+                rft = p.GetString();
+            }
+
+            return new TokenResponseAuthenticCustom(at, idt, rft);
         }
+
 
 
 
