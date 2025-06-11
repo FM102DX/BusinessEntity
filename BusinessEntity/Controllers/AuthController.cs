@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using BusinessEntity.Services;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Text;
 
 namespace BusinessEntity.Controllers
 {
@@ -166,9 +167,11 @@ namespace BusinessEntity.Controllers
                 Response.Cookies.Append("access_token", tokens.AccessToken, cookieOptions);
                 _logger.LogInformation("[AuthController.Callback] Step4.6.Result – Cookies set");
 
-                // Финальный шаг
+                // Финальный шаг - безопасное перенаправление
                 _logger.LogInformation("[AuthController.Callback] User {UserName} successfully authenticated", userName);
-                var returnUrl = !string.IsNullOrEmpty(state) ? state : "/";
+                
+                var returnUrl = GetSafeReturnUrl(state);
+                _logger.LogInformation("[AuthController.Callback] Redirecting to: {ReturnUrl}", returnUrl);
                 return LocalRedirect(returnUrl);
             }
             catch (Exception ex)
@@ -188,12 +191,62 @@ namespace BusinessEntity.Controllers
             {
                 await _authService.SignOutAsync();
                 _logger.LogInformation("User logged out successfully");
-                return Redirect("/auth/logged-out");
+                return Redirect("/"); // Перенаправляем на главную страницу вместо специальной страницы
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during logout");
                 return Redirect("/auth/error?message=Logout failed");
+            }
+        }
+
+        /// <summary>
+        /// Безопасно обрабатывает returnUrl из state параметра OAuth callback
+        /// </summary>
+        /// <param name="state">Параметр state из OAuth callback</param>
+        /// <returns>Безопасный локальный URL для перенаправления</returns>
+        private string GetSafeReturnUrl(string? state)
+        {
+            const string defaultUrl = "/";
+            
+            if (string.IsNullOrEmpty(state))
+            {
+                return defaultUrl;
+            }
+
+            try
+            {
+                // Пробуем декодировать state как Base64
+                var decodedBytes = Convert.FromBase64String(state);
+                var decodedUrl = Encoding.UTF8.GetString(decodedBytes);
+                
+                // Проверяем, что URL является локальным
+                if (Url.IsLocalUrl(decodedUrl))
+                {
+                    _logger.LogInformation("[GetSafeReturnUrl] Using decoded return URL: {ReturnUrl}", decodedUrl);
+                    return decodedUrl;
+                }
+                else
+                {
+                    _logger.LogWarning("[GetSafeReturnUrl] Decoded URL is not local: {DecodedUrl}, using default", decodedUrl);
+                    return defaultUrl;
+                }
+            }
+            catch (Exception decodeEx)
+            {
+                _logger.LogWarning(decodeEx, "[GetSafeReturnUrl] Failed to decode state as Base64, trying as plain URL");
+                
+                // Если не удалось декодировать как Base64, пробуем как обычный URL
+                if (Url.IsLocalUrl(state))
+                {
+                    _logger.LogInformation("[GetSafeReturnUrl] Using plain return URL: {ReturnUrl}", state);
+                    return state;
+                }
+                else
+                {
+                    _logger.LogWarning("[GetSafeReturnUrl] State is not a local URL: {State}, using default", state);
+                    return defaultUrl;
+                }
             }
         }
     }

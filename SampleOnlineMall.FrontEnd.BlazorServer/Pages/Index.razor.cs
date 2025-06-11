@@ -76,7 +76,7 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Pages
             try
             {
                 await AuthService.SignOutAsync();
-                Navigation.NavigateTo("/auterlink/logout", true);
+                Navigation.NavigateTo("/", true); // Перенаправляем сразу на главную страницу
             }
             catch (Exception ex)
             {

@@ -274,20 +274,39 @@ namespace BusinessEntity.Services
                     var userName = httpContext.User.Identity.Name;
                     _logger.LogInformation($"Signing out user: {userName}");
 
-                    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                    httpContext.Response.Cookies.Delete("jwt_token");
-
-                    // Необязательное уведомление Authentik
+                    // Сначала сохраняем токен ДО удаления cookie
                     var token = httpContext.Request.Cookies["jwt_token"];
+
+                    // Выполняем выход из Cookie аутентификации
+                    await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    
+                    // Удаляем cookies
+                    httpContext.Response.Cookies.Delete("jwt_token");
+                    httpContext.Response.Cookies.Delete("access_token");
+
+                    // Уведомляем Authentic о выходе (опционально)
                     if (!string.IsNullOrEmpty(token))
                     {
-                        var client = _httpClientFactory.CreateClient("AuthentIC");
-                        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
-                        request.Headers.Add("Authorization", $"Bearer {token}");
-                        await client.SendAsync(request);
+                        try
+                        {
+                            var client = _httpClientFactory.CreateClient("AuthentIC");
+                            var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+                            request.Headers.Add("Authorization", $"Bearer {token}");
+                            var response = await client.SendAsync(request);
+                            _logger.LogInformation("Notified Authentic about logout, status: {StatusCode}", response.StatusCode);
+                        }
+                        catch (Exception notifyEx)
+                        {
+                            _logger.LogWarning(notifyEx, "Failed to notify Authentic about logout (non-critical)");
+                            // Не пробрасываем исключение, так как локальный logout уже выполнен
+                        }
                     }
 
-                    _logger.LogInformation("Sign out completed");
+                    _logger.LogInformation("Sign out completed successfully");
+                }
+                else
+                {
+                    _logger.LogInformation("No authenticated user to sign out");
                 }
             }
             catch (Exception ex)

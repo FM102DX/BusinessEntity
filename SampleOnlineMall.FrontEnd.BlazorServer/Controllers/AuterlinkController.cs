@@ -80,9 +80,8 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer.Controllers
             
             _logger.LogInformation($"User {userName} logged out");
 
-            // TODO: В реальной реализации здесь может быть редирект на Auterlink для глобального выхода
-            
-            return RedirectToAction("LoggedOut");
+            // Перенаправляем на главную страницу вместо специальной страницы
+            return Redirect("/");
         }
 
         [HttpGet("logged-out")]
