@@ -17,68 +17,12 @@ using Microsoft.Extensions.Logging;
 
 namespace BusinessEntity.Services
 {
-    public interface IApplicationSideAuthService
-    {
-        Task<bool> IsUserAuthenticatedAsync();
-        Task<ClaimsPrincipal?> GetCurrentUserAsync();
-        Task<string?> GetUserNameAsync();
-        Task<string?> GetUserEmailAsync();
-        Task<string?> GetJwtTokenAsync();
-        Task<bool> ValidateTokenAsync(string token);
-        Task<TokenResponseAuthenticCustom> ExchangeCodeAsync(string code);
-        Task SignOutAsync();
-        string GetLoginUrl(string? returnUrl = null);
-        Task<bool> IsServiceAvailableAsync();
-        
-        // Новые методы для обработки OAuth callback
-        Task<OAuthCallbackResult> ProcessOAuthCallbackAsync(string code);
-        Task<ClaimsPrincipal> CreateUserPrincipalAsync(TokenResponseAuthenticCustom tokens);
-        string GetSafeReturnUrl(string? state);
-    }
-    
-    public record TokenResponseAuthenticCustom(
-        string AccessToken,
-        string IdToken,
-        string? RefreshToken = null
-    );
-    
-    // Новый класс для результата обработки OAuth callback
-    public class OAuthCallbackResult
-    {
-        public bool IsSuccess { get; set; }
-        public ClaimsPrincipal? UserPrincipal { get; set; }
-        public TokenResponseAuthenticCustom? Tokens { get; set; }
-        public string? ErrorMessage { get; set; }
-        public string? UserName { get; set; }
-        
-        public static OAuthCallbackResult Success(ClaimsPrincipal userPrincipal, TokenResponseAuthenticCustom tokens, string userName)
-        {
-            return new OAuthCallbackResult
-            {
-                IsSuccess = true,
-                UserPrincipal = userPrincipal,
-                Tokens = tokens,
-                UserName = userName
-            };
-        }
-        
-        public static OAuthCallbackResult Failure(string errorMessage)
-        {
-            return new OAuthCallbackResult
-            {
-                IsSuccess = false,
-                ErrorMessage = errorMessage
-            };
-        }
-    }
-
     public class ApplicationSideAuthService : IApplicationSideAuthService
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<ApplicationSideAuthService> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
-
 
         public ApplicationSideAuthService(
             IHttpContextAccessor httpContextAccessor,
@@ -158,7 +102,6 @@ namespace BusinessEntity.Services
                     ["token"] = token
                 });
 
-
                 _logger.LogInformation("[ApplicationSideAuthService.ValidateTokenAsync] P1: делаем запрос introspect POST to {Base}{Path}", client.BaseAddress, "/application/o/introspect/");
                 var response = await client.PostAsync("/application/o/introspect/", content);
 
@@ -182,7 +125,6 @@ namespace BusinessEntity.Services
                 return false;
             }
         }
-
 
         public async Task<TokenResponseAuthenticCustom> ExchangeCodeAsync(string code)
         {
@@ -244,9 +186,6 @@ namespace BusinessEntity.Services
 
             return new TokenResponseAuthenticCustom(at, idt, rft);
         }
-
-
-
 
         public string GetLoginUrl(string? returnUrl = null)
         {
