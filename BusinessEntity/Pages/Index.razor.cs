@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
 using SampleOnlineMall.WebLogger.Models;
+using System.Security.Claims;
 
 namespace BusinessEntity.Pages
 {
@@ -20,6 +21,11 @@ namespace BusinessEntity.Pages
 
         private string? CurrentUserName { get; set; }
         private string? CurrentUserEmail { get; set; }
+        private string? CurrentUserId { get; set; }
+        private string? JwtToken { get; set; }
+        private ClaimsPrincipal? CurrentUser { get; set; }
+        private List<Claim> AllClaims { get; set; } = new();
+        private Dictionary<string, List<Claim>> ClaimsByType { get; set; } = new();
 
         protected override async Task OnInitializedAsync()
         {
@@ -29,9 +35,30 @@ namespace BusinessEntity.Pages
                 
                 if (isAuthenticated)
                 {
+                    // Получаем базовую информацию о пользователе
                     CurrentUserName = await AuthService.GetUserNameAsync();
                     CurrentUserEmail = await AuthService.GetUserEmailAsync();
-                    Logger.LogInformation($"User {CurrentUserName} accessed main page");
+                    JwtToken = await AuthService.GetJwtTokenAsync();
+                    
+                    // Получаем полный объект пользователя с клеймами
+                    CurrentUser = await AuthService.GetCurrentUserAsync();
+                    
+                    if (CurrentUser?.Identity != null)
+                    {
+                        // Извлекаем все клеймы
+                        AllClaims = CurrentUser.Claims.ToList();
+                        
+                        // Группируем клеймы по типам для удобного отображения
+                        ClaimsByType = AllClaims
+                            .GroupBy(c => c.Type)
+                            .ToDictionary(g => g.Key, g => g.ToList());
+                        
+                        // Получаем ID пользователя из клеймов
+                        CurrentUserId = CurrentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                                       ?? CurrentUser.FindFirst("sub")?.Value;
+                    }
+                    
+                    Logger.LogInformation($"User {CurrentUserName} accessed main page with {AllClaims.Count} claims");
                 }
                 else
                 {

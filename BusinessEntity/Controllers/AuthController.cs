@@ -123,19 +123,36 @@ namespace BusinessEntity.Controllers
             
             try
             {
-                await _authService.SignOutAsync();
-                _logger.LogInformation("[AuthController.Logout] Logout completed successfully");
-                return Redirect("/");
+                var success = await _authService.SignOutAsync();
+                if (success)
+                {
+                    _logger.LogInformation("[AuthController.Logout] Logout completed successfully");
+                    
+                    // Проверяем, есть ли URL для фронт-ченнел logout
+                    var frontChannelUrl = _authService.GetFrontChannelLogoutUrl();
+                    if (!string.IsNullOrEmpty(frontChannelUrl))
+                    {
+                        _logger.LogInformation("[AuthController.Logout] Redirecting to front-channel logout: {Url}", frontChannelUrl);
+                        return Redirect(frontChannelUrl); // Отправляем браузер в Authentik для очистки сессии
+                    }
+                    
+                    return Redirect("/auth/logged-out"); // fallback
+                }
+                else
+                {
+                    _logger.LogError("[AuthController.Logout] Logout returned false");
+                    return StatusCode(500, "Logout failed");
+                }
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("Authentik logout failed"))
+            catch (AuthSignOutFromAuthenticException ex)
             {
                 _logger.LogError(ex, "[AuthController.Logout] Authentik logout failed");
-                return Redirect("/auth/error?message=Failed to logout from authentication server. Please try again.");
+                return StatusCode(500, "Failed to logout from authentication server. The logout process has been stopped.");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[AuthController.Logout] Unexpected error during logout");
-                return Redirect("/auth/error?message=Logout failed");
+                return StatusCode(500, "Logout failed due to unexpected error");
             }
         }
     }

@@ -23,6 +23,7 @@ namespace BusinessEntity.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private string? _providerSlug;
+        private string? _lastEndSessionUrl; // Сохраняем URL для фронт-ченнел logout
 
         public ApplicationSideAuthService(
             IHttpContextAccessor httpContextAccessor,
@@ -38,35 +39,38 @@ namespace BusinessEntity.Services
 
         #region Получение параметров пользователя и токенов
 
-        public async Task<bool> IsUserAuthenticatedAsync()
-            => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
+        public Task<bool> IsUserAuthenticatedAsync()
+            => Task.FromResult(_httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false);
 
-        public async Task<ClaimsPrincipal?> GetCurrentUserAsync()
-            => _httpContextAccessor.HttpContext?.User;
+        public Task<ClaimsPrincipal?> GetCurrentUserAsync()
+            => Task.FromResult(_httpContextAccessor.HttpContext?.User);
 
-        public async Task<string?> GetUserNameAsync()
+        public Task<string?> GetUserNameAsync()
         {
-            var user = await GetCurrentUserAsync();
-            return user?.Identity?.Name
-                   ?? user?.FindFirst(ClaimTypes.Name)?.Value;
+            var user = _httpContextAccessor.HttpContext?.User;
+            var userName = user?.Identity?.Name ?? user?.FindFirst(ClaimTypes.Name)?.Value;
+            return Task.FromResult(userName);
         }
 
-        public async Task<string?> GetUserEmailAsync()
-            => (await GetCurrentUserAsync())?.FindFirst(ClaimTypes.Email)?.Value;
+        public Task<string?> GetUserEmailAsync()
+        {
+            var email = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value;
+            return Task.FromResult(email);
+        }
 
-        public async Task<string?> GetJwtTokenAsync()
+        public Task<string?> GetJwtTokenAsync()
         {
             var ctx = _httpContextAccessor.HttpContext;
-            if (ctx == null) return null;
+            if (ctx == null) return Task.FromResult<string?>(null);
 
             if (ctx.Request.Cookies.TryGetValue("jwt_token", out var jwt) && !string.IsNullOrEmpty(jwt))
-                return jwt;
+                return Task.FromResult<string?>(jwt);
 
             var auth = ctx.Request.Headers["Authorization"].FirstOrDefault();
             if (!string.IsNullOrEmpty(auth) && auth.StartsWith("Bearer "))
-                return auth.Substring("Bearer ".Length).Trim();
+                return Task.FromResult<string?>(auth.Substring("Bearer ".Length).Trim());
 
-            return null;
+            return Task.FromResult<string?>(null);
         }
 
         #endregion
@@ -175,7 +179,7 @@ namespace BusinessEntity.Services
                 ["response_type"] = "code",
                 ["scope"] = scope,
                 ["state"] = state,
-                ["prompt"] = "login consent",
+                ["prompt"] = "login", // Принудительно требуем ввод логина каждый раз
                 ["max_age"] = "0",
                 ["include_granted_scopes"] = "false"
             };
@@ -207,7 +211,7 @@ namespace BusinessEntity.Services
             }
         }
 
-        public async Task<ClaimsPrincipal> CreateUserPrincipalAsync(TokenResponseAuthenticCustom tokens)
+        public Task<ClaimsPrincipal> CreateUserPrincipalAsync(TokenResponseAuthenticCustom tokens)
         {
             var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
             var jwt = handler.ReadJwtToken(tokens.IdToken);
@@ -232,29 +236,67 @@ namespace BusinessEntity.Services
                     claims.Add(cl);
 
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            return new ClaimsPrincipal(identity);
+            return Task.FromResult(new ClaimsPrincipal(identity));
         }
 
         #endregion
 
         #region Выход из системы и логаут
 
-        public async Task SignOutAsync()
+        public async Task<bool> SignOutAsync()
         {
             var ctx = _httpContextAccessor.HttpContext;
-            if (ctx?.User?.Identity?.IsAuthenticated != true) return;
+            if (ctx?.User?.Identity?.IsAuthenticated != true) 
+            {
+                _logger.LogInformation("[SignOutAsync] No authenticated user to sign out");
+                return true; // Пользователь уже не аутентифицирован - считаем успехом
+            }
 
             var idToken = ctx.Request.Cookies["jwt_token"];
             if (!string.IsNullOrEmpty(idToken))
             {
-                var ok = await LogoutFromAuthentikAsync(idToken);
-                if (!ok) _logger.LogWarning("[SignOutAsync] remote logout failed");
+                try
+                {
+                    var cfg = _configuration.GetSection("AuthentIC2");
+                    // Сохраняем URL для фронт-ченнел logout
+                    _lastEndSessionUrl = BuildFrontChannelEndSessionUrl(idToken, cfg);
+                    
+                    var ok = await LogoutFromAuthentikAsync(idToken);
+                    if (!ok) 
+                    {
+                        _logger.LogError("[SignOutAsync] Failed to logout from Authentik");
+                        throw new AuthSignOutFromAuthenticException("Failed to logout from Authentik authentication server");
+                    }
+                    _logger.LogInformation("[SignOutAsync] Successfully logged out from Authentik (back-channel)");
+                }
+                catch (AuthSignOutFromAuthenticException)
+                {
+                    // Пропускаем наше исключение дальше
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[SignOutAsync] Unexpected error during Authentik logout");
+                    throw new AuthSignOutFromAuthenticException("Unexpected error during Authentik logout", ex);
+                }
             }
 
-            await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            ctx.Response.Cookies.Delete("jwt_token");
-            ctx.Response.Cookies.Delete("access_token");
+            try
+            {
+                await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                ctx.Response.Cookies.Delete("jwt_token");
+                ctx.Response.Cookies.Delete("access_token");
+                _logger.LogInformation("[SignOutAsync] Local sign out completed successfully");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[SignOutAsync] Failed to complete local sign out");
+                throw new AuthSignOutFromAuthenticException("Failed to complete local sign out", ex);
+            }
         }
+
+        public string? GetFrontChannelLogoutUrl() => _lastEndSessionUrl;
 
         private async Task<bool> LogoutFromAuthentikAsync(string idToken)
         {
@@ -347,6 +389,20 @@ namespace BusinessEntity.Services
                 _logger.LogWarning("[ResolveProviderSlug] fallback to 'default'");
                 return "default";
             }
+        }
+
+        private string BuildFrontChannelEndSessionUrl(string idToken, IConfigurationSection cfg)
+        {
+            var baseUrlForBrowser = cfg["BaseUrlForBrowser"]!.TrimEnd('/');
+            var slug = _providerSlug ??= ResolveProviderSlug(idToken, cfg);
+            var path = $"/application/o/{slug}/end-session/";
+            var qs = new Dictionary<string, string?>
+            {
+                ["client_id"] = cfg["ClientId"],
+                ["post_logout_redirect_uri"] = "/auth/logged-out", // Перенаправляем на нашу страницу
+                ["id_token_hint"] = idToken
+            };
+            return baseUrlForBrowser + QueryHelpers.AddQueryString(path, qs);
         }
 
         #endregion

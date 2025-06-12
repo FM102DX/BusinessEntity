@@ -23,7 +23,9 @@ namespace BusinessEntity.Services
 
         // Login / Logout
         string GetLoginUrl(string? returnUrl = null);
-        Task SignOutAsync();
+        Task<bool> SignOutAsync(); // Изменено: теперь возвращает bool
+        /// <summary>URL на который нужно перенаправить браузер для полного выхода из Authentik</summary>
+        string? GetFrontChannelLogoutUrl();
 
         // Health check
         Task<bool> IsServiceAvailableAsync();
