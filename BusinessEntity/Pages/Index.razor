@@ -8,123 +8,56 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="user-info-container">
-            <div class="user-welcome">
-                @if (!string.IsNullOrEmpty(CurrentUserName))
-                {
-                    <h3>Добро пожаловать в KMS Business Entity, @CurrentUserName!</h3>
-                    
-                    <!-- Основная информация о пользователе -->
-                    <div class="user-basic-info">
-                        @if (!string.IsNullOrEmpty(CurrentUserEmail))
-                        {
-                            <p class="user-email"><strong>Email:</strong> @CurrentUserEmail</p>
-                        }
+        <div class="auth-summary-container">
+            @if (!string.IsNullOrEmpty(CurrentUserName))
+            {
+                <div class="alert alert-success d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>@CurrentUserName</strong>
                         @if (!string.IsNullOrEmpty(CurrentUserId))
                         {
-                            <p class="user-id"><strong>ID пользователя:</strong> @CurrentUserId</p>
+                            <small class="text-muted">(@CurrentUserId)</small>
                         }
-                        @if (CurrentUser?.Identity != null)
-                        {
-                            <p class="auth-type"><strong>Тип авторизации:</strong> @CurrentUser.Identity.AuthenticationType</p>
-                            <p class="auth-status"><strong>Авторизован:</strong> @(CurrentUser.Identity.IsAuthenticated ? "Да" : "Нет")</p>
-                        }
-                        <p class="claims-count"><strong>Количество клеймов:</strong> @AllClaims.Count</p>
                     </div>
-
-                    <!-- Детальная информация о клеймах -->
-                    @if (AllClaims.Any())
-                    {
-                        <div class="claims-section">
-                            <h4>Все клеймы пользователя:</h4>
-                            
-                            <!-- Группировка клеймов по типам -->
-                            <div class="claims-by-type">
-                                @foreach (var claimGroup in ClaimsByType.OrderBy(x => x.Key))
-                                {
-                                    <div class="claim-group">
-                                        <h5 class="claim-type">@GetFriendlyClaimTypeName(claimGroup.Key)</h5>
-                                        <div class="claim-values">
-                                            @foreach (var claim in claimGroup.Value)
-                                            {
-                                                <div class="claim-item">
-                                                    <span class="claim-value">@claim.Value</span>
-                                                    @if (!string.IsNullOrEmpty(claim.Issuer) && claim.Issuer != "LOCAL AUTHORITY")
-                                                    {
-                                                        <small class="claim-issuer">(@claim.Issuer)</small>
-                                                    }
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-
-                            <!-- Полный список клеймов в виде таблицы -->
-                            <div class="claims-table-section">
-                                <h5>Подробная таблица клеймов:</h5>
-                                <div class="table-responsive">
-                                    <table class="table table-striped table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Тип клейма</th>
-                                                <th>Значение</th>
-                                                <th>Издатель</th>
-                                                <th>Оригинальный издатель</th>
-                                                <th>Тип значения</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var claim in AllClaims.OrderBy(c => c.Type))
-                                            {
-                                                <tr>
-                                                    <td><code>@claim.Type</code></td>
-                                                    <td>@claim.Value</td>
-                                                    <td>@claim.Issuer</td>
-                                                    <td>@claim.OriginalIssuer</td>
-                                                    <td>@claim.ValueType</td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    }
-
-                    <!-- JWT Token информация (если есть) -->
-                    @if (!string.IsNullOrEmpty(JwtToken))
-                    {
-                        <div class="token-section">
-                            <h4>Информация о токене:</h4>
-                            <div class="token-info">
-                                <p><strong>JWT токен присутствует:</strong> Да</p>
-                                <p><strong>Длина токена:</strong> @JwtToken.Length символов</p>
-                                <details>
-                                    <summary>Показать токен (осторожно!)</summary>
-                                    <div class="token-value">
-                                        <code>@JwtToken</code>
-                                    </div>
-                                </details>
-                            </div>
-                        </div>
-                    }
-
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="SignOut">Выйти</button>
-                }
-                else
-                {
-                    <p>Загрузка информации о пользователе...</p>
-                }
-            </div>
+                    <div>
+                        <a href="/authinfo" class="btn btn-outline-primary btn-sm me-2">Подробнее об авторизации</a>
+                    </div>
+                </div>
+            }
         </div>
 
-        <h1>KMS-Business-Entities-Main</h1>
+        <h1>KMS Business Entity</h1>
 
-        <div class="main-logger-content">
+        <div class="main-content">
             <div class="alert alert-success">
                 <h4>Система управления бизнес-сущностями</h4>
                 <p>Добро пожаловать в систему управления бизнес-сущностями KMS. Вы успешно авторизованы через Authentic.</p>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Быстрые действия</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>Здесь будут располагаться основные функции системы управления бизнес-сущностями.</p>
+                            <button class="btn btn-primary" disabled>Создать сущность</button>
+                            <button class="btn btn-secondary ms-2" disabled>Просмотр каталога</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Информация</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>Для просмотра детальной информации об авторизации перейдите в раздел "Авторизация".</p>
+                            <a href="/authinfo" class="btn btn-info">Информация об авторизации</a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </Authorized>
@@ -144,181 +77,20 @@
     </NotAuthorized>
 </AuthorizeView>
 
-@code {
-    private string GetFriendlyClaimTypeName(string claimType)
-    {
-        return claimType switch
-        {
-            ClaimTypes.NameIdentifier => "ID пользователя",
-            ClaimTypes.Name => "Имя пользователя", 
-            ClaimTypes.Email => "Email",
-            ClaimTypes.GivenName => "Имя",
-            ClaimTypes.Surname => "Фамилия",
-            ClaimTypes.Role => "Роль",
-            ClaimTypes.AuthenticationMethod => "Метод аутентификации",
-            "sub" => "Субъект (Subject)",
-            "aud" => "Аудитория (Audience)",
-            "iss" => "Издатель (Issuer)",
-            "iat" => "Выдан в (Issued At)",
-            "exp" => "Истекает (Expires)",
-            "nbf" => "Не действителен до (Not Before)",
-            "jti" => "JWT ID",
-            "preferred_username" => "Предпочитаемое имя пользователя",
-            "given_name" => "Имя",
-            "family_name" => "Фамилия",
-            "jwt_token" => "JWT Токен",
-            _ => claimType
-        };
-    }
-}
-
 <style>
-    .user-info-container {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        padding: 20px;
+    .auth-summary-container {
         margin-bottom: 20px;
     }
 
-    .user-welcome h3 {
-        color: #28a745;
-        margin-bottom: 15px;
+    .main-content {
+        margin-top: 20px;
     }
 
-    .user-basic-info {
-        background-color: #e9ecef;
-        padding: 15px;
-        border-radius: 5px;
+    .card {
         margin-bottom: 20px;
     }
 
-    .user-basic-info p {
-        margin-bottom: 8px;
-        font-size: 0.95rem;
-    }
-
-    .user-email, .user-id, .auth-type, .auth-status, .claims-count {
-        color: #495057;
-    }
-
-    .claims-section {
-        margin-top: 20px;
-        padding: 15px;
-        background-color: #fff;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-    }
-
-    .claims-section h4 {
-        color: #007bff;
-        margin-bottom: 15px;
-    }
-
-    .claims-by-type {
-        margin-bottom: 25px;
-    }
-
-    .claim-group {
-        margin-bottom: 15px;
-        padding: 10px;
-        background-color: #f8f9fa;
-        border-left: 3px solid #007bff;
-    }
-
-    .claim-type {
-        color: #0056b3;
-        font-size: 1rem;
-        margin-bottom: 8px;
-        font-weight: 600;
-    }
-
-    .claim-values {
-        margin-left: 10px;
-    }
-
-    .claim-item {
-        margin-bottom: 5px;
-    }
-
-    .claim-value {
-        font-weight: 500;
-        color: #495057;
-    }
-
-    .claim-issuer {
-        color: #6c757d;
-        font-style: italic;
-        margin-left: 5px;
-    }
-
-    .claims-table-section {
-        margin-top: 20px;
-    }
-
-    .claims-table-section h5 {
-        color: #495057;
-        margin-bottom: 10px;
-    }
-
-    .table {
-        font-size: 0.85rem;
-    }
-
-    .table code {
-        background-color: #f1f3f4;
-        padding: 2px 4px;
-        border-radius: 3px;
-        font-size: 0.8rem;
-    }
-
-    .token-section {
-        margin-top: 20px;
-        padding: 15px;
-        background-color: #fff3cd;
-        border: 1px solid #ffeaa7;
-        border-radius: 5px;
-    }
-
-    .token-section h4 {
-        color: #856404;
-        margin-bottom: 10px;
-    }
-
-    .token-info p {
-        margin-bottom: 8px;
-        color: #856404;
-    }
-
-    .token-value {
-        background-color: #f8f9fa;
-        padding: 10px;
-        border-radius: 3px;
-        margin-top: 10px;
-        word-break: break-all;
-        font-family: 'Courier New', monospace;
-        font-size: 0.8rem;
-        max-height: 200px;
-        overflow-y: auto;
-    }
-
-    .btn-outline-secondary {
-        font-size: 0.8rem;
-        padding: 5px 10px;
-        margin-top: 15px;
-    }
-
-    details {
-        margin-top: 10px;
-    }
-
-    summary {
-        cursor: pointer;
-        color: #007bff;
-        font-weight: 500;
-    }
-
-    summary:hover {
-        text-decoration: underline;
+    .btn-sm {
+        font-size: 0.875rem;
     }
 </style>

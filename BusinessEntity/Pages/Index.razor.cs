@@ -20,45 +20,28 @@ namespace BusinessEntity.Pages
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
 
         private string? CurrentUserName { get; set; }
-        private string? CurrentUserEmail { get; set; }
         private string? CurrentUserId { get; set; }
-        private string? JwtToken { get; set; }
-        private ClaimsPrincipal? CurrentUser { get; set; }
-        private List<Claim> AllClaims { get; set; } = new();
-        private Dictionary<string, List<Claim>> ClaimsByType { get; set; } = new();
+        private bool IsAuthenticated { get; set; }
 
         protected override async Task OnInitializedAsync()
         {
             try
             {
-                var isAuthenticated = await AuthService.IsUserAuthenticatedAsync();
+                IsAuthenticated = await AuthService.IsUserAuthenticatedAsync();
                 
-                if (isAuthenticated)
+                if (IsAuthenticated)
                 {
-                    // Получаем базовую информацию о пользователе
                     CurrentUserName = await AuthService.GetUserNameAsync();
-                    CurrentUserEmail = await AuthService.GetUserEmailAsync();
-                    JwtToken = await AuthService.GetJwtTokenAsync();
                     
-                    // Получаем полный объект пользователя с клеймами
-                    CurrentUser = await AuthService.GetCurrentUserAsync();
-                    
-                    if (CurrentUser?.Identity != null)
+                    // Получаем ID пользователя из клеймов
+                    var currentUser = await AuthService.GetCurrentUserAsync();
+                    if (currentUser?.Identity != null)
                     {
-                        // Извлекаем все клеймы
-                        AllClaims = CurrentUser.Claims.ToList();
-                        
-                        // Группируем клеймы по типам для удобного отображения
-                        ClaimsByType = AllClaims
-                            .GroupBy(c => c.Type)
-                            .ToDictionary(g => g.Key, g => g.ToList());
-                        
-                        // Получаем ID пользователя из клеймов
-                        CurrentUserId = CurrentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                                       ?? CurrentUser.FindFirst("sub")?.Value;
+                        CurrentUserId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                                       ?? currentUser.FindFirst("sub")?.Value;
                     }
                     
-                    Logger.LogInformation($"User {CurrentUserName} accessed main page with {AllClaims.Count} claims");
+                    Logger.LogInformation($"User {CurrentUserName} accessed main page");
                 }
                 else
                 {
@@ -67,7 +50,7 @@ namespace BusinessEntity.Pages
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error loading user information");
+                Logger.LogError(ex, "Error loading user information on main page");
             }
         }
 
@@ -83,34 +66,6 @@ namespace BusinessEntity.Pages
             {
                 Logger.LogError(ex, "Error redirecting to login");
             }
-        }
-
-        private Task SignOut()
-        {
-            try
-            {
-                Logger.LogInformation($"User {CurrentUserName} is requesting sign out");
-                
-                // Очищаем локальные данные
-                CurrentUserName = null;
-                CurrentUserEmail = null;
-                
-                // Принудительно обновляем компонент
-                StateHasChanged();
-                
-                Logger.LogInformation("Redirecting to sign out page");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error during sign out preparation");
-            }
-            finally
-            {
-                // Перенаправляем на страницу выхода
-                Navigation.NavigateTo("/auth/logout", forceLoad: true);
-            }
-            
-            return Task.CompletedTask;
         }
     }
 }
