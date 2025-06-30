@@ -12,24 +12,22 @@ using SampleOnlineMall.WebLogger.Models;
 using System.Security.Claims;
 
 namespace BusinessEntity.Pages
-{
-    public partial class Index : ComponentBase
+{    public partial class Index : ComponentBase
     {
         [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
-
-        private string? CurrentUserName { get; set; }
+        [Inject] public IBusinessEntityTypesService BusinessEntityTypesService { get; set; } = default!;        private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }
         private bool IsAuthenticated { get; set; }
+        private IEnumerable<string> BusinessEntityTypes { get; set; } = new List<string>();
 
         protected override async Task OnInitializedAsync()
         {
             try
             {
                 IsAuthenticated = await AuthService.IsUserAuthenticatedAsync();
-                
-                if (IsAuthenticated)
+                  if (IsAuthenticated)
                 {
                     CurrentUserName = await AuthService.GetUserNameAsync();
                     
@@ -40,6 +38,9 @@ namespace BusinessEntity.Pages
                         CurrentUserId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value 
                                        ?? currentUser.FindFirst("sub")?.Value;
                     }
+                    
+                    // Получаем типы бизнес-сущностей
+                    BusinessEntityTypes = BusinessEntityTypesService.GetBusinessEntityTypes();
                     
                     Logger.LogInformation($"User {CurrentUserName} accessed main page");
                 }

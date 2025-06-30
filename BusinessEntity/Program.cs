@@ -109,10 +109,11 @@ namespace BusinessEntity
             {
                 client.BaseAddress = new Uri("http://authentic-server-1:9000");
                 client.Timeout = TimeSpan.FromSeconds(30);
-            });
-
-            // Регистрируем наш сервис авторизации
+            });            // Регистрируем наш сервис авторизации
             builder.Services.AddScoped<IApplicationSideAuthService, ApplicationSideAuthService>();
+            
+            // Регистрируем сервис типов BusinessEntity
+            builder.Services.AddScoped<IBusinessEntityTypesService, BusinessEntityTypesService>();
 
 			var _app = new WebLoggerApp();
 

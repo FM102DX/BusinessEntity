@@ -8,53 +8,53 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="auth-summary-container">
+        <h1>KMS Business Entity</h1>
+        
+        <div class="user-info-container">
             @if (!string.IsNullOrEmpty(CurrentUserName))
             {
-                <div class="alert alert-success d-flex justify-content-between align-items-center">
+                <div class="alert alert-info d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>@CurrentUserName</strong>
+                        <strong>Пользователь:</strong> @CurrentUserName
                         @if (!string.IsNullOrEmpty(CurrentUserId))
                         {
-                            <small class="text-muted">(@CurrentUserId)</small>
+                            <small class="text-muted ms-2">ID: @CurrentUserId</small>
                         }
                     </div>
                     <div>
-                        <a href="/authinfo" class="btn btn-outline-primary btn-sm me-2">Подробнее об авторизации</a>
+                        <a href="/authinfo" class="btn btn-outline-primary btn-sm">Подробнее об авторизации</a>
                     </div>
                 </div>
             }
         </div>
 
-        <h1>KMS Business Entity</h1>
-
         <div class="main-content">
-            <div class="alert alert-success">
-                <h4>Система управления бизнес-сущностями</h4>
-                <p>Добро пожаловать в систему управления бизнес-сущностями KMS. Вы успешно авторизованы через Authentic.</p>
-            </div>
-            
             <div class="row">
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">
-                            <h5>Быстрые действия</h5>
+                            <h5>Доступные типы сущностей</h5>
                         </div>
                         <div class="card-body">
-                            <p>Здесь будут располагаться основные функции системы управления бизнес-сущностями.</p>
-                            <button class="btn btn-primary" disabled>Создать сущность</button>
-                            <button class="btn btn-secondary ms-2" disabled>Просмотр каталога</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5>Информация</h5>
-                        </div>
-                        <div class="card-body">
-                            <p>Для просмотра детальной информации об авторизации перейдите в раздел "Авторизация".</p>
-                            <a href="/authinfo" class="btn btn-info">Информация об авторизации</a>
+                            <p>В системе доступны следующие типы бизнес-сущностей:</p>
+                            @if (BusinessEntityTypes != null && BusinessEntityTypes.Any())
+                            {
+                                <ul class="list-group list-group-flush">
+                                    @foreach (var entityType in BusinessEntityTypes)
+                                    {
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span class="badge bg-primary rounded-pill">@entityType</span>
+                                            <small class="text-muted">Тип сущности</small>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <div class="alert alert-info mb-0">
+                                    <small>Типы сущностей загружаются...</small>
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
@@ -78,7 +78,7 @@
 </AuthorizeView>
 
 <style>
-    .auth-summary-container {
+    .user-info-container {
         margin-bottom: 20px;
     }
 
@@ -92,5 +92,11 @@
 
     .btn-sm {
         font-size: 0.875rem;
+    }
+
+    .lead {
+        margin-bottom: 30px;
+        text-align: center;
+        color: #6c757d;
     }
 </style>
