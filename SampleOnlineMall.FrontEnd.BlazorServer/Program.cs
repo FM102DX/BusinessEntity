@@ -8,6 +8,9 @@ using SampleOnlineMall.FrontEnd.BlazorServer.Data;
 using SampleOnlineMall.Service;
 using SampleOnlineMall.Service.WebLogging;
 using SampleOnlineMall.WebLogger.Services;
+using SampleOnlineMall.FrontEnd.BlazorServer.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Serilog;
 using Serilog.Events;
 
@@ -24,6 +27,30 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
             builder.Services.AddRazorPages();
             builder.Services.AddServerSideBlazor();
 
+            // Добавляем авторизацию и аутентификацию
+            builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddCookie(options =>
+                {
+                    options.LoginPath = "/auterlink/login";
+                    options.LogoutPath = "/auterlink/logout";
+                    options.AccessDeniedPath = "/unauthorized";
+                    options.ExpireTimeSpan = TimeSpan.FromHours(24);
+                    options.SlidingExpiration = true;
+                });
+
+            builder.Services.AddAuthorization(options =>
+            {
+                options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build();
+            });
+
+            // Добавляем HttpContextAccessor для доступа к контексту запроса
+            builder.Services.AddHttpContextAccessor();
+
+            // Регистрируем наш сервис авторизации
+            builder.Services.AddScoped<IAuterlinkAuthService, AuterlinkAuthService>();
+
             #region custom calls
 
             // App classes
@@ -31,13 +58,13 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
             genApp.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
             builder.Services.AddSingleton(typeof(GenericAppSettings), (x) => genApp);
 
-            // ����������� WebLoggerLocalSettings � DI
+            // Регистрация WebLoggerLocalSettings в DI
             var webLoggerSettings = new WebLoggerLocalSettings();
             builder.Configuration.GetSection("WebLoggerLocalSettings").Bind(webLoggerSettings);
             builder.Services.AddSingleton(webLoggerSettings);
             builder.Services.AddScoped<IWebLoggerService, WebLoggerService>();
 
-            // ���������� ������
+            // Получение логгера
             var serviceProvider = builder.Services.BuildServiceProvider();
             var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
             wLogger.Information("App launched");
@@ -89,6 +116,10 @@ namespace SampleOnlineMall.FrontEnd.BlazorServer
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseRouting();
+
+            // Добавляем middleware для аутентификации и авторизации
+            app.UseAuthentication();
+            app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
             {
