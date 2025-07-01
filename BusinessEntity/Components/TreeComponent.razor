@@ -1,0 +1,38 @@
+@using BusinessEntity.Models
+
+<RadzenTree Data="@TreeData" Style="height:100%; width:100%;">
+    <RadzenTreeLevel TextProperty="Title" ChildrenProperty="Children" />
+</RadzenTree>
+
+@code {
+    private List<TreeNodeItem> TreeData { get; set; } = new();
+
+    protected override void OnInitialized()
+    {
+        // Инициализируем мок-данные для дерева
+        TreeData = new List<TreeNodeItem>
+        {
+            new TreeNodeItem
+            {
+                Title = "📁 Корневая папка",
+                Children = new List<TreeNodeItem>
+                {
+                    new TreeNodeItem { Title = "📄 Страница 1" },
+                    new TreeNodeItem { Title = "📋 Документ 1" },
+                    new TreeNodeItem
+                    {
+                        Title = "📁 Подпапка проектов",
+                        Children = new List<TreeNodeItem>
+                        {
+                            new TreeNodeItem { Title = "📄 Страница 2" },
+                            new TreeNodeItem { Title = "📋 Документ 2" },
+                            new TreeNodeItem { Title = "🔧 Настройки" }
+                        }
+                    }
+                }
+            },
+            new TreeNodeItem { Title = "📄 Отдельная страница" },
+            new TreeNodeItem { Title = "📊 Отчеты" }
+        };
+    }
+} 

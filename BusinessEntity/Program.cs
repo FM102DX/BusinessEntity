@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using SampleOnlineMall.WebLogger.DataAccess;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Radzen;
 
 namespace BusinessEntity
 {
@@ -22,6 +23,9 @@ namespace BusinessEntity
 			builder.Services.AddServerSideBlazor();
 			builder.Services.AddEndpointsApiExplorer();
 			builder.Services.AddAutoMapper(typeof(Program));
+
+			// Add Radzen services
+			builder.Services.AddRadzenComponents();
 
 			// Настройка JWT аутентификации
 			var jwtSettings = builder.Configuration.GetSection("JwtSettings");
