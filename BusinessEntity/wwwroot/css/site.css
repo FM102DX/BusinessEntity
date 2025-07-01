@@ -80,7 +80,10 @@ div.main-logger-widget-content {
     font-size: 14px;
 }
 
-
+div.nav-menu-top-left-placeholder {
+    height: 65px;
+    width: 65px;
+}
 
 
 h1:focus {
