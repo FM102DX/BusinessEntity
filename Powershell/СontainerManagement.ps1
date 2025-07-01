@@ -335,6 +335,7 @@ function Show-Menu {
     Write-Host "35   -- Сбилдить и запустить production_db контейнер"
     Write-Host "37   -- Запустить сервис Authentik"
     Write-Host "371  -- Сгенерировать .env для Authentik"
+    Write-Host "38   -- Запушить ветку basic_add_elements_and_tree_mechanism как есть"
     Write-Host "40   -- Сбилдить и запустить бизнес-логику"
     Write-Host "80   -- Очистить экран (CLS)"
     Write-Host "99   -- Выход"
@@ -355,6 +356,7 @@ do {
         "35"  { BuildAndRunPostgresAssortDb }
         "37"  { Action37 }
         "371" { Action371 }
+        "38"  { git push --force-with-lease origin basic_add_elements_and_tree_mechanism }
         "40"  { BuildAndRunBusinessLogicContainers }
         "80"  { Clear-Host }
         "99"  { break }
