@@ -8,38 +8,53 @@ using SampleOnlineMall.Service;
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using SampleOnlineMall.WebLogger.Services;
 
 
 
 namespace SampleOnlineMall
 {
     [ApiController]
-    [Route("")]
-    public class AssortmentReadFrontend : Controller
+    [Route("frontend")]
+    public class AssortmentReadFrontendController : Controller
     {
-        public Serilog.ILogger _logger { get; set; }
+        public IWebLoggerService _logger { get; set; }
         public CommodityItemFrontendManager _itemManager { get; set; }
-        public WebLoggerManager _webLoggerManager { get; set; }
-        public AssortmentReadFrontend(CommodityItemFrontendManager itemManager, WebLoggerManager webLoggerManager, Serilog.ILogger logger)
+        public AssortmentReadFrontendController(CommodityItemFrontendManager itemManager, IWebLoggerService logger)
         {
             _logger = logger;
             _itemManager= itemManager;
-            _webLoggerManager= webLoggerManager;
         }
+
 
         [HttpGet]
         [Route("getall/")]
-        public async Task<IEnumerable<CommodityItemFrontend>> GetAllItems()
+        public async Task<IActionResult> GetAllItems()
         {
-            return await _itemManager.GetAll();
+            string reply;
+            try
+            {
+                
+                var items = await _itemManager.GetAll();
+                reply = $"[AssortApi] giving away {items.Count()} items";
+                Console.WriteLine(reply);
+                await _logger.Information(reply);
+                return Ok(items); // Возвращаем статус 200 и список items
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred: {ex.Message} {ex.InnerException?.Message}");
+                return StatusCode(500, $"An error occurred: {ex.Message}");
+            }
         }
+
 
         [HttpPost]
         [Route("getallbyrequest/")]
         public async Task<RepositoryResponce<CommodityItemFrontend>> GetAllByRequest(RepositoryRequestTextSearch request)
         {
             var str = JsonConvert.SerializeObject(request);
-            _webLoggerManager.Log($"Controller: got request {str}");
+            _logger.Information($"Controller: got request {str}");
             return await _itemManager.GetAllByRequest(request);
         }
 

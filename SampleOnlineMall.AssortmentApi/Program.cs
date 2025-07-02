@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Options;
 using SampleOnlineMall.Core;
 using SampleOnlineMall.Core.Appilcation;
 using SampleOnlineMall.Core.Managers;
@@ -8,7 +10,11 @@ using SampleOnlineMall.DataAccess;
 using SampleOnlineMall.DataAccess.Abstract;
 using SampleOnlineMall.DataAccess.DataAccess;
 using SampleOnlineMall.Service;
+using SampleOnlineMall.Service.WebLogging;
+using SampleOnlineMall.WebLogger.Services;
 using Serilog;
+using System.Runtime;
+using WebLoggerSettings = SampleOnlineMall.Core.WebLoggerSettings;
 
 
 namespace SampleOnlineMall
@@ -18,52 +24,55 @@ namespace SampleOnlineMall
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
-
-            builder.WebHost.ConfigureKestrel(options => options.ListenLocalhost(6000));
-
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-
             var configuration = new ConfigurationBuilder().Build();
-
             builder.Configuration.AddConfiguration(configuration);
-
-            var _app = new SampleOnlineMallAssortmentApiApp();
-
-            string logFilePath = System.IO.Path.Combine(_app.LogsDirectory, Functions.GetNextFreeFileName(_app.LogsDirectory, "AssortmentApiLogs", "txt"));
-
-            Serilog.ILogger _logger = new LoggerConfiguration()
-                  .WriteTo.File(logFilePath)
-                  .MinimumLevel.Debug()
-                  .CreateLogger();
-
-            _logger.Information("P1");
-
-            //var confMgr = new ConfigurationManager();
-
-            //confMgr.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-
             builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-            var cnnStr = builder.Configuration.GetConnectionString("PostgreConnection");
 
-            var loggerOptions = new WebApiAsyncRepositoryOptions()
-                        .SetLogger(_logger)
-                        .SetBaseAddress("https://weblogger.t109.tech")
-                        .SetInsertHostPath("insertitem/");
+
+            #region бизнес-логика
+
+            // App classes
+            builder.Services.AddScoped<SampleOnlineMallAssortmentApiApp>();
+
+            var genApp = new GenericAppSettings();
+            genApp.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
+            builder.Services.AddSingleton(typeof(GenericAppSettings), (x) => genApp);
+
+            // –егистраци€ WebLoggerLocalSettings в DI
+            var webLoggerSettings = new WebLoggerLocalSettings();
+            builder.Configuration.GetSection("WebLoggerLocalSettings").Bind(webLoggerSettings);
+            builder.Services.AddSingleton(webLoggerSettings);
+
+            builder.Services.AddScoped<IWebLoggerService, WebLoggerService>();
+
+            Console.WriteLine($"ASRT_P3");
+
+            // используем логгер
+            var serviceProvider = builder.Services.BuildServiceProvider();
+            var wLogger = serviceProvider.GetRequiredService<IWebLoggerService>();
+            wLogger.Information("App launched");
+
+            Console.WriteLine($"ASRT_P4");
+
+            foreach (var key in Environment.GetEnvironmentVariables().Keys)
+            {
+                // wLogger.Information($"{key}={Environment.GetEnvironmentVariable(key.ToString())}");
+            }
 
             // Add services to the container
+
             builder.Services.AddSingleton(typeof(Microsoft.Extensions.Configuration.ConfigurationManager), (x) => builder.Configuration);
             builder.Services.AddScoped(typeof(DbContext), typeof(EfPostgresDbContext));
-            builder.Services.AddSingleton(typeof(SampleOnlineMallAssortmentApiApp), (x) => _app);
             builder.Services.AddScoped(typeof(CommodityItemManager));
             builder.Services.AddScoped(typeof(CommodityItemFrontendManager));
             builder.Services.AddScoped(typeof(SupplierManager));
-            builder.Services.AddSingleton(typeof(Serilog.ILogger), (x) => _logger);
             builder.Services.AddScoped(typeof(IAsyncRepository<CommodityItem>), typeof(EfAsyncRepository<CommodityItem>));
             builder.Services.AddScoped(typeof(IAsyncRepository<Supplier>), typeof(EfAsyncRepository<Supplier>));
+            builder.Services.AddScoped<CustomMapper>();
 
-            builder.Services.AddScoped<Mapper>();
-            builder.Services.AddScoped(typeof(WebLoggerManager), (x) => new WebLoggerManager("assortment", loggerOptions));
-
+            #endregion
+            Console.WriteLine($"ASRT_P5");
             builder.Services.AddCors(confg =>
                 confg.AddPolicy("AllowAll",
                 p => p.AllowAnyOrigin()
@@ -71,38 +80,34 @@ namespace SampleOnlineMall
                 .AllowAnyHeader()));
 
             builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
-            _logger.Information("P2");
 
             var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
+            var imgPath = Path.Combine(Directory.GetCurrentDirectory(), "CommodityItemImages");
+            Directory.CreateDirectory(imgPath);
+
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                /*
+                    ¬ этом случае ваши изображени€ будут доступны по URL: http://<host>:<port>/images/<file_name>, где:
+                    < host > Ч IP - адрес или домен контейнера,
+                    < port > Ч порт, который вы пробросили дл€ микросервиса,
+                    < file_name > Ч им€ файла(например, 1.jpg).
+                */
+
+                FileProvider = new PhysicalFileProvider(imgPath),
+                RequestPath = "/images"
+            });
 
             app.UseSwagger();
             app.UseSwaggerUI();
-
-
-            if (app.Environment.IsDevelopment())
-            {
-            }
-
-            _logger.Information("P3");
-
             app.UseHttpsRedirection();
-
             app.UseAuthorization();
-
             app.MapControllers();
-
             app.UseCors("AllowAll");
-
-            _logger.Information("P4");
-
             app.Run();
-
-            _logger.Information("P5");
         }
     }
 }

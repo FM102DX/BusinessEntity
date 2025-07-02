@@ -3,6 +3,7 @@ using SampleOnlineMall.Core;
 using SampleOnlineMall.Core.Managers;
 using SampleOnlineMall.Core.Models;
 using SampleOnlineMall.Service;
+using SampleOnlineMall.WebLogger.Services;
 using System;
 using System.Collections.Generic;
 
@@ -14,15 +15,12 @@ namespace SampleOnlineMall
     [Route("Suppliers/")]
     public class Suppliers : Controller
     {
-        public Serilog.ILogger _logger { get; set; }
+        public IWebLoggerService _logger { get; set; }
         public SupplierManager _manager { get; set; }
-        public WebLoggerManager _webLoggerManager { get; set; }
-
-        public Suppliers(SupplierManager manager, WebLoggerManager webLoggerManager, Serilog.ILogger logger)
+        public Suppliers(SupplierManager manager, IWebLoggerService logger)
         {
             _logger = logger;
             _manager = manager;
-            _webLoggerManager= webLoggerManager;
         }
 
         [HttpGet]
@@ -62,12 +60,12 @@ namespace SampleOnlineMall
 
             if (rezult.Success)
             {
-                _webLoggerManager.Information($"Successfully added supplier name={item.Name} msg={rezult.Message}");
+                _logger.Information($"Successfully added supplier name={item.Name} msg={rezult.Message}");
                 return StatusCode(201, CommonOperationResult.SayOk());
             }
             else
             {
-                _webLoggerManager.Error($"Error while adding supplier name={item.Name} err={rezult.Message}");
+                _logger.Error($"Error while adding supplier name={item.Name} err={rezult.Message}");
                 return StatusCode(501, CommonOperationResult.SayFail(rezult.Message));
             }
 

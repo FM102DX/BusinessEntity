@@ -1,0 +1,26 @@
+﻿@page "/item/{ItemId:guid}"
+@using SampleOnlineMall.FrontEnd.BlazorServer.Components
+@using SampleOnlineMall.FrontEnd.BlazorServer.Pages
+@using SampleOnlineMall.FrontEnd.BlazorServer.Components.DisplayImageWithSelector;
+
+<div class="shopitem-detail-page">
+    <div class="shopitem-picture-name-price-block shopitem-block">
+        <div class="shopitem-picture-block">
+            <DisplayImageWithSelector ContainerWidth="500" ImgList="@ImgList" ContainerHeight="500" SelectorPosition="DisplayImageWithSelector.SelectorPositionEnum.bottom" ></DisplayImageWithSelector>
+        </div>
+        <div class="shopitem-pricing-block">
+            @ActualItem.Name
+        </div>
+    </div>
+    <div class="shopitem-block-separator"></div>
+    <div class="shopitem-supplier-block shopitem-block">
+        Supplier: @ActualItemSupplierName
+    </div>
+    <div class="shopitem-description-block shopitem-block">
+        @ActualItem.Description
+    </div>
+    <div class="shopitem-block-separator"></div>
+    <div class="shopitem-comments-block shopitem-block"></div>
+    <div class="shopitem-block-separator"></div>
+
+</div>

@@ -9,14 +9,15 @@ using SampleOnlineMall.DataAccess.Models;
 using SampleOnlineMall.Service;
 using System.Linq.Expressions;
 using Newtonsoft.Json;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.DataAccess
 {
     public class EfAsyncRepository<T> : IAsyncRepository<T> where T: BaseEntity
     {
         private DbContext           _context;
-        private Serilog.ILogger     _logger;
-        public EfAsyncRepository(DbContext context, Serilog.ILogger logger)
+        private IWebLoggerService _logger;
+        public EfAsyncRepository(DbContext context, IWebLoggerService logger)
         {
             _context = context;
             _logger = logger;
@@ -251,5 +252,9 @@ namespace SampleOnlineMall.DataAccess
             throw new NotImplementedException();
         }
 
+        public Task<CommonOperationResult> ClearAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

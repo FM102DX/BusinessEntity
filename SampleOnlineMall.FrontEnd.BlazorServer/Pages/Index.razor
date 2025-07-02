@@ -1,0 +1,120 @@
+﻿@page "/"
+@page "/index"
+@page "/{Page:int}"
+@using Microsoft.AspNetCore.Authorization
+@using SampleOnlineMall.FrontEnd.BlazorServer.Components
+@using SampleOnlineMall.FrontEnd.BlazorServer.Pages
+@using SampleOnlineMall.FrontEnd.BlazorServer.Components.ShopItemCollection
+@using SampleOnlineMall.FrontEnd.BlazorServer.Services
+@attribute [Authorize]
+@inject IAuterlinkAuthService AuthService
+@inject NavigationManager Navigation
+@inject ILogger<Index> Logger
+
+<div class="user-info-container">
+    <div class="user-welcome">
+        @if (!string.IsNullOrEmpty(CurrentUserName))
+        {
+            <h3>Добро пожаловать, @CurrentUserName!</h3>
+            @if (!string.IsNullOrEmpty(CurrentUserEmail))
+            {
+                <p class="user-email">Email: @CurrentUserEmail</p>
+            }
+            <button class="btn btn-outline-secondary btn-sm" @onclick="SignOut">Выйти</button>
+        }
+        else
+        {
+            <p>Загрузка информации о пользователе...</p>
+        }
+    </div>
+</div>
+
+<ShopItemCollection UsageCase="@ShopItemCollection.ShopItemCollectionUsageCaseEnum.MainPageAppearamce" Page="@PageToPass" ItemsPerPage="6" />
+
+<style>
+    .user-info-container {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .user-welcome h3 {
+        color: #28a745;
+        margin-bottom: 10px;
+    }
+
+    .user-email {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
+
+    .btn-outline-secondary {
+        font-size: 0.8rem;
+        padding: 5px 10px;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int? Page { get; set; }
+
+    public int PageToPass 
+    { 
+        get 
+        {
+            int page = 0;
+            if(Page!=null)
+            {
+                page = (int)Page;
+            }
+            return page;
+        } 
+    }
+
+    private string? CurrentUserName { get; set; }
+    private string? CurrentUserEmail { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Проверяем, авторизован ли пользователь
+            var isAuthenticated = await AuthService.IsUserAuthenticatedAsync();
+            
+            if (!isAuthenticated)
+            {
+                Logger.LogWarning("User is not authenticated, redirecting to unauthorized page");
+                Navigation.NavigateTo("/unauthorized", true);
+                return;
+            }
+
+            // Получаем информацию о пользователе
+            CurrentUserName = await AuthService.GetUserNameAsync();
+            CurrentUserEmail = await AuthService.GetUserEmailAsync();
+
+            Logger.LogInformation($"User {CurrentUserName} accessed main page");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading user information");
+            Navigation.NavigateTo("/unauthorized", true);
+        }
+    }
+
+    private async Task SignOut()
+    {
+        try
+        {
+            await AuthService.SignOutAsync();
+            Navigation.NavigateTo("/auterlink/logout", true);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error during sign out");
+        }
+    }
+}
+

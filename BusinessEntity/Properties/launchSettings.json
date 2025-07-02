@@ -1,0 +1,42 @@
+{
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:51691/",
+      "sslPort": 0
+    }
+  },
+  "profiles": {
+    "BlazorServerWebLogger": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5049"
+    },
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "Docker (dev-mall2)": {
+      "commandName": "Docker",
+      "launchBrowser": true,
+      "httpPort": 5010,
+
+      "containerName": "business-entity-container",
+      "containerRunArguments": "--rm --network docker-networkmall2",
+
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://*:80"
+      }
+    }
+
+  }
+}

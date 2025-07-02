@@ -114,5 +114,10 @@ namespace SampleOnlineMall.DataAccess.DataAccess
         {
             throw new NotImplementedException();
         }
+
+        public Task<CommonOperationResult> ClearAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

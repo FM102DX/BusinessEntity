@@ -1,19 +1,10 @@
 ﻿using SampleOnlineMall.Core.Appilcation;
 using SampleOnlineMall.DataAccess.Abstract;
-using SampleOnlineMall.Service;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Drawing;
-using System.IO;
-using Shim= SixLabors.ImageSharp.Image;
-using SixLabors.ImageSharp.Formats;
 using SampleOnlineMall.Core.Mappers;
 using SampleOnlineMall.Core.Models;
 using SampleOnlineMall.DataAccess.Models;
 using Newtonsoft.Json;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.Core.Managers
 {
@@ -21,19 +12,22 @@ namespace SampleOnlineMall.Core.Managers
     public class CommodityItemFrontendManager
     {
         private IAsyncRepository<CommodityItem> _repo;
-        private Serilog.ILogger _logger;
+        private IWebLoggerService _logger;
         private SampleOnlineMallAssortmentApiApp _app;
-        private WebLoggerManager _webLogMgr;
-        private Mapper _mapper;
+        
+        private CustomMapper _mapper;
         private IAsyncRepository<Supplier> _supplierRepo;
 
-        public CommodityItemFrontendManager(IAsyncRepository<CommodityItem> repo, IAsyncRepository<Supplier> supplierRepo,  Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app, Mapper mapper, WebLoggerManager webLogMgr)
+        public CommodityItemFrontendManager(IAsyncRepository<CommodityItem> repo, 
+                                            IAsyncRepository<Supplier> supplierRepo, 
+                                            IWebLoggerService logger, 
+                                            SampleOnlineMallAssortmentApiApp app, 
+                                            CustomMapper mapper)
         {
             _repo = repo;
             _logger = logger;
             _app = app;
             _mapper = mapper;
-            _webLogMgr = webLogMgr;
             _supplierRepo = supplierRepo;
         }
 
@@ -45,7 +39,6 @@ namespace SampleOnlineMall.Core.Managers
                 var x = GetPictureInfoListForItem(item);
                 item.Pictures = x;
             }
-           // _webLogMgr.Log($"{items[0].Pictures.Count()}");
             return items;
         }
 
@@ -55,20 +48,19 @@ namespace SampleOnlineMall.Core.Managers
             var searchText = repositoryRequest.SearchText?.ToLower();
             if (repositoryRequest.UseSearch)
             {
-                _webLogMgr.Log($"[CommodityItemFrontendManager]: used search");
+                //_webLogMgr.Log($"[CommodityItemFrontendManager]: used search");
                 var searchReq = RepositoryRequestFuncSearch<CommodityItem>.FromTextSearchRequest(repositoryRequest);
                 searchReq.SearchFunc = x => x.Name.ToLower().Contains(searchText) || x.Description.ToLower().Contains(searchText);
                 sourceResponce = await _repo.GetAllByRequestAsync(searchReq);
             }
             else
             {
-                _webLogMgr.Log($"[CommodityItemFrontendManager]: not using search");
+                //_webLogMgr.Log($"[CommodityItemFrontendManager]: not using search");
                 sourceResponce = await _repo.GetAllByRequestAsync(repositoryRequest);
             }
             
             var str = JsonConvert.SerializeObject(sourceResponce);
-
-            _webLogMgr.Log($"[CommodityItemFrontendManager]: responce is {str}");
+          //  _webLogMgr.Log($"[CommodityItemFrontendManager]: responce is {str}");
 
             var targetResponce = _mapper.ResponceFrontFromResponceCommItem(sourceResponce);
 
@@ -106,9 +98,9 @@ namespace SampleOnlineMall.Core.Managers
             for (int i = 1; i <= 3; i++)
             {
                 var pic = new PictureInfo();
-                pic.BigPictureFullPath = $"{_app.BaseUrl}/CommodityItemImages/{item.Id}/{i}.jpg";
-                pic.MediumPictureFullPath = $"{_app.BaseUrl}/CommodityItemImages/{item.Id}/{i}m.jpg";
-                pic.SmallPictureFullPath = $"{_app.BaseUrl}/CommodityItemImages/{item.Id}/{i}s.jpg";
+                pic.BigPictureFullPath = $"{_app.BaseUrl}/Images/{item.Id}/{i}.jpg";
+                pic.MediumPictureFullPath = $"{_app.BaseUrl}/Images/{item.Id}/{i}m.jpg";
+                pic.SmallPictureFullPath = $"{_app.BaseUrl}/Images/{item.Id}/{i}s.jpg";
                 picLst.Add(pic);
             }
             return picLst;

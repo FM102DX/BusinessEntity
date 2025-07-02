@@ -20,8 +20,8 @@ namespace SampleOnlineMall.DataAccess.Models
             LastModifiedDatTime = lastModifiedDateTime;
         }
 
-        public string SysMessage { get; set; } // for diagnostic purposes
-        public string ShortTimeStamp { get { return $"{CreatedDateTime.ToShortDateString()} {CreatedDateTime.ToShortTimeString()}"; } }
+        // for diagnostic purposes
+        public string SysMessage { get; set; } 
         public DateTime CreatedDateTime { get; set; }
         public DateTime LastModifiedDatTime { get; set; }
 

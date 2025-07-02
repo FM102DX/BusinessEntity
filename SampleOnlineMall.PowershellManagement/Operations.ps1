@@ -217,6 +217,26 @@ function DeployMallBlazorFrontend ([string] $_transactionId)
 
 }
 
+function DeployWebLoggerBlazor ([string] $_transactionId)
+{
+    if($callType -eq 'plain')
+    {
+        # this is made to start transaction in a separate window
+        [string] $argList = "-file $scriptFileFullPath -transactionId $_transactionId -callType 'external-from-self' ";
+        Start-process -FilePath $pwshPath -ArgumentList $argList -PassThru;
+        return;
+    }
+    
+    [string] $remoteFolder = "/var/www/www-root/data/www/weblogger2.t109.tech";
+    [string] $projectPath =      "C:\Develop\SampleOnlineMall\WebLogger.Blazor";
+    [string] $projectBuildPath = "C:\Develop\SampleOnlineMall\WebLogger.Blazor\bin\Release\net6.0";
+    [string] $siteUrl = "https://weblogger2.t109.tech";
+
+    DeployBalzorWasm60SiteToUbuntuHost -remoteFolder $remoteFolder -projectPath $projectPath -projectBuildPath $projectBuildPath -siteUrl $siteUrl
+
+}
+
+
 function DeployStore01 ([string] $_transactionId)
 {
     if($callType -eq 'plain')
@@ -281,6 +301,7 @@ Function DeployWebLogger ([string] $_transactionId)
     DeployAspNetCore60ApiSiteToUbuntuHost -remoteFolder $remoteFolder -projectPath $projectPath -projectBuildPath $projectBuildPath -wwwRootFolder $wwwRootFolder -serviceName $serviceName -executingFileFullPath $executingFileFullPath -siteUrl $siteUrl
 
 }
+
 function LogAndExit ([string] $text)
 {
     log $text
@@ -880,8 +901,11 @@ function ExecMenuItem([string] $menuItem) {
     elseif ($ex -eq "250101") { SendWebApiTestMessage -_transactionId $ex}
     elseif ($ex -eq "253101") { DeleteAllWebLoggerMessages -_transactionId $ex}
     elseif ($ex -eq "251801") { DeployWebLogger -_transactionId $ex}
-
     elseif ($ex -eq "257401") { DeployWebLoggerThanDelteAndCreateDb -_transactionId $ex}
+
+    #26--web logger-2-Blazor
+
+    elseif ($ex -eq "261801") { DeployWebLoggerBlazor -_transactionId $ex}
 
     #27--Suppliers
     elseif ($ex -eq "270000") { GetSuppliersStatus      -_transactionId $ex}

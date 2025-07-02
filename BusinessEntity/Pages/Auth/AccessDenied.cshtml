@@ -1,0 +1,22 @@
+@page "/auth/access-denied"
+@model BusinessEntity.Pages.Auth.AccessDeniedModel
+@{
+    ViewData["Title"] = "Access Denied";
+}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h4 class="card-title text-warning">Доступ запрещен</h4>
+                    <p class="card-text">У вас недостаточно прав для доступа к данному ресурсу.</p>
+                    <div class="mt-3">
+                        <a href="/" class="btn btn-primary">Вернуться на главную</a>
+                        <a href="/auth/logout" class="btn btn-secondary">Выйти из системы</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

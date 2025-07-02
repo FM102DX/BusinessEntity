@@ -17,7 +17,7 @@ namespace SampleOnlineMall.Core
         public EfPostgresWebLoggerDbContext(Microsoft.Extensions.Configuration.ConfigurationManager confManager)
         {
             _confManager = confManager;
-            Database.EnsureCreated();
+            //Database.EnsureCreated();
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -36,10 +36,14 @@ namespace SampleOnlineMall.Core
             {
                 entity.HasKey(e => e.Id);
             });
+            modelBuilder.Entity<WebLoggerSettings>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+            });
 
 
-          //  modelBuilder.Entity<Employee>();
-           // modelBuilder.Entity<Role>();
+            //  modelBuilder.Entity<Employee>();
+            // modelBuilder.Entity<Role>();
 
             base.OnModelCreating(modelBuilder);
         }

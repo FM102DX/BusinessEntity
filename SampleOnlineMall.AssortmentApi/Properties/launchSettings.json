@@ -4,8 +4,7 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://localhost:18637",
-      "sslPort": 44327
+      "applicationUrl": "http://localhost:5000",
     }
   },
   "profiles": {
@@ -30,9 +29,10 @@
     "Docker": {
       "commandName": "Docker",
       "launchBrowser": true,
-      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}/swagger",
-      "publishAllPorts": true,
-      "useSSL": true
+      "environmentVariables": {
+        "IS_DOCKER": "true",
+        "ASPNETCORE_URLS": "http://*:80"
+      }
     }
   }
 }

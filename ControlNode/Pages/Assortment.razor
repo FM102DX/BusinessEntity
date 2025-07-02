@@ -1,0 +1,51 @@
+﻿@page "/assortment"
+@using SampleOnlineMall.Core
+@using ControlNode.Components
+@using ControlNode.Pages
+
+<h3>Assortment</h3>
+<div class="assort-mgmt-page">
+    <AssortMgmtSection Title="Закидывание ассортимента">
+        <div class="assort-mgmt-section-content-item">
+            <RadzenButton Text="Закинуть ассортимент" Click="OnLoadAssortClick" Style="margin: 10px;" />
+        </div>
+        <div class="assort-mgmt-section-content-item">
+            <p>Загружено позиций @AssortLoader.LastFeedPosCount</p>
+        </div>
+    </AssortMgmtSection>
+
+
+    <AssortMgmtSection Title="Просмотр ассортимента">
+        <div class="assort-mgmt-section-content-item">
+        </div>
+        <div class="assort-mgmt-section-content-item">
+            <RadzenButton Text="Скачать ассортимент" Click="@AssortLoader.GetAsync" Style="margin: 10px;" />
+        </div>
+        <div class="assort-mgmt-section-content-item">
+            <RadzenButton Text="Очистить ассортимент" Click="@AssortLoader.ClearAsync" Style="margin: 10px;" />
+        </div>
+        <div class="assort-mgmt-section-content-item">
+            <p>@AssortLoader.LoadedPosCount</p>
+        </div>
+
+
+    </AssortMgmtSection>
+
+    <div class="assort-table">
+        <RadzenDataGrid Data="@AssortLoader.Assortment.Items" TItem="CommodityItemApiFeed">
+            <Columns>
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Title="Image" Width="10%">
+                    <Template Context="item">
+                        <img src="@($"{item.FirstPic}")" alt="Image" style="height: 100px;" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Id" Title="Id" Width="20%" />
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Name" Title="Name" Width="20%" />
+                <RadzenDataGridColumn TItem="CommodityItemApiFeed" Property="Price" Title="Price" />
+            </Columns>
+        </RadzenDataGrid>
+    </div>
+
+
+</div>
+

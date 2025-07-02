@@ -1,0 +1,35 @@
+@* Компонент для отображения сообщения о необходимости авторизации *@
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h3 class="mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Требуется авторизация
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning" role="alert">
+                        <h4 class="alert-heading">Доступ ограничен</h4>
+                        <p>Для доступа к этой странице необходимо войти в систему KMS Business Entity через Auterlink.</p>
+                        <hr>
+                        <p class="mb-0">Пожалуйста, авторизуйтесь для продолжения работы.</p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <a href="/auterlink/login" class="btn btn-primary me-2">
+                            <i class="fas fa-sign-in-alt me-1"></i>
+                            Войти в систему
+                        </a>
+                        <a href="/" class="btn btn-outline-secondary">
+                            <i class="fas fa-home me-1"></i>
+                            На главную
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

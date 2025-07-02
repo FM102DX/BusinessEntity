@@ -1,0 +1,21 @@
+@page "/auth/error"
+@model BusinessEntity.Pages.Auth.ErrorModel
+@{
+    ViewData["Title"] = "Authentication Error";
+}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title text-danger">Ошибка аутентификации</h4>
+                    <p class="card-text">@Model.ErrorMessage</p>
+                    <div class="mt-3">
+                        <a href="/auth/login" class="btn btn-primary">Попробовать снова</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

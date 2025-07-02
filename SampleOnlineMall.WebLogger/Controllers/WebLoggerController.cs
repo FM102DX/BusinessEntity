@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 
 
-namespace SampleOnlineMall
+namespace SampleOnlineMall.WebLogger
 {
     [ApiController]
     [Route("")]

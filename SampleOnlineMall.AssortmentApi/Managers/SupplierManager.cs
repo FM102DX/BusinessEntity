@@ -1,32 +1,21 @@
 ﻿using SampleOnlineMall.Core.Appilcation;
 using SampleOnlineMall.DataAccess.Abstract;
 using SampleOnlineMall.Service;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Drawing;
-using System.IO;
-using Shim= SixLabors.ImageSharp.Image;
-using SixLabors.ImageSharp.Formats;
-using SampleOnlineMall.Core.Mappers;
 using SampleOnlineMall.Core.Models;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace SampleOnlineMall.Core.Managers
 {
     public class SupplierManager
     {
         private IAsyncRepository<Supplier> _repo;
-        private Serilog.ILogger _logger;
+        private IWebLoggerService _logger;
         private SampleOnlineMallAssortmentApiApp _app;
-        private WebLoggerManager _webLogger;
-        public SupplierManager(IAsyncRepository<Supplier> repo, WebLoggerManager webLogger, Serilog.ILogger logger, SampleOnlineMallAssortmentApiApp app)
+        public SupplierManager(IAsyncRepository<Supplier> repo, IWebLoggerService logger, SampleOnlineMallAssortmentApiApp app)
         {
             _repo = repo;
             _logger = logger;
             _app = app;
-            _webLogger = webLogger;
         }
 
         public async Task<IEnumerable<Supplier>> GetAll()
@@ -80,7 +69,7 @@ namespace SampleOnlineMall.Core.Managers
         public async Task<CommonOperationResult> InsertFromWebApi (Supplier item)
         {
             _logger.Information($"This is Supplier manager. Received commodity item name={item.Name}");
-            _webLogger.Log($"inserting item name={item.Name}");
+            //_webLogger.Log($"inserting item name={item.Name}");
             try
             {
                 var exists = await _repo.Exists(item.Id);

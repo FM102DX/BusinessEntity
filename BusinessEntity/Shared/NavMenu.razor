@@ -1,0 +1,22 @@
+﻿@using Microsoft.AspNetCore.Components.Routing
+
+<div class="nav-menu-top-left-placeholder"></div>
+<div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
+    <nav class="flex-column">        
+        <div class="nav-item">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All" title="Home">
+                <span class="oi oi-home" aria-hidden="true"></span>
+            </NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="authinfo" title="Авторизация">
+                <span class="oi oi-lock-locked" aria-hidden="true"></span>
+            </NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="business-entity-test" title="Business Entity Test">
+                <span class="oi oi-cog" aria-hidden="true"></span>
+            </NavLink>
+        </div>
+    </nav>
+</div>

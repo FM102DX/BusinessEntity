@@ -1,0 +1,553 @@
+﻿
+
+
+/* ***************   CORE MODEL  **************** */
+
+.LeftAligned {
+    text-align: left;
+}
+
+html, body {
+    color: black;
+    font-family: GTEestiPro, arial, sans-serif;
+    font-size: 14px;
+    letter-spacing: normal;
+    line-height: 18.06px;
+    word-spacing: 0px;
+    background-color: none;
+    background-image: url("img/background/bg-yandex-gery.jpg");
+    background-position: left top;
+    background-repeat: repeat;
+    min-height: 100%;
+    height: 100%;
+}
+div#app {
+    min-height: 100%;
+    height: 100%;
+}
+
+div {
+    display: block;
+
+}
+
+    div.page {
+        position: relative;
+        margin: 0 auto;
+        width: 1100px;
+        min-width: 1100px;
+        padding-bottom: 0px;
+        padding-left: 0px;
+        padding-right: 0px;
+        padding-top: 0px;
+        text-size-adjust: 100%;
+        text-transform: none;
+        min-height: 100%;
+        height: 100%;
+    }
+
+    div.topbar {
+        height: 30px;
+        background-color: burlywood;
+        padding-top: 5px;
+    }
+
+    div.topSpace {
+        height: 45px;
+        width: 100%;
+    }
+
+    div.ShopItemCollection {
+        margin-top: 30px;
+        display: table-cell;
+        padding-bottom: 100px;
+    }
+
+    div.bottombar {
+        height: 30px;
+        background-color: greenyellow;
+        padding-top: 5px;
+    }
+
+    div.itemPath {
+        height: 40px;
+        background-color: white;
+        padding-top: 5px;
+        padding-left: 10px;
+    }
+
+    div.container {
+        min-height: 1350px;
+    }
+
+    div.footer {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        height:100px;
+    }
+
+    div.footerVisible {
+        width: 900px;
+        height: 100px;
+        border-top-right-radius: 15px;
+        border-top-left-radius: 15px;
+        background-image: url("img/background/bgblue.jpg");
+        margin: auto;
+        color: white;
+        text-align: center;
+        vertical-align: text-top;
+        padding-top: 40px;
+    }
+
+
+    div.TopNavMenuItem, div.BottomNavMenuItem {
+        display: block;
+        float: left;
+        height: 10px;
+        margin: 0px 10px 0px 10px;
+    }
+
+    div.TopBarElement {
+        display: block;
+        float: left;
+    }
+
+img.SiteLogo {
+    height: 37px;
+}
+
+div.search {
+    margin-bottom: 0px;
+    margin-left: 0px;
+    margin-right: 0px;
+    margin-top: 00px;
+    height: 70px;
+}
+
+
+
+/********************SEARCH *****************************/
+
+
+
+
+
+div.SearchBar {
+    padding-top: 0px;
+    display: block;
+    float: left;
+    margin-left:50px;
+    height: 70px;
+}
+
+div.SearchBarLeftRight {
+    float: left;
+    height: 70px;
+    width: 10%;
+    float: left;
+}
+
+div.SearchBarElement {
+    float: left;
+}
+
+div#ClickableShopLabel {
+    margin-right: 30px;
+    margin-left: 35px;
+    width: 130px;
+    height: 70px;
+    border: 0px;
+    padding-top: 0px;
+    background-image: url("img/site-logo2.jpg");
+    background-position: left top;
+    background-size: 110px;
+    background-repeat: no-repeat;
+    background-position-y: top;
+}
+
+.SearchFieldBg {
+    background-color: white;
+}
+
+div.SearchInputBoxElementGroup {
+    padding-top: 0px;
+    width: 500px;
+    height: 70px;
+}
+
+div.SearchButtonElementGroup {
+    padding-top: 0px;
+    width: 200px;
+    height: 70px;
+}
+
+
+input#MainSearchField {
+    width: 100%;
+    height: 100%;
+    border: none;
+    font-size: 14pt;
+    padding-left: 15px;
+    color: lightgray;
+    outline: none;
+}
+
+div#CloseCross {
+    width: 40px;
+    height: 45px;
+    border: none;
+    background-color: white;
+    
+}
+
+div.CloseCrossWithImage {
+    background-image: url("img/SearchCloseCross.jpg");
+    background-repeat: no-repeat;
+    background-position: center;
+    cursor:pointer;
+}
+.CursorTest {
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    background-color:red;
+}
+
+div.CloseCrossWithNoImage {
+}
+
+
+div.SearchFieldAndCrossWrap {
+    width: 100%;
+    height: 50px;
+    -webkit-border-bottom-left-radius: 6px;
+    -webkit-border-top-left-radius: 6px;
+    -moz-border-radius-bottomleft: 6px;
+    -moz-border-radius-topleft: 6px;
+    border-bottom-left-radius: 6px;
+    border-top-left-radius: 6px;
+    border: 2px solid;
+    border-color: lightgrey;
+    padding-left: 15px;
+}
+
+div.SearchFieldWrap {
+    width: 440px;
+    height: 100%;
+}
+
+.SearchFieldAndCrossWrap::-webkit-input-placeholder {
+    color: lightgray;
+}
+
+.SearchFieldAndCrossWrap::-moz-placeholder {
+    color: lightgray;
+}
+
+.SearchFieldAndCrossWrap:focus {
+    color: slategray;
+    border-color: lightgrey;
+}
+
+button#MainSearchButton {
+    width: 80px;
+    height: 50px;
+    border: 2px solid;
+    border-color: lightgrey;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+
+
+
+/*  ***********  SHOP ITEM PAGE ************** */
+
+div.shopitem-detail-page {
+    margin-top: 30px;
+    display: table-cell;
+    height: auto;
+    overflow: hidden;
+}
+
+div.shopitem-block
+{
+    width:1100px;
+    margin-left:0px;
+}
+
+div.shopitem-picture-name-price-block {
+    
+    height: 600px;
+}
+
+div.PaginationControlSeparator {
+    clear: both;
+}
+
+div.PaginationControlContainer {
+    width:100%;
+    align-content: center;
+}
+
+div.PaginationControl {
+    width: 300px;
+    height: 35px;
+    background-color: lightgreen;
+    margin:auto;
+}
+
+div.shopitem-description-block {
+    height: 300px;
+    color: black;
+    font-size: 15px;
+}
+div.shopitem-comments-block {
+    
+    height: 300px;
+    
+}
+
+div.shopitem-block-separator {
+    float: left;
+    clear: both;
+}
+
+div.shopitem-picture-block {
+    width: 600px;
+    height: 100%;
+    float: left;
+}
+div.shopitem-pricing-block {
+    float: left;
+    width: 450px;
+    height: 100%;
+    color:darkmagenta;
+    font-size: 25px;
+}
+
+
+div.SkuName {
+    float: left;
+    clear: both;
+    font-size: 25px;
+    line-height: 35px;
+    padding-top: 20px;
+    margin-top: 25px;
+    margin-bottom: 15px;
+    padding-left: 10px;
+}
+
+div.SkuNameSep {
+    float: left;
+    clear: both;
+}
+
+
+div.skuUnitBase {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    height: 400px;
+    min-width: 20px;
+}
+
+div.SkuCard {
+    width: 300px;
+    height: 400px;
+    position: relative;
+    float: left;
+    background-color: white;
+    margin-right: 25px;
+    margin-left: 25px;
+    border-radius: 7px;
+    padding-top: 20px;
+    padding-left: 10px;
+    box-shadow: 0 4px 12px 0 #0d234308;
+}
+
+div.goodsRowBegin {
+    width: 70px;
+    position: relative;
+    float: left;
+    clear: left;
+}
+
+div.goodsRowEnd {
+    width: 20px;
+    position: relative;
+    float: left;
+    clear: right;
+}
+
+img.SkuCardPic {
+    width: 230px;
+    border-radius: 3px;
+}
+
+div.SkuCard-element {
+    width: 240px;
+    margin-left: 20px;
+    position: relative;
+    float: left;
+    clear: both;
+}
+
+div.SkuCard-image {
+    height: 265px;
+    width: 240px;
+    overflow: hidden;
+}
+
+div.SkuCard-productName {
+    height: 55px;
+    font-size: 10pt;
+    margin-top: 15px;
+    margin-bottom: 7px;
+    overflow: hidden;
+}
+
+div.SkuCard-productPrice {
+    height: 15px;
+    font-size: 10pt;
+    margin-top: 7px;
+    margin-bottom: 7px;
+}
+
+div.SkuDetailPage {
+}
+
+div.SkuDetailPagePart {
+    margin-bottom: 0px;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-top: 0px;
+    height: 300px;
+    float: left;
+    background-color: white;
+}
+
+div.MiniImageHolder {
+    width: 115px;
+    height: 400px;
+}
+
+div.BigImageHolder {
+    width: 400px;
+    height: 400px;
+    text-align: center;
+    padding-top: 17px;
+    padding-left: 0px;
+}
+
+div.DescriptionHolder {
+    width: 400px;
+    height: 400px;
+}
+
+div.PriceBuyCard {
+    width: 200px;
+    height: 400px;
+    border: 3px solid darkblue;
+    border-radius: 5px;
+    font-size: 25px;
+    float: left;
+    background-color: white;
+    padding-top: 20px;
+    padding-left: 7px;
+}
+
+
+div.SkuDetailPageSmallPic {
+    float: left;
+    clear: both;
+    margin-bottom: 20px;
+    margin-left: 20px;
+    margin-right: 20px;
+    margin-top: 20px;
+    cursor: pointer;
+}
+
+div.SkuDetailPageSmallPicRegular {
+    border-style: solid;
+    border-width: 3px;
+    border-color: white;
+}
+
+div.SkuDetailPageSmallPicSelected {
+    border-style: solid;
+    border-width: 3px;
+    border-color: grey;
+}
+
+
+/* *********************** COMPONENTS ***************************** */
+
+/* *********************** IMAGE SELECTOR ************************* */
+
+div.display-image-with-selector__container {
+    
+}
+div.display-image-with-selector__image {
+    
+}
+div.display-image-with-selector__selector {
+    
+}
+div.display-image-with-selector__part{
+    float:left;
+}
+img.display-image-with-selector__image{
+    height:400px;
+}
+div.imgselector__thumb-image-wrap{
+    float:left;
+    padding:7px;
+    cursor:pointer;
+}
+div.thumb-image-wrap_selected{
+    border: 1px solid;
+    border-color:grey;
+}
+div.thumb-image-wrap_regular {
+    border: 1px solid;
+    border-color: aliceblue;
+}
+
+/* ***********************  PAGINATOR  ************************* */
+div.paginator-control {
+    margin-top: 40px;
+    margin-left: 130px;
+}
+
+div.paginator-control-item {
+    height: 40px;
+    padding-left: 17px;
+    padding-right: 17px;
+    padding-top: 10px;
+    border-width: 1px;
+    border-color: grey;
+    border-style: solid;
+    margin-right: -1px;
+    float: left;
+}
+
+div.paginator-control-item-selected {
+    background-color: #3f92a4;
+    color:white;
+}
+div.paginator-control-item-regular {
+    background-color:white;
+    
+}
+
+div.paginator-control-item-clickable {
+
+}
+
+div.paginator-control-item-nonclickable {
+    background-color:#efefef;
+    color: darkgrey;
+}
+

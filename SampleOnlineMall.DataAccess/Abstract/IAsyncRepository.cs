@@ -36,6 +36,7 @@ namespace SampleOnlineMall.DataAccess.Abstract
         public Task<CommonOperationResult> DeleteAsync(Guid id);
 
         public Task<CommonOperationResult> InitAsync(bool deleteDb = false);
+        public Task<CommonOperationResult> ClearAsync();
 
     }
 }
