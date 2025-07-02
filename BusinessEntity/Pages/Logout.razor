@@ -1,8 +1,5 @@
 @page "/logout"
 @layout BusinessEntity.Shared.MainLayout
-@using Microsoft.AspNetCore.Authorization
-@attribute [AllowAnonymous]
-@inject NavigationManager Navigation
 
 <PageTitle>Выход из системы</PageTitle>
 
@@ -39,11 +36,3 @@
         </div>
     </div>
 </div>
-
-@code {
-    protected override void OnInitialized()
-    {
-        // Перенаправляем на новую Razor страницу выхода
-        Navigation.NavigateTo("/auterlink/loggedout", true);
-    }
-}
