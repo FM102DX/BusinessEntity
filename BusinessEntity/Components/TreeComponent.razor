@@ -1,38 +1,147 @@
 @using BusinessEntity.Models
+@using BusinessEntity.Core.Services
+@using BusinessEntity.Core.Contracts
+@inject ISampleDataService SampleDataService
+@inject BusinessEntityHelper BusinessEntityHelper
+@inject ILogger<TreeComponent> Logger
 
-<RadzenTree Data="@TreeData" Style="height:100%; width:100%;">
-    <RadzenTreeLevel TextProperty="Title" ChildrenProperty="Children" />
-</RadzenTree>
+<div class="card">
+    <div class="card-header">
+        <h6>Структура бизнес-сущностей</h6>
+    </div>
+    <div class="card-body p-2">
+        @if (TreeData != null && TreeData.Any())
+        {
+            <RadzenTree Data="@TreeData" Style="width: 100%; height: 400px;">
+                <RadzenTreeLevel Text="@GetNodeText" />
+            </RadzenTree>
+        }
+        else if (IsLoading)
+        {
+            <div class="alert alert-info mb-0">
+                <small>Дерево загружается...</small>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-warning mb-0">
+                <small>Нет данных для отображения</small>
+            </div>
+        }
+    </div>
+</div>
 
 @code {
-    private List<TreeNodeItem> TreeData { get; set; } = new();
+    [Parameter] public EventCallback<TreeNodeItem> OnNodeSelected { get; set; }
+    
+    private IEnumerable<TreeNodeItem> TreeData { get; set; } = new List<TreeNodeItem>();
+    private bool IsLoading { get; set; } = true;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        // Инициализируем мок-данные для дерева
-        TreeData = new List<TreeNodeItem>
+        try
         {
-            new TreeNodeItem
+            IsLoading = true;
+            
+            // Инициализируем демо-данные если их нет
+            await SampleDataService.InitializeSampleDataAsync();
+            
+            // Строим дерево
+            TreeData = await BuildTreeAsync();
+            
+            Logger.LogInformation("TreeComponent initialized successfully");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error initializing TreeComponent");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task<IEnumerable<TreeNodeItem>> BuildTreeAsync()
+    {
+        try
+        {
+            var rootEntities = await BusinessEntityHelper.GetRootEntitiesAsync();
+            var treeNodes = new List<TreeNodeItem>();
+
+            foreach (var entity in rootEntities)
             {
-                Title = "📁 Корневая папка",
-                Children = new List<TreeNodeItem>
-                {
-                    new TreeNodeItem { Title = "📄 Страница 1" },
-                    new TreeNodeItem { Title = "📋 Документ 1" },
-                    new TreeNodeItem
-                    {
-                        Title = "📁 Подпапка проектов",
-                        Children = new List<TreeNodeItem>
-                        {
-                            new TreeNodeItem { Title = "📄 Страница 2" },
-                            new TreeNodeItem { Title = "📋 Документ 2" },
-                            new TreeNodeItem { Title = "🔧 Настройки" }
-                        }
-                    }
-                }
-            },
-            new TreeNodeItem { Title = "📄 Отдельная страница" },
-            new TreeNodeItem { Title = "📊 Отчеты" }
+                var treeNode = await BuildTreeNodeAsync(entity);
+                treeNodes.Add(treeNode);
+            }
+
+            return treeNodes;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error building tree");
+            return new List<TreeNodeItem>();
+        }
+    }
+
+    private async Task<TreeNodeItem> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entity)
+    {
+        var icon = GetEntityIcon(entity.EntityType);
+        var treeNode = new TreeNodeItem
+        {
+            Title = entity.Name,
+            Icon = icon,
+            Entity = entity,
+            EntityType = entity.EntityType.ToString(),
+            Expanded = true
         };
+
+        // Получаем дочерние сущности
+        var children = await BusinessEntityHelper.GetChildEntitiesAsync(entity.Id);
+        var childNodes = new List<TreeNodeItem>();
+
+        foreach (var child in children)
+        {
+            var childNode = await BuildTreeNodeAsync(child);
+            childNodes.Add(childNode);
+        }
+
+        treeNode.Children = childNodes;
+        return treeNode;
+    }
+
+    private string GetEntityIcon(BusinessEntity.Core.Classes.BusinessEntityTypeEnum entityType)
+    {
+        return entityType switch
+        {
+            BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Space => "📁",
+            BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Folder => "📂",
+            BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Page => "📄",
+            _ => "❓"
+        };
+    }
+
+    private string GetNodeText(object data)
+    {
+        if (data is TreeNodeItem node)
+        {
+            return $"{GetEntityIcon(node.Entity?.EntityType ?? BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Space)} {node.Title}";
+        }
+        return "Unknown";
+    }
+
+    public async Task RefreshTreeAsync()
+    {
+        IsLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            TreeData = await BuildTreeAsync();
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
     }
 } 

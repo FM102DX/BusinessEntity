@@ -2,10 +2,12 @@
 using BusinessEntity.Contracts;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.Services;
 using BusinessEntity.Data;
 using BusinessEntity.Data.Messages;
 using BusinessEntity.Data.Services;
 using BusinessEntity.Services;
+using BusinessEntity.Models;
 using DynamicData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -20,6 +22,8 @@ namespace BusinessEntity.Pages
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
         [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
+        [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
+        [Inject] public BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         
         private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }
@@ -27,6 +31,8 @@ namespace BusinessEntity.Pages
         private IEnumerable<MacroRelationType> PossibleRelations { get; set; } = new List<MacroRelationType>();
         private IEnumerable<string> EntityTypeEnums { get; set; } = new List<string>();
         private IEnumerable<string> RelationTypeEnums { get; set; } = new List<string>();
+        private List<BusinessEntity.Core.Classes.BusinessEntity> BusinessEntities { get; set; } = new List<BusinessEntity.Core.Classes.BusinessEntity>();
+        private TreeNodeItem? SelectedTreeNode { get; set; }
 
         protected override async Task OnInitializedAsync()
         {
@@ -54,6 +60,13 @@ namespace BusinessEntity.Pages
                     // Получаем все возможные типы отношений из enum
                     RelationTypeEnums = Enum.GetNames(typeof(BusinessEntityRelationTypeEnum));
                     
+                    // Инициализируем демо-данные
+                    await SampleDataService.InitializeSampleDataAsync();
+                    
+                    // Загружаем созданные сущности
+                    var entities = await BusinessEntityHelper.GetAllBusinessEntities();
+                    BusinessEntities = entities.ToList();
+                    
                     Logger.LogInformation($"User {CurrentUserName} accessed main page");
                 }
                 else
@@ -78,6 +91,24 @@ namespace BusinessEntity.Pages
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error redirecting to login");
+            }
+        }
+
+        private void OnTreeNodeSelected(TreeNodeItem selectedNode)
+        {
+            try
+            {
+                SelectedTreeNode = selectedNode;
+                Logger.LogInformation($"Tree node selected: {selectedNode?.Title} (Type: {selectedNode?.EntityType})");
+                
+                // Здесь можно добавить дополнительную логику обработки выбранного узла
+                // Например, показать детали сущности в правой панели
+                
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error handling tree node selection");
             }
         }
     }

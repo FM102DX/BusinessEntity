@@ -6,9 +6,8 @@ using System.Threading.Tasks;
 
 namespace BusinessEntity.Core.Classes
 {
-    public class BusinessEntityBase
+    public class BusinessEntityBase : BaseEntity
     {
-        public Guid Id { get; set; } = Guid.NewGuid();
         public string Name { get; set; } = string.Empty;
         
         public virtual BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Undefined;

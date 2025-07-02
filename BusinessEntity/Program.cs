@@ -122,6 +122,16 @@ namespace BusinessEntity
             // Регистрируем сервис возможных типов отношений между сущностями
             builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
 
+            // Регистрируем репозитории
+            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity>, BusinessEntity.Core.Repositories.InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntity>>();
+            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.Relation>, BusinessEntity.Core.Repositories.InMemoryRepository<BusinessEntity.Core.Classes.Relation>>();
+
+            // Регистрируем BusinessEntityHelper
+            builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
+
+            // Регистрируем SampleDataService как Scoped (не Singleton), так как он зависит от Scoped BusinessEntityHelper
+            builder.Services.AddScoped<BusinessEntity.Core.Contracts.ISampleDataService, BusinessEntity.Core.Services.SampleDataService>();
+
 			var _app = new WebLoggerApp();
 
             var connectionString = builder.Configuration.GetConnectionString("DockerConnection");
