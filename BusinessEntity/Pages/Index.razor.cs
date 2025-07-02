@@ -1,5 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using BusinessEntity.Contracts;
+using BusinessEntity.Core.Contracts;
+using BusinessEntity.Core.Classes;
 using BusinessEntity.Data;
 using BusinessEntity.Data.Messages;
 using BusinessEntity.Data.Services;
@@ -17,10 +19,14 @@ namespace BusinessEntity.Pages
         [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
-        [Inject] public IBusinessEntityTypesService BusinessEntityTypesService { get; set; } = default!;        private string? CurrentUserName { get; set; }
+        [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
+        
+        private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }
         private bool IsAuthenticated { get; set; }
-        private IEnumerable<string> BusinessEntityTypes { get; set; } = new List<string>();
+        private IEnumerable<MacroRelationType> PossibleRelations { get; set; } = new List<MacroRelationType>();
+        private IEnumerable<string> EntityTypeEnums { get; set; } = new List<string>();
+        private IEnumerable<string> RelationTypeEnums { get; set; } = new List<string>();
 
         protected override async Task OnInitializedAsync()
         {
@@ -39,8 +45,14 @@ namespace BusinessEntity.Pages
                                        ?? currentUser.FindFirst("sub")?.Value;
                     }
                     
-                    // Получаем типы бизнес-сущностей
-                    BusinessEntityTypes = BusinessEntityTypesService.GetBusinessEntityTypes();
+                    // Получаем возможные отношения между сущностями
+                    PossibleRelations = RelationTypesProvider.GetPossibleRelations();
+                    
+                    // Получаем все возможные типы сущностей из enum
+                    EntityTypeEnums = Enum.GetNames(typeof(BusinessEntityTypeEnum));
+                    
+                    // Получаем все возможные типы отношений из enum
+                    RelationTypeEnums = Enum.GetNames(typeof(BusinessEntityRelationTypeEnum));
                     
                     Logger.LogInformation($"User {CurrentUserName} accessed main page");
                 }

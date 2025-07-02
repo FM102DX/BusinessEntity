@@ -1,6 +1,8 @@
 using BusinessEntity.Data.App;
 using BusinessEntity.Services;
 using BusinessEntity.Middleware;
+using BusinessEntity.Core.Contracts;
+using BusinessEntity.Core.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -116,8 +118,9 @@ namespace BusinessEntity
             });            // Регистрируем наш сервис авторизации
             builder.Services.AddScoped<IApplicationSideAuthService, ApplicationSideAuthService>();
             
-            // Регистрируем сервис типов BusinessEntity
-            builder.Services.AddScoped<IBusinessEntityTypesService, BusinessEntityTypesService>();
+           
+            // Регистрируем сервис возможных типов отношений между сущностями
+            builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
 
 			var _app = new WebLoggerApp();
 

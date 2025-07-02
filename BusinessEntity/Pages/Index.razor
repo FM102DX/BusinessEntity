@@ -30,30 +30,87 @@
 
         <div class="main-content">
             <div class="row">
-                <div class="col-md-6">
+                <!-- Возможные отношения между сущностями -->
+                <div class="col-md-8">
                     <div class="card">
                         <div class="card-header">
-                            <h5>Доступные типы сущностей</h5>
+                            <h5>Возможные отношения между сущностями</h5>
                         </div>
                         <div class="card-body">
-                            <p>В системе доступны следующие типы бизнес-сущностей:</p>
-                            @if (BusinessEntityTypes != null && BusinessEntityTypes.Any())
+                            @if (PossibleRelations != null && PossibleRelations.Any())
                             {
-                                <ul class="list-group list-group-flush">
-                                    @foreach (var entityType in BusinessEntityTypes)
-                                    {
-                                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                                            <span class="badge bg-primary rounded-pill">@entityType</span>
-                                            <small class="text-muted">Тип сущности</small>
-                                        </li>
-                                    }
-                                </ul>
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Название отношения</th>
+                                                <th>Тип A</th>
+                                                <th>Тип B</th>
+                                                <th>Тип отношения</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var relation in PossibleRelations)
+                                            {
+                                                <tr>
+                                                    <td><strong>@relation.RelationName</strong></td>
+                                                    <td><span class="badge bg-primary">@relation.RelationObjectTypeA</span></td>
+                                                    <td><span class="badge bg-success">@relation.RelationObjectTypeB</span></td>
+                                                    <td><span class="badge bg-info">@relation.RelationType</span></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
                             }
                             else
                             {
                                 <div class="alert alert-info mb-0">
-                                    <small>Типы сущностей загружаются...</small>
+                                    <small>Отношения загружаются...</small>
                                 </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Enum значения -->
+                <div class="col-md-4">
+                    <!-- Типы сущностей -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6>Типы сущностей (Enum)</h6>
+                        </div>
+                        <div class="card-body">
+                            @if (EntityTypeEnums != null && EntityTypeEnums.Any())
+                            {
+                                <ul class="list-group list-group-flush">
+                                    @foreach (var entityType in EntityTypeEnums)
+                                    {
+                                        <li class="list-group-item py-1">
+                                            <span class="badge bg-primary">@entityType</span>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    </div>
+                    
+                    <!-- Типы отношений -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6>Типы отношений (Enum)</h6>
+                        </div>
+                        <div class="card-body">
+                            @if (RelationTypeEnums != null && RelationTypeEnums.Any())
+                            {
+                                <ul class="list-group list-group-flush">
+                                    @foreach (var relationType in RelationTypeEnums)
+                                    {
+                                        <li class="list-group-item py-1">
+                                            <span class="badge bg-info">@relationType</span>
+                                        </li>
+                                    }
+                                </ul>
                             }
                         </div>
                     </div>
