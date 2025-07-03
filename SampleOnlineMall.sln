@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.2.32616.157
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleOnlineMall.AssortmentApi", "SampleOnlineMall.AssortmentApi\SampleOnlineMall.AssortmentApi.csproj", "{5484D303-BFEC-4DE4-87B1-67C0DC76210B}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleOnlineMall.DataAccess", "SampleOnlineMall.DataAccess\SampleOnlineMall.DataAccess.csproj", "{294949CE-7807-4332-A572-D1BBD3491442}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleOnlineMall.Core", "SampleOnlineMall.Core\SampleOnlineMall.Core.csproj", "{153482A9-11EA-4BC4-965E-6E8F8042160A}"
@@ -13,16 +11,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "WebLogger", "WebLogger", "{
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Frontend", "Frontend", "{D9D7416B-0506-454D-8CF5-53BB9A16E1A3}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Backend", "Backend", "{FB842107-F2BE-4236-8078-EE66506A02F6}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleOnlineMall.FrontEnd.BlazorServer", "SampleOnlineMall.FrontEnd.BlazorServer\SampleOnlineMall.FrontEnd.BlazorServer.csproj", "{EBEA647E-2537-4552-9EE0-D92E9B5B650C}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{F04FE8F8-22D7-4E50-AF62-FEE1BE7EBC5B}"
-	ProjectSection(SolutionItems) = preProject
-		TechNotes.txt = TechNotes.txt
-	EndProjectSection
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorApp1", "BlazorApp1\BlazorApp1.csproj", "{5B4413A9-F4B8-4B97-9EC8-870338F08C66}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ControlNode", "ControlNode", "{E5BC70C6-4830-4558-9551-2392590E4BF0}"
 EndProject
@@ -38,6 +27,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorServerWebLogger", "BlazorServerWebLogger\BlazorServerWebLogger.csproj", "{0BB14D07-9F88-4C98-AB08-40726AC01EFE}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BusinessEntity", "BusinessEntity", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+	ProjectSection(SolutionItems) = preProject
+		CHANGELOG.md = CHANGELOG.md
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BusinessEntity", "BusinessEntity\BusinessEntity.csproj", "{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}"
 EndProject
@@ -49,10 +41,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{5484D303-BFEC-4DE4-87B1-67C0DC76210B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{5484D303-BFEC-4DE4-87B1-67C0DC76210B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{5484D303-BFEC-4DE4-87B1-67C0DC76210B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{5484D303-BFEC-4DE4-87B1-67C0DC76210B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{294949CE-7807-4332-A572-D1BBD3491442}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{294949CE-7807-4332-A572-D1BBD3491442}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{294949CE-7807-4332-A572-D1BBD3491442}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -65,10 +53,6 @@ Global
 		{EBEA647E-2537-4552-9EE0-D92E9B5B650C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EBEA647E-2537-4552-9EE0-D92E9B5B650C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EBEA647E-2537-4552-9EE0-D92E9B5B650C}.Release|Any CPU.Build.0 = Release|Any CPU
-		{5B4413A9-F4B8-4B97-9EC8-870338F08C66}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{5B4413A9-F4B8-4B97-9EC8-870338F08C66}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{5B4413A9-F4B8-4B97-9EC8-870338F08C66}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{5B4413A9-F4B8-4B97-9EC8-870338F08C66}.Release|Any CPU.Build.0 = Release|Any CPU
 		{C28543E9-C736-4B78-843F-A86DF9BDC9F9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{C28543E9-C736-4B78-843F-A86DF9BDC9F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C28543E9-C736-4B78-843F-A86DF9BDC9F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -94,9 +78,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{5484D303-BFEC-4DE4-87B1-67C0DC76210B} = {FB842107-F2BE-4236-8078-EE66506A02F6}
 		{EBEA647E-2537-4552-9EE0-D92E9B5B650C} = {D9D7416B-0506-454D-8CF5-53BB9A16E1A3}
-		{5B4413A9-F4B8-4B97-9EC8-870338F08C66} = {F04FE8F8-22D7-4E50-AF62-FEE1BE7EBC5B}
 		{C28543E9-C736-4B78-843F-A86DF9BDC9F9} = {E5BC70C6-4830-4558-9551-2392590E4BF0}
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE} = {73E58599-8E32-4A18-88AF-DA652E84AF6B}
 		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
