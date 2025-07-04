@@ -1,4 +1,4 @@
-namespace BusinessEntity.DataAccess.Infrastructure;
+namespace BusinessEntity.DataAccess.Classes;
 
 using System;
 using System.Collections.Concurrent;

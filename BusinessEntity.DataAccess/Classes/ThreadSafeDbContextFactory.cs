@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using Microsoft.EntityFrameworkCore;
 
-namespace BusinessEntity.DataAccess.Infrastructure;
+namespace BusinessEntity.DataAccess.Classes;
 
 // NOTE: код скопирован без изменений логики. Логирование остаётся через DebugLogger.
 public class ThreadSafeDbContextFactory
@@ -171,7 +171,7 @@ public class ThreadSafeDbContextFactory
         }
     }
 
-    private class DbContextPoolRecord
+    public class DbContextPoolRecord
     {
         private readonly int _dbContextLifeTimeMs;
         public Guid Id { get; }

@@ -1,6 +1,4 @@
 using System.Collections.ObjectModel;
-using BusinessEntity.Contracts;
-
 using BusinessEntity.Services;
 using DynamicData;
 using Microsoft.AspNetCore.Components;

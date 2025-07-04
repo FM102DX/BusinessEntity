@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using BusinessEntity.Core.Contracts;
-using BusinessEntity.DataAccess.Infrastructure;
+using BusinessEntity.DataAccess.Classes;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusinessEntity.DataAccess.Repositories;

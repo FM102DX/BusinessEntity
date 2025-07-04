@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace BusinessEntity.DataAccess.Infrastructure;
+namespace BusinessEntity.DataAccess.Classes;
 
 /// <summary>
 /// DbContext, используемый репозиториями BusinessEntity. Конфигурация таблиц настраивается в вызывающем коде.

@@ -5,7 +5,7 @@ using BusinessEntity.Core.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using SampleOnlineMall.WebLogger.DataAccess;
+using BusinessEntity.DataAccess.Classes;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Radzen;

@@ -1,4 +1,4 @@
-namespace BusinessEntity.DataAccess.Infrastructure;
+namespace BusinessEntity.DataAccess.Classes;
 
 /// <summary>
 /// Простейший результат операции, не зависящий от внешних пакетов.
