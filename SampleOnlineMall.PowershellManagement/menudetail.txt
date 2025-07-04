@@ -1,9 +1,0 @@
-10****Api01
-100101--DeployApi01
-100102--DeployStore01
-100110--DeployHtmlAboutmeSite
-
-20****Sample mall
-200101--Deploy Sample Mall Assort WebApi
-200102--Fill assortment
-203101--Delete all assortment items

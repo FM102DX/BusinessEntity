@@ -1,4 +1,3 @@
-using BusinessEntity.Data.App;
 using BusinessEntity.Services;
 using BusinessEntity.Middleware;
 using BusinessEntity.Core.Contracts;
@@ -131,8 +130,6 @@ namespace BusinessEntity
 
             // Регистрируем SampleDataService как Scoped (не Singleton), так как он зависит от Scoped BusinessEntityHelper
             builder.Services.AddScoped<BusinessEntity.Core.Contracts.ISampleDataService, BusinessEntity.Core.Services.SampleDataService>();
-
-			var _app = new WebLoggerApp();
 
             var connectionString = builder.Configuration.GetConnectionString("DockerConnection");
 			var optionsBuilder = new DbContextOptionsBuilder<KmsBusinessEntityDbContext>();

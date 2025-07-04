@@ -1,14 +1,11 @@
 using System.Collections.ObjectModel;
 using BusinessEntity.Contracts;
-using BusinessEntity.Data;
-using BusinessEntity.Data.Messages;
-using BusinessEntity.Data.Services;
+
 using BusinessEntity.Services;
 using DynamicData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
-using SampleOnlineMall.WebLogger.Models;
 using System.Security.Claims;
 
 namespace BusinessEntity.Pages
