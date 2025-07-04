@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\BusinessEntity.DataAccess\BusinessEntity.DataAccess.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Classes\Helper\" />
   </ItemGroup>
 
