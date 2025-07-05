@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Components;
-using BusinessEntity.Services;
 using Microsoft.Extensions.Logging;
+using BusinessEntity.Contracts;
 
 namespace BusinessEntity.Components
 {

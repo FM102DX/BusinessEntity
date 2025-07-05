@@ -3,6 +3,7 @@ using BusinessEntity.Models;
 using BusinessEntity.Core.Services;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace BusinessEntity.Components
 {
@@ -11,10 +12,11 @@ namespace BusinessEntity.Components
         [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
         [Inject] public BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         [Inject] public ILogger<TreeComponent> Logger { get; set; } = default!;
+        [Inject] IWebLoggerService? WebLogger { get; set; }
 
-        [Parameter] public EventCallback<TreeNodeItem> OnNodeSelected { get; set; }
-        
-        private IEnumerable<TreeNodeItem> TreeData { get; set; } = new List<TreeNodeItem>();
+        [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
+        public List<Core.Classes.BusinessEntity>? AllEntities { get; set; }
+        private IEnumerable<TreeNodeItemViewModelBase> TreeData { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsLoading { get; set; } = true;
 
         protected override async Task OnInitializedAsync()
@@ -41,13 +43,19 @@ namespace BusinessEntity.Components
             }
         }
 
-        private async Task<IEnumerable<TreeNodeItem>> BuildTreeAsync()
+        private async Task<IEnumerable<TreeNodeItemViewModelBase>> BuildTreeAsync()
         {
             try
             {
-                var rootEntities = await BusinessEntityHelper.GetRootEntitiesAsync();
-                var treeNodes = new List<TreeNodeItem>();
+                await WebLogger.Information("Building tree");
+                var allBusinessEntities = await BusinessEntityHelper.GetAllBusinessEntities();
+                var strAllEntDump = string.Join($"{string.Empty}", allBusinessEntities.ToList().Select(x => x.Name));
+                await WebLogger.Information(strAllEntDump);
 
+
+                AllEntities = allBusinessEntities.ToList();
+                var rootEntities = AllEntities.Where(x => x.EntityType == BusinessEntityTypeEnum.Space);
+                var treeNodes = new List<TreeNodeItemViewModelBase>();
                 foreach (var entity in rootEntities)
                 {
                     var treeNode = await BuildTreeNodeAsync(entity);
@@ -59,14 +67,14 @@ namespace BusinessEntity.Components
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error building tree");
-                return new List<TreeNodeItem>();
+                return new List<TreeNodeItemViewModelBase>();
             }
         }
 
-        private async Task<TreeNodeItem> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entity)
+        private async Task<TreeNodeItemViewModelBase> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entity)
         {
             var icon = GetEntityIcon(entity.EntityType);
-            var treeNode = new TreeNodeItem
+            var treeNodeVm = new TreeNodeItemViewModelBase
             {
                 Title = entity.Name,
                 Icon = icon,
@@ -77,7 +85,7 @@ namespace BusinessEntity.Components
 
             // Получаем дочерние сущности
             var children = await BusinessEntityHelper.GetChildEntitiesAsync(entity.Id);
-            var childNodes = new List<TreeNodeItem>();
+            var childNodes = new List<TreeNodeItemViewModelBase>();
 
             foreach (var child in children)
             {
@@ -85,8 +93,8 @@ namespace BusinessEntity.Components
                 childNodes.Add(childNode);
             }
 
-            treeNode.Children = childNodes;
-            return treeNode;
+            treeNodeVm.Children = childNodes;
+            return treeNodeVm;
         }
 
         private string GetEntityIcon(BusinessEntityTypeEnum entityType)
@@ -102,7 +110,7 @@ namespace BusinessEntity.Components
 
         private string GetNodeText(object data)
         {
-            if (data is TreeNodeItem node)
+            if (data is TreeNodeItemViewModelBase node)
             {
                 return $"{GetEntityIcon(node.Entity?.EntityType ?? BusinessEntityTypeEnum.Space)} {node.Title}";
             }
@@ -116,6 +124,64 @@ namespace BusinessEntity.Components
             
             try
             {
+                TreeData = await BuildTreeAsync();
+            }
+            finally
+            {
+                IsLoading = false;
+                StateHasChanged();
+            }
+        }
+
+        // Метод для создания дополнительных тестовых данных
+        public async Task CreateAdditionalTestDataAsync()
+        {
+            try
+            {
+                // Получаем корневые сущности
+                var rootEntities = await BusinessEntityHelper.GetRootEntitiesAsync();
+                var demoSpace = rootEntities.FirstOrDefault(e => e.EntityType == BusinessEntityTypeEnum.Space);
+                
+                if (demoSpace != null)
+                {
+                    // Создаем дополнительную страницу прямо в Space
+                    var directPage = await BusinessEntityHelper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Direct Page in Space");
+                    
+                    // Получаем типы отношений
+                    var relationTypes = BusinessEntityHelper.GetType().Assembly
+                        .GetTypes()
+                        .Where(t => t.GetInterfaces().Contains(typeof(IPossibleEntityRelationTypesProvider)))
+                        .FirstOrDefault();
+                    
+                    if (relationTypes != null)
+                    {
+                        var provider = Activator.CreateInstance(relationTypes) as IPossibleEntityRelationTypesProvider;
+                        var spaceContainsPage = provider?.GetPossibleRelations()
+                            .FirstOrDefault(r => r.RelationName == "basic:space-contains-page");
+                        
+                        if (spaceContainsPage != null)
+                        {
+                            await BusinessEntityHelper.CreateRelation(demoSpace, directPage, spaceContainsPage, "");
+                        }
+                    }
+                }
+                
+                Logger.LogInformation("Additional test data created successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error creating additional test data");
+            }
+        }
+
+        public async Task CreateAdditionalTestDataAndRefreshAsync()
+        {
+            IsLoading = true;
+            StateHasChanged();
+            
+            try
+            {
+                await CreateAdditionalTestDataAsync();
                 TreeData = await BuildTreeAsync();
             }
             finally

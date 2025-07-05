@@ -38,7 +38,19 @@ namespace BusinessEntity.Core.Services
                 // Получаем возможные типы отношений
                 var relationTypes = _relations.GetPossibleRelations().ToList();
                 var spaceContainsFolder = relationTypes.FirstOrDefault(r => r.RelationName == "basic:space-contains-folder");
+                var spaceContainsPage = relationTypes.FirstOrDefault(r => r.RelationName == "basic:space-contains-page");
                 var folderContainsPage = relationTypes.FirstOrDefault(r => r.RelationName == "basic:folder-contains-page");
+                var folderContainsFolder = relationTypes.FirstOrDefault(r => r.RelationName == "basic:folder-contains-folder");
+
+                // Создаём несколько страниц прямо в Space
+                var directPage1 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Welcome Page");
+                var directPage2 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Quick Start Guide");
+                
+                if (spaceContainsPage != null)
+                {
+                    await _helper.CreateRelation(demoSpace, directPage1, spaceContainsPage, "");
+                    await _helper.CreateRelation(demoSpace, directPage2, spaceContainsPage, "");
+                }
 
                 // Создаём 3 папки
                 for (int i = 1; i <= 3; i++)
@@ -62,6 +74,34 @@ namespace BusinessEntity.Core.Services
                         {
                             await _helper.CreateRelation(folder, page, folderContainsPage, "");
                         }
+                    }
+                    
+                    // Создаём вложенную папку в первой папке для демонстрации
+                    if (i == 1 && folderContainsFolder != null)
+                    {
+                        var subFolder = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Folder, "Subfolder 1-1");
+                        await _helper.CreateRelation(folder, subFolder, folderContainsFolder, "");
+                        
+                        // Добавляем страницу в подпапку
+                        var subPage = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Sub-document 1-1-1");
+                        if (folderContainsPage != null)
+                        {
+                            await _helper.CreateRelation(subFolder, subPage, folderContainsPage, "");
+                        }
+                    }
+                }
+
+                // Демонстрация дублирования: добавляем одну из страниц также в другую папку
+                var existingPage = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Shared Document");
+                if (folderContainsPage != null)
+                {
+                    // Получаем первые две папки для демонстрации дублирования
+                    var allFolders = await _helper.GetChildEntitiesAsync(demoSpace.Id);
+                    var folders = allFolders.Where(e => e.EntityType == BusinessEntityTypeEnum.Folder).Take(2).ToList();
+                    
+                    foreach (var folder in folders)
+                    {
+                        await _helper.CreateRelation(folder, existingPage, folderContainsPage, "");
                     }
                 }
             }

@@ -1,7 +1,7 @@
 # Управление Docker-контейнерами
 
 . "$PSScriptRoot\DockerNetworkInfo.ps1"
-
+# . "$PSScriptRoot\AutoConnectContainers.ps1"  # Удалено, больше не требуется
 
 # Список контейнеров
 $containers = @(
@@ -9,39 +9,31 @@ $containers = @(
         Name = "admin-node"
         PortInt = 80
         PortExt = 5020
-        ProjectPath = "C:\Develop\Mall2\ControlNode"
-        ContextPath = "C:\Develop\Mall2"
-        LogPath = "C:\Develop\Logs\"
-    },
-    [PSCustomObject]@{
-        Name = "assort-api-container"
-        PortInt = 80
-        PortExt = 5010
-        ProjectPath = "C:\Develop\Mall2\SampleOnlineMall.AssortmentApi"
-        ContextPath = "C:\Develop\Mall2"
+        ProjectPath = "C:\Develop\BusinessEntity\ControlNode"
+        ContextPath = "C:\Develop\BusinessEntity"
         LogPath = "C:\Develop\Logs\"
     },
     [PSCustomObject]@{
         Name = "business-entity-container"
         PortInt = 80
         PortExt = 7000
-        ProjectPath = "C:\Develop\Mall2\BusinessEntity"
-        ContextPath = "C:\Develop\Mall2"
+        ProjectPath = "C:\Develop\BusinessEntity\BusinessEntity"
+        ContextPath = "C:\Develop\BusinessEntity"
         LogPath = "C:\Develop\Logs\"
     },
     [PSCustomObject]@{
         Name = "web_logger-container"
         PortInt = 80
         PortExt = 5080
-        ProjectPath = "C:\Develop\Mall2\BlazorServerWebLogger"
-        ContextPath = "C:\Develop\Mall2"
+        ProjectPath = "C:\Develop\BusinessEntity\BlazorServerWebLogger"
+        ContextPath = "C:\Develop\BusinessEntity"
         LogPath = "C:\Develop\Logs\"
     },
     [PSCustomObject]@{
         Name = "postgres-production-db"
         PortInt = 5432
         PortExt = 5470
-        DockerfilePath = "C:\Develop\Mall2\postgres_db\Dockerfile"
+        DockerfilePath = "C:\Develop\BusinessEntity\postgres_db\Dockerfile"
         EnvDbName = "main"
         EnvDbUser = "adm01"
         EnvDbPassword = "adm01pwd"
@@ -108,6 +100,7 @@ function SelectContainerAndRun {
         return $null
     }
     BuildAndRunContainer -container $container
+    AjustNetworks   # Подключаем все контейнеры к общей сети после запуска нового
 }
 
 function BuildAndRunPostgresContainer {
@@ -125,7 +118,7 @@ function BuildAndRunPostgresContainer {
     $envDbUser      = $container.EnvDbUser
     $envDbPassword  = $container.EnvDbPassword
     $logPath        = $container.LogPath
-    $networkName    = "docker-networkmall2"
+    $networkName    = "docker-networkBusinessEntity"
 
     # Контекст сборки — папка, где лежит Dockerfile
     $contextPath = Split-Path $dockerfilePath -Parent
@@ -247,7 +240,7 @@ function BuildAndRunContainer {
     }
 
     Write-Host "Запуск нового контейнера..."
-    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-networkmall2 -e 'ASPNETCORE_ENVIRONMENT=Development' -d --name $container.Name -p "$($portExt):$($portInt)" $imageName
+    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-networkBusinessEntity -e 'ASPNETCORE_ENVIRONMENT=Development' -d --name $container.Name -p "$($portExt):$($portInt)" $imageName
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
@@ -268,7 +261,7 @@ function Connect-ContainerToSharedNetwork {
         [string]$containerName
     )
     
-    $bridgeNetwork = "shared-bridge-network"
+    $bridgeNetwork = "docker-business-entity-common-bridge"  # обновлённое имя сети
     
     # Проверяем, существует ли общая сеть
     $existingNetwork = docker network ls --filter "name=$bridgeNetwork" --format "{{.Name}}"
@@ -298,8 +291,49 @@ function Connect-ContainerToSharedNetwork {
             }
         }
     } else {
-        Write-Host "⚠ Общая сеть не найдена. Запустите ConnectDockerNetworks.ps1 для её создания." -ForegroundColor Yellow
+        Write-Host "⚠ Общая сеть не найдена. Запустите функцию AjustNetworks (пункт меню 03) для её создания." -ForegroundColor Yellow
     }
+}
+
+# --- Новая функция для создания/настройки общей сети и подключения всех контейнеров ---
+function AjustNetworks {
+    param(
+        [string]$networkName = "docker-business-entity-common-bridge"
+    )
+
+    Write-Host "=== Настройка общей сети '$networkName' ===" -ForegroundColor Cyan
+
+    # Создать сеть, если она отсутствует
+    $existingNetwork = docker network ls --filter "name=$networkName" --format "{{.Name}}"
+    if (-not $existingNetwork) {
+        Write-Host "Создаём сеть '$networkName'..." -ForegroundColor Yellow
+        docker network create --driver bridge $networkName | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Сеть '$networkName' создана." -ForegroundColor Green
+        } else {
+            Write-Error "Ошибка создания сети '$networkName'"
+            return
+        }
+    } else {
+        Write-Host "Сеть '$networkName' уже существует." -ForegroundColor Green
+    }
+
+    # Подключить все существующие контейнеры к сети
+    $containers = docker ps -q
+    foreach ($containerId in $containers) {
+        $networksJson = docker inspect --format "{{json .NetworkSettings.Networks}}" $containerId | ConvertFrom-Json
+        if ($networksJson.PSObject.Properties.Name -notcontains $networkName) {
+            Write-Host "Подключаю контейнер $containerId к сети '$networkName'..." -ForegroundColor Yellow
+            docker network connect $networkName $containerId | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "✓ $containerId подключен." -ForegroundColor Green
+            } else {
+                Write-Host "⚠ Не удалось подключить $containerId." -ForegroundColor Red
+            }
+        }
+    }
+
+    Write-Host "Настройка сети завершена." -ForegroundColor Cyan
 }
 
 # Новая функция для объединения сетей
@@ -316,25 +350,40 @@ function Action01 {
 # Новая функция для автоподключения контейнеров
 function Action02 {
     Write-Host "Автоподключение контейнеров к общей сети..." -ForegroundColor Cyan
-    $scriptPath = Join-Path $PSScriptRoot "AutoConnectContainers.ps1"
-    if (Test-Path $scriptPath) {
-        & $scriptPath
+    Auto-ConnectNewContainers
+}
+
+# Новая функция для очистки кеша Docker
+function Action378 {
+    Write-Host "Очистка кеша Docker..." -ForegroundColor Cyan
+    Write-Host "Эта операция удалит все неиспользуемые образы, контейнеры, сети и кеш сборки." -ForegroundColor Yellow
+    $confirmation = Read-Host "Вы уверены, что хотите продолжить? (y/N)"
+    
+    if ($confirmation -eq 'y' -or $confirmation -eq 'Y') {
+        Write-Host "Выполняется docker system prune -a..." -ForegroundColor Yellow
+        docker system prune -a
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✓ Кеш Docker успешно очищен." -ForegroundColor Green
+        } else {
+            Write-Host "⚠ Произошла ошибка при очистке кеша Docker." -ForegroundColor Red
+        }
     } else {
-        Write-Host "Скрипт AutoConnectContainers.ps1 не найден." -ForegroundColor Red
+        Write-Host "Операция отменена." -ForegroundColor Yellow
     }
 }
 
 function Show-Menu {
     Write-Host "Меню:" -ForegroundColor Green
     Write-Host "00   -- Вывести статус докер-сетей"
-    Write-Host "01   -- Объединить Docker сети (создать общую сеть)"
-    Write-Host "02   -- Автоподключение контейнеров к общей сети"
+    Write-Host "03   -- Настроить общую сеть (AjustNetworks)"
     Write-Host "10   -- Подключиться к выбранному контейнеру"
     Write-Host "20   -- Вывести диагностическую информацию для выбранного контейнера"
     Write-Host "30   -- Сбилдить и запустить контейнер"
     Write-Host "35   -- Сбилдить и запустить production_db контейнер"
     Write-Host "37   -- Запустить сервис Authentik"
     Write-Host "371  -- Сгенерировать .env для Authentik"
+    Write-Host "378  -- Очистить кеш докера"
     Write-Host "38   -- Запушить ветку basic_add_elements_and_tree_mechanism как есть"
     Write-Host "40   -- Сбилдить и запустить бизнес-логику"
     Write-Host "80   -- Очистить экран (CLS)"
@@ -348,14 +397,14 @@ do {
 
     switch ($choice) {
         "00"  { Show-MultipleContainersNetworks }
-        "01"  { Action01 }
-        "02"  { Action02 }
+        "03"  { AjustNetworks }
         "10"  { Action10 }
         "20"  { Action20 }
         "30"  { SelectContainerAndRun }
-        "35"  { BuildAndRunPostgresAssortDb }
+        "35"  { BuildAndRunPostgresContainer }
         "37"  { Action37 }
         "371" { Action371 }
+        "378" { Action378 }
         "38"  { git push --force-with-lease origin basic_add_elements_and_tree_mechanism }
         "40"  { BuildAndRunBusinessLogicContainers }
         "80"  { Clear-Host }

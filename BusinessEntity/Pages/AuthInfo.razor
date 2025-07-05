@@ -27,7 +27,7 @@
                         @if (CurrentUser?.Identity != null)
                         {
                             <p class="auth-type"><strong>Тип авторизации:</strong> @CurrentUser.Identity.AuthenticationType</p>
-                            <p class="auth-status"><strong>Авторизован:</strong> @(CurrentUser.Identity.IsAuthenticated ? "Да" : "Нет")</p>
+                            <p class="auth-status"><strong>Авторизован:</strong> @AuthenticationStatusText</p>
                         }
                         <p class="claims-count"><strong>Количество клеймов:</strong> @AllClaims.Count</p>
                     </div>

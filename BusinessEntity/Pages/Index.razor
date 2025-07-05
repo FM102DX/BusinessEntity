@@ -3,19 +3,16 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @attribute [AllowAnonymous]
-
 <PageTitle>KMS-Business-Entities-Main</PageTitle>
-
 <AuthorizeView>
     <Authorized>
         <h1>KMS Business Entity</h1>
-        
         <div class="user-info-container">
             @if (!string.IsNullOrEmpty(CurrentUserName))
             {
                 <div class="alert alert-info d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>Пользователь:</strong> @CurrentUserName
+                        <strong>Пользователь123123:</strong> @CurrentUserName
                         @if (!string.IsNullOrEmpty(CurrentUserId))
                         {
                             <small class="text-muted ms-2">ID: @CurrentUserId</small>
@@ -27,14 +24,12 @@
                 </div>
             }
         </div>
-
         <div class="main-content">
             <div class="row">
                 <!-- Левая панель - Дерево сущностей -->
                 <div class="col-md-3">
                     <TreeComponent OnNodeSelected="@OnTreeNodeSelected" />
                 </div>
-                
                 <!-- Правая панель - Остальной контент -->
                 <div class="col-md-9">
                     <!-- Demo Business Entities Section -->
@@ -85,7 +80,6 @@
                             </div>
                         </div>
                     </div>
-                    
                     <div class="row">
                         <!-- Возможные отношения между сущностями -->
                         <div class="col-md-8">

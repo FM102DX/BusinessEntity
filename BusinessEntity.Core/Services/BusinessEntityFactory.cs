@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BusinessEntity.Core.Classes.Factory
+namespace BusinessEntity.Core.Services
 {
     public class BusinessEntityFactory
     {

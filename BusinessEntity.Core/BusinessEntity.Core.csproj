@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Classes\Helper\**" />
+    <EmbeddedResource Remove="Classes\Helper\**" />
+    <None Remove="Classes\Helper\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ReactiveUI" Version="20.3.1" />
     <PackageReference Include="ReactiveUI.Blazor" Version="20.3.1" />
     <PackageReference Include="ReactiveUI.Fody" Version="19.5.41" />
@@ -14,10 +20,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BusinessEntity.DataAccess\BusinessEntity.DataAccess.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Classes\Helper\" />
   </ItemGroup>
 
 </Project>

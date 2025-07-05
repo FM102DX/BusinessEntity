@@ -1,7 +1,8 @@
+using BusinessEntity.Services;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
-namespace BusinessEntity.Services
+namespace BusinessEntity.Contracts
 {
     public interface IApplicationSideAuthService
     {

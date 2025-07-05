@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
-using BusinessEntity.Services;
 using DynamicData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
 using System.Security.Claims;
+using BusinessEntity.Contracts;
 
 namespace BusinessEntity.Pages
 {
@@ -21,6 +21,9 @@ namespace BusinessEntity.Pages
         private ClaimsPrincipal? CurrentUser { get; set; }
         private List<Claim> AllClaims { get; set; } = new();
         private Dictionary<string, List<Claim>> ClaimsByType { get; set; } = new();
+
+        // Computed properties for UI
+        private string AuthenticationStatusText => CurrentUser?.Identity?.IsAuthenticated == true ? "Да" : "Нет";
 
         protected override async Task OnInitializedAsync()
         {

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace BusinessEntity.Services
+namespace BusinessEntity.Contracts
 {
     public interface IBusinessEntityRelationTypesService
     {

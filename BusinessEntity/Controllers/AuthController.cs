@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BusinessEntity.Services;
+using BusinessEntity.Contracts;
 
 namespace BusinessEntity.Controllers
 {

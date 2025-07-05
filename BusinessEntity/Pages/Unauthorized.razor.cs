@@ -1,4 +1,4 @@
-using BusinessEntity.Services;
+using BusinessEntity.Contracts;
 using Microsoft.AspNetCore.Components;
 
 namespace BusinessEntity.Pages

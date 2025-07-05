@@ -8,7 +8,12 @@ using Microsoft.EntityFrameworkCore;
 using BusinessEntity.DataAccess.Classes;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using BusinessEntity.DataAccess.Repositories;
 using Radzen;
+using BusinessEntity.Contracts;
+using SampleOnlineMall.Service;
+using SampleOnlineMall.Service.WebLogging;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace BusinessEntity
 {
@@ -25,8 +30,19 @@ namespace BusinessEntity
 			builder.Services.AddEndpointsApiExplorer();
 			builder.Services.AddAutoMapper(typeof(Program));
 
-			// Add Radzen services
-			builder.Services.AddRadzenComponents();
+            // App classes
+            var genApp = new GenericAppSettings();
+            genApp.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
+            builder.Services.AddSingleton(typeof(GenericAppSettings), (x) => genApp);
+
+            // Регистрация WebLoggerLocalSettings в DI
+            var webLoggerSettings = new WebLoggerLocalSettings();
+            builder.Configuration.GetSection("WebLoggerLocalSettings").Bind(webLoggerSettings);
+            builder.Services.AddSingleton(webLoggerSettings);
+            builder.Services.AddScoped<IWebLoggerService, WebLoggerService>();
+
+            // Add Radzen services
+            builder.Services.AddRadzenComponents();
 
 			// Настройка JWT аутентификации
 			var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -122,8 +138,8 @@ namespace BusinessEntity
             builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
 
             // Регистрируем репозитории
-            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity>, BusinessEntity.Core.Repositories.InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntity>>();
-            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.Relation>, BusinessEntity.Core.Repositories.InMemoryRepository<BusinessEntity.Core.Classes.Relation>>();
+            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity>, InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntity>>();
+            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.Relation>, InMemoryRepository<BusinessEntity.Core.Classes.Relation>>();
 
             // Регистрируем BusinessEntityHelper
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();

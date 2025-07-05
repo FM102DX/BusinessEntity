@@ -2,13 +2,13 @@
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Services;
-using BusinessEntity.Services;
 using BusinessEntity.Models;
 using DynamicData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
 using System.Security.Claims;
+using BusinessEntity.Contracts;
 
 namespace BusinessEntity.Pages
 {    public partial class Index : ComponentBase
@@ -27,7 +27,7 @@ namespace BusinessEntity.Pages
         private IEnumerable<string> EntityTypeEnums { get; set; } = new List<string>();
         private IEnumerable<string> RelationTypeEnums { get; set; } = new List<string>();
         private List<BusinessEntity.Core.Classes.BusinessEntity> BusinessEntities { get; set; } = new List<BusinessEntity.Core.Classes.BusinessEntity>();
-        private TreeNodeItem? SelectedTreeNode { get; set; }
+        private TreeNodeItemViewModelBase? SelectedTreeNode { get; set; }
 
         protected override async Task OnInitializedAsync()
         {
@@ -89,7 +89,7 @@ namespace BusinessEntity.Pages
             }
         }
 
-        private void OnTreeNodeSelected(TreeNodeItem selectedNode)
+        private void OnTreeNodeSelected(TreeNodeItemViewModelBase selectedNode)
         {
             try
             {

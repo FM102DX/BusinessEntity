@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
+using System.Linq;
 
 namespace BusinessEntity.Core.Services
 {
@@ -56,7 +57,7 @@ namespace BusinessEntity.Core.Services
                 Id = Guid.NewGuid(),
                 ObjectAId = entityA.Id,
                 ObjectBId = entityB.Id,
-                RelationType = macroRelationType.RelationName,
+                RelationType = macroRelationType.RelationType.ToString(),
                 RelationParams = parameters
             };
 
@@ -90,7 +91,7 @@ namespace BusinessEntity.Core.Services
 
         public async Task<IEnumerable<Classes.BusinessEntity>> GetChildEntitiesAsync(Guid parentId)
         {
-            var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == parentId && r.RelationType == "Contains");
+            var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString());
             var childIds = relations.Select(r => r.ObjectBId).ToList();
             
             var children = new List<Classes.BusinessEntity>();
@@ -103,17 +104,21 @@ namespace BusinessEntity.Core.Services
                 }
             }
             
-            return children;
+            // Сортируем дочерние элементы по дате создания
+            return children.OrderBy(c => c.CreatedDate);
         }
 
         public async Task<IEnumerable<Classes.BusinessEntity>> GetRootEntitiesAsync()
         {
             // Находим все сущности, которые НЕ являются объектом B в отношении "Contains"
             var allEntities = await _businessEntityRepository.GetAllAsync();
-            var containsRelations = await _relationRepository.GetAllAsync(r => r.RelationType == "Contains");
+            var containsRelations = await _relationRepository.GetAllAsync(r => r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString());
             var childIds = containsRelations.Select(r => r.ObjectBId).ToHashSet();
             
-            return allEntities.Where(e => !childIds.Contains(e.Id));
+            var rootEntities = allEntities.Where(e => !childIds.Contains(e.Id));
+            
+            // Сортируем корневые элементы по дате создания
+            return rootEntities.OrderBy(e => e.CreatedDate);
         }
     }
 } 

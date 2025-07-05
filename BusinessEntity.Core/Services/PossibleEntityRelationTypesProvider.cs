@@ -23,6 +23,13 @@ namespace BusinessEntity.Core.Services
                     typeB: BusinessEntityTypeEnum.Folder,
                     relationType: BusinessEntityRelationTypeEnum.Contains
                 ),
+                // Space может содержать Page напрямую
+                new MacroRelationType(
+                    relationName: "basic:space-contains-page",
+                    typeA: BusinessEntityTypeEnum.Space,
+                    typeB: BusinessEntityTypeEnum.Page,
+                    relationType: BusinessEntityRelationTypeEnum.Contains
+                ),
                 // Тестовый объект: Папка содержит страницу
                 new MacroRelationType(
                     relationName: "basic:folder-contains-page",

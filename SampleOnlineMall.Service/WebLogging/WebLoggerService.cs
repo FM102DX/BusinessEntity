@@ -89,13 +89,13 @@ namespace SampleOnlineMall.WebLogger.Services
                     MessageType = messageType,
                     Message = message
                 };
-                //Console.WriteLine($"LGR_P1 -- sending message {message}");
+                Console.WriteLine($"LGR_P1 -- sending message {message}");
                 using var httpClient = new HttpClient();
-                //Console.WriteLine($"LGR_P2");
+                Console.WriteLine($"LGR_P2");
                 var content = new StringContent(Newtonsoft.Json.JsonConvert.SerializeObject(logEntry), Encoding.UTF8, "application/json");
-                //Console.WriteLine($"LGR_P3 url={_loggerUrl} content={content} base={httpClient.BaseAddress}");
+                Console.WriteLine($"LGR_P3 url={_loggerUrl} content={content} base={httpClient.BaseAddress}");
                 var response = await httpClient.PostAsync(_loggerUrl, content);
-                //Console.WriteLine($"LGR_P4");
+                Console.WriteLine($"LGR_P4 {response.IsSuccessStatusCode} {response.ToString()}");
             }
             catch (Exception ex)
             {
