@@ -38,6 +38,8 @@ main {
     height: calc(100vh - 56px);
     overflow-y: auto;
     padding: 8px;
+    display: flex;
+    flex-direction: column;
 }
 
 .top-row {
