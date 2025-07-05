@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using System.Linq;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace BusinessEntity.Core.Services
 {
@@ -10,17 +11,21 @@ namespace BusinessEntity.Core.Services
     {
         private readonly IAsyncRepository<Classes.BusinessEntity> _businessEntityRepository;
         private readonly IAsyncRepository<Relation> _relationRepository;
+        private readonly IWebLoggerService? _webLogger;
 
         public BusinessEntityHelper(
             IAsyncRepository<Classes.BusinessEntity> businessEntityRepository, 
-            IAsyncRepository<Relation> relationRepository)
+            IAsyncRepository<Relation> relationRepository,
+            IWebLoggerService? webLogger)
         {
             _businessEntityRepository = businessEntityRepository ?? throw new ArgumentNullException(nameof(businessEntityRepository));
             _relationRepository = relationRepository ?? throw new ArgumentNullException(nameof(relationRepository));
+            _webLogger = webLogger; // Логгер может быть не настроен, поэтому допускаем null
         }
 
         public async Task<Classes.BusinessEntity> CreateBusinessEntity(BusinessEntityTypeEnum type, string name)
         {
+            _webLogger?.Information($"CreateBusinessEntity: type={type}, name={name}");
             var entity = new Classes.BusinessEntity
             {
                 Id = Guid.NewGuid(),
@@ -34,6 +39,7 @@ namespace BusinessEntity.Core.Services
 
         public async Task RemoveBusinessEntity(Guid id)
         {
+            _webLogger?.Warning($"RemoveBusinessEntity: id={id}");
             // Сначала удаляем все связи, где участвует данная сущность
             var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == id || r.ObjectBId == id);
             
@@ -48,6 +54,7 @@ namespace BusinessEntity.Core.Services
 
         public async Task<Relation> CreateRelation(IBusinessEntity entityA, IBusinessEntity entityB, MacroRelationType macroRelationType, string parameters = "")
         {
+            _webLogger?.Information($"CreateRelation: {entityA?.Name} -> {entityB?.Name} relation={macroRelationType?.RelationType}");
             if (entityA == null) throw new ArgumentNullException(nameof(entityA));
             if (entityB == null) throw new ArgumentNullException(nameof(entityB));
             if (macroRelationType == null) throw new ArgumentNullException(nameof(macroRelationType));
@@ -66,6 +73,7 @@ namespace BusinessEntity.Core.Services
 
         public async Task<Classes.BusinessEntity?> GetBusinessEntityById(Guid id)
         {
+            _webLogger?.Debug($"GetBusinessEntityById: id={id}");
             return await _businessEntityRepository.GetByIdAsync(id);
         }
 

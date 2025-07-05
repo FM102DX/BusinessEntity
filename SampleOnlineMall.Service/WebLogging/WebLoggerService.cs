@@ -46,35 +46,40 @@ namespace SampleOnlineMall.WebLogger.Services
         {
             _isActive = newStatus;
         }
-        public async Task Debug(string text)
+        public Task Debug(string text)
         {
-            await SendLogAsync("Debug", text);
+            _ = Task.Run(() => SendLogAsync("Debug", text));
+            return Task.CompletedTask;
         }
 
-        public async Task Information(string text)
+        public Task Information(string text)
         {
-            await SendLogAsync("Info", text);
+            _ = Task.Run(() => SendLogAsync("Info", text));
+            return Task.CompletedTask;
         }
 
-        public async Task Warning(string text)
+        public Task Warning(string text)
         {
-            await SendLogAsync("Warning", text);
+            _ = Task.Run(() => SendLogAsync("Warning", text));
+            return Task.CompletedTask;
         }
-        public async Task Error(string text)
+        public Task Error(string text)
         {
-            await SendLogAsync("Error", text);
+            _ = Task.Run(() => SendLogAsync("Error", text));
+            return Task.CompletedTask;
         }
-        public async Task Error(Exception ex)
+        public Task Error(Exception ex)
         {
-            await SendLogAsync("Error", $"Error occured messgae={ex.Message} inner exception={ex.InnerException}");
+            _ = Task.Run(() => SendLogAsync("Error", $"Error occured messgae={ex.Message} inner exception={ex.InnerException}"));
+            return Task.CompletedTask;
         }
-        public async Task SendObject(object data)
+        public Task SendObject(object data)
         {
             // Сериализация объекта в JSON
             string serializedData = JsonConvert.SerializeObject(data, Formatting.Indented);
 
-            // Логирование через SendLogAsync
-            await SendLogAsync("OBJECT", serializedData);
+            _ = Task.Run(() => SendLogAsync("OBJECT", serializedData));
+            return Task.CompletedTask;
         }
 
         private async Task SendLogAsync(string messageType, string message)

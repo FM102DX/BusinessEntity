@@ -11,8 +11,8 @@ namespace BusinessEntity.Core.Services
     {
         private readonly BusinessEntityHelper _helper;
         private readonly IPossibleEntityRelationTypesProvider _relations;
-        private readonly object _lock = new object();
-        private bool _seeded = false;
+        private static readonly object _syncLock = new();
+        private static bool _seededGlobal = false;
 
         public SampleDataService(
             BusinessEntityHelper helper,
@@ -24,16 +24,24 @@ namespace BusinessEntity.Core.Services
 
         public async Task InitializeSampleDataAsync(CancellationToken ct = default)
         {
-            lock (_lock)
+            lock (_syncLock)
             {
-                if (_seeded) return;
-                _seeded = true;
+                if (_seededGlobal) return;
+                _seededGlobal = true;
             }
 
             try
             {
-                // Создаём главный Space
-                var demoSpace = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Space, "Demo Space");
+                // Проверим, есть ли уже пространства. Если есть, не создаём повторно.
+                var existingEntities = await _helper.GetAllBusinessEntities();
+                if (existingEntities.Any(e => e.EntityType == BusinessEntityTypeEnum.Space))
+                {
+                    return;
+                }
+
+                // Создаём два Space вместо одного
+                var documentsSpace = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Space, "Документы");
+                var newsSpace = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Space, "Новости");
 
                 // Получаем возможные типы отношений
                 var relationTypes = _relations.GetPossibleRelations().ToList();
@@ -42,17 +50,17 @@ namespace BusinessEntity.Core.Services
                 var folderContainsPage = relationTypes.FirstOrDefault(r => r.RelationName == "basic:folder-contains-page");
                 var folderContainsFolder = relationTypes.FirstOrDefault(r => r.RelationName == "basic:folder-contains-folder");
 
-                // Создаём несколько страниц прямо в Space
+                // Создаём несколько страниц прямо в пространстве "Документы"
                 var directPage1 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Welcome Page");
                 var directPage2 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Quick Start Guide");
                 
                 if (spaceContainsPage != null)
                 {
-                    await _helper.CreateRelation(demoSpace, directPage1, spaceContainsPage, "");
-                    await _helper.CreateRelation(demoSpace, directPage2, spaceContainsPage, "");
+                    await _helper.CreateRelation(documentsSpace, directPage1, spaceContainsPage, "");
+                    await _helper.CreateRelation(documentsSpace, directPage2, spaceContainsPage, "");
                 }
 
-                // Создаём 3 папки
+                // Создаём 3 папки в "Документы"
                 for (int i = 1; i <= 3; i++)
                 {
                     var folder = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Folder, $"Folder {i}");
@@ -60,7 +68,7 @@ namespace BusinessEntity.Core.Services
                     // Связываем Space с Folder
                     if (spaceContainsFolder != null)
                     {
-                        await _helper.CreateRelation(demoSpace, folder, spaceContainsFolder, "");
+                        await _helper.CreateRelation(documentsSpace, folder, spaceContainsFolder, "");
                     }
 
                     // Создаём 2-3 страницы в каждой папке
@@ -96,7 +104,7 @@ namespace BusinessEntity.Core.Services
                 if (folderContainsPage != null)
                 {
                     // Получаем первые две папки для демонстрации дублирования
-                    var allFolders = await _helper.GetChildEntitiesAsync(demoSpace.Id);
+                    var allFolders = await _helper.GetChildEntitiesAsync(documentsSpace.Id);
                     var folders = allFolders.Where(e => e.EntityType == BusinessEntityTypeEnum.Folder).Take(2).ToList();
                     
                     foreach (var folder in folders)
@@ -104,13 +112,45 @@ namespace BusinessEntity.Core.Services
                         await _helper.CreateRelation(folder, existingPage, folderContainsPage, "");
                     }
                 }
+
+                // Заполняем пространство "Новости"
+                // 1) Прямые страницы
+                var newsDirect1 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Новости дня");
+                var newsDirect2 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Аналитика");
+
+                if (spaceContainsPage != null)
+                {
+                    await _helper.CreateRelation(newsSpace, newsDirect1, spaceContainsPage, "");
+                    await _helper.CreateRelation(newsSpace, newsDirect2, spaceContainsPage, "");
+                }
+
+                // 2) Создаём 2 рубрики (папки) в "Новости"
+                for (int i = 1; i <= 2; i++)
+                {
+                    var newsFolder = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Folder, $"Рубрика {i}");
+
+                    if (spaceContainsFolder != null)
+                    {
+                        await _helper.CreateRelation(newsSpace, newsFolder, spaceContainsFolder, "");
+                    }
+
+                    // В каждой рубрике по 2 новости
+                    for (int j = 1; j <= 2; j++)
+                    {
+                        var newsArticle = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, $"Новость {i}-{j}");
+                        if (folderContainsPage != null)
+                        {
+                            await _helper.CreateRelation(newsFolder, newsArticle, folderContainsPage, "");
+                        }
+                    }
+                }
             }
             catch (Exception)
             {
                 // В случае ошибки сбрасываем флаг, чтобы можно было попробовать ещё раз
-                lock (_lock)
+                lock (_syncLock)
                 {
-                    _seeded = false;
+                    _seededGlobal = false;
                 }
                 throw;
             }

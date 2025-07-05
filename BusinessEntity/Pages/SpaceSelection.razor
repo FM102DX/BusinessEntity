@@ -1,0 +1,44 @@
+@page "/space-selection"
+@attribute [Authorize]
+@inject BusinessEntity.Contracts.IUserContextService UserContext
+@inject BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity> Repository
+@inject NavigationManager NavManager
+
+<h3>Выбор пространства</h3>
+
+@if (spaces == null)
+{
+    <p><em>Загрузка...</em></p>
+}
+else if (!spaces.Any())
+{
+    <p>Нет доступных пространств.</p>
+}
+else
+{
+    <ul class="list-group">
+        @foreach (var space in spaces)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                @space.Name
+                <button class="btn btn-sm btn-primary" @onclick="() => SelectSpace(space)">Выбрать</button>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<BusinessEntity.Core.Classes.BusinessEntity>? spaces;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var list = await Repository.GetAllAsync(e => e.EntityType == BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Space);
+        spaces = list.ToList();
+    }
+
+    private void SelectSpace(BusinessEntity.Core.Classes.BusinessEntity space)
+    {
+        UserContext.SetSpace(space.Id, space.Name);
+        NavManager.NavigateTo("/");
+    }
+} 

@@ -147,6 +147,9 @@ namespace BusinessEntity
             // Регистрируем SampleDataService как Scoped (не Singleton), так как он зависит от Scoped BusinessEntityHelper
             builder.Services.AddScoped<BusinessEntity.Core.Contracts.ISampleDataService, BusinessEntity.Core.Services.SampleDataService>();
 
+            // Регистрируем UserContextService для хранения выбранного пространства
+            builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
+
             var connectionString = builder.Configuration.GetConnectionString("DockerConnection");
 			var optionsBuilder = new DbContextOptionsBuilder<KmsBusinessEntityDbContext>();
 			optionsBuilder.UseNpgsql(connectionString);
@@ -184,6 +187,9 @@ namespace BusinessEntity
 			// Добавляем middleware для аутентификации и авторизации
 			app.UseAuthentication();
 			app.UseAuthorization();
+
+			// Middleware, перенаправляющее на страницу выбора пространства при его отсутствии
+			app.UseMiddleware<BusinessEntity.Middleware.SpaceSelectionMiddleware>();
 
 			app.MapControllers();
 			app.MapRazorPages();

@@ -118,7 +118,7 @@ function BuildAndRunPostgresContainer {
     $envDbUser      = $container.EnvDbUser
     $envDbPassword  = $container.EnvDbPassword
     $logPath        = $container.LogPath
-    $networkName    = "docker-networkBusinessEntity"
+    $networkName    = "docker-business-entity-common-bridge"
 
     # Контекст сборки — папка, где лежит Dockerfile
     $contextPath = Split-Path $dockerfilePath -Parent
@@ -240,7 +240,7 @@ function BuildAndRunContainer {
     }
 
     Write-Host "Запуск нового контейнера..."
-    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-networkBusinessEntity -e 'ASPNETCORE_ENVIRONMENT=Development' -d --name $container.Name -p "$($portExt):$($portInt)" $imageName
+    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-business-entity-common-bridge -e 'ASPNETCORE_ENVIRONMENT=Development' -e 'IS_DOCKER=true' -d --name $container.Name -p "$(($portExt)):$(($portInt))" $imageName
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."

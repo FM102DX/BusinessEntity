@@ -4,6 +4,8 @@ using BusinessEntity.Core.Services;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
 using SampleOnlineMall.WebLogger.Services;
+using System.Linq;
+using BusinessEntity.Contracts;
 
 namespace BusinessEntity.Components
 {
@@ -13,6 +15,7 @@ namespace BusinessEntity.Components
         [Inject] public BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         [Inject] public ILogger<TreeComponent> Logger { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
+        [Inject] public IUserContextService UserContext { get; set; } = default!;
 
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
         public List<Core.Classes.BusinessEntity>? AllEntities { get; set; }
@@ -49,17 +52,39 @@ namespace BusinessEntity.Components
             {
                 await WebLogger.Information("Building tree");
                 var allBusinessEntities = await BusinessEntityHelper.GetAllBusinessEntities();
-                var strAllEntDump = string.Join($"{string.Empty}", allBusinessEntities.ToList().Select(x => x.Name));
-                await WebLogger.Information(strAllEntDump);
-
-
                 AllEntities = allBusinessEntities.ToList();
-                var rootEntities = AllEntities.Where(x => x.EntityType == BusinessEntityTypeEnum.Space);
+
                 var treeNodes = new List<TreeNodeItemViewModelBase>();
-                foreach (var entity in rootEntities)
+
+                if (UserContext.HasSelectedSpace)
                 {
-                    var treeNode = await BuildTreeNodeAsync(entity);
-                    treeNodes.Add(treeNode);
+                    var currentSpace = AllEntities.FirstOrDefault(e => e.Id == UserContext.CurrentSpaceId);
+                    if (currentSpace != null)
+                    {
+                        var children = await BusinessEntityHelper.GetChildEntitiesAsync(currentSpace.Id);
+                        foreach (var child in children)
+                        {
+                            var node = await BuildTreeNodeAsync(child);
+                            treeNodes.Add(node);
+                        }
+                    }
+                }
+                else
+                {
+                    // Fallback: если пространство не выбрано (теоретически не должно быть) – покажем все пространства
+                    var rootSpaces = AllEntities.Where(x => x.EntityType == BusinessEntityTypeEnum.Space);
+                    foreach (var space in rootSpaces)
+                    {
+                        var node = await BuildTreeNodeAsync(space);
+                        treeNodes.Add(node);
+                    }
+                }
+
+                // Dump
+                if (WebLogger != null)
+                {
+                    var treeDumpText = DumpTree(treeNodes, 0);
+                    await WebLogger.Information($"Tree dump:\n{treeDumpText}");
                 }
 
                 return treeNodes;
@@ -85,7 +110,7 @@ namespace BusinessEntity.Components
 
             // Получаем дочерние сущности
             var children = await BusinessEntityHelper.GetChildEntitiesAsync(entity.Id);
-            var childNodes = new List<TreeNodeItemViewModelBase>();
+            var childNodes = new List<TreeNodeItemViewModelBase>(); 
 
             foreach (var child in children)
             {
@@ -189,6 +214,22 @@ namespace BusinessEntity.Components
                 IsLoading = false;
                 StateHasChanged();
             }
+        }
+
+        private string DumpTree(IEnumerable<TreeNodeItemViewModelBase> nodes, int indentLevel)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var node in nodes)
+            {
+                var indent = new string('-', indentLevel * 2);
+                sb.AppendLine($"{indent}{node.Icon} {node.Title}");
+
+                if (node.Children != null && node.Children.Any())
+                {
+                    sb.Append(DumpTree(node.Children, indentLevel + 1));
+                }
+            }
+            return sb.ToString();
         }
     }
 } 
