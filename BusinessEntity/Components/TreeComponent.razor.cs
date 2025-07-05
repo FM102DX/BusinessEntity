@@ -9,18 +9,19 @@ using BusinessEntity.Contracts;
 
 namespace BusinessEntity.Components
 {
-    public partial class TreeComponent : ComponentBase
+    public partial class TreeComponent : ComponentBase, IDisposable
     {
         [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
         [Inject] public BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         [Inject] public ILogger<TreeComponent> Logger { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
-        [Inject] public IUserContextService UserContext { get; set; } = default!;
+        [Inject] public IUserContextService UserContextService { get; set; } = default!;
 
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
-        public List<Core.Classes.BusinessEntity>? AllEntities { get; set; }
+        
         private IEnumerable<TreeNodeItemViewModelBase> TreeData { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsLoading { get; set; } = true;
+        private bool Visible { get; set; } = false;
 
         protected override async Task OnInitializedAsync()
         {
@@ -31,8 +32,11 @@ namespace BusinessEntity.Components
                 // Инициализируем демо-данные если их нет
                 await SampleDataService.InitializeSampleDataAsync();
                 
-                // Строим дерево
-                TreeData = await BuildTreeAsync();
+                // Подписываемся на изменения выбранного пространства
+                UserContextService.SelectedSpaceChanged += OnSelectedSpaceChanged;
+                
+                // Проверяем текущее состояние пространства
+                await UpdateTreeForCurrentSpace();
                 
                 Logger.LogInformation("TreeComponent initialized successfully");
             }
@@ -46,19 +50,49 @@ namespace BusinessEntity.Components
             }
         }
 
+        private async void OnSelectedSpaceChanged(Guid? spaceId)
+        {
+            try
+            {
+                await UpdateTreeForCurrentSpace();
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error handling space change in TreeComponent");
+            }
+        }
+
+        private async Task UpdateTreeForCurrentSpace()
+        {
+            if (!UserContextService.HasSelectedSpace)
+            {
+                // Если пространство не выбрано - скрываем дерево
+                TreeData = new List<TreeNodeItemViewModelBase>();
+                Visible = false;
+                Logger.LogInformation("No space selected - hiding tree");
+                return;
+            }
+
+            // Если пространство выбрано - строим дерево для этого пространства
+            IsLoading = true;
+            TreeData = await BuildTreeForSpaceAsync(UserContextService.CurrentSpaceId!.Value);
+            Visible = true;
+            IsLoading = false;
+            
+            Logger.LogInformation($"Tree built for space: {UserContextService.CurrentSpaceName}");
+        }
+
         private async Task<IEnumerable<TreeNodeItemViewModelBase>> BuildTreeAsync()
         {
             try
             {
-                await WebLogger.Information("Building tree");
                 var allBusinessEntities = await BusinessEntityHelper.GetAllBusinessEntities();
-                AllEntities = allBusinessEntities.ToList();
-
                 var treeNodes = new List<TreeNodeItemViewModelBase>();
 
-                if (UserContext.HasSelectedSpace)
+                if (UserContextService.HasSelectedSpace)
                 {
-                    var currentSpace = AllEntities.FirstOrDefault(e => e.Id == UserContext.CurrentSpaceId);
+                    var currentSpace = allBusinessEntities.FirstOrDefault(e => e.Id == UserContextService.CurrentSpaceId);
                     if (currentSpace != null)
                     {
                         var children = await BusinessEntityHelper.GetChildEntitiesAsync(currentSpace.Id);
@@ -72,7 +106,7 @@ namespace BusinessEntity.Components
                 else
                 {
                     // Fallback: если пространство не выбрано (теоретически не должно быть) – покажем все пространства
-                    var rootSpaces = AllEntities.Where(x => x.EntityType == BusinessEntityTypeEnum.Space);
+                    var rootSpaces = allBusinessEntities.Where(x => x.EntityType == BusinessEntityTypeEnum.Space);
                     foreach (var space in rootSpaces)
                     {
                         var node = await BuildTreeNodeAsync(space);
@@ -144,70 +178,41 @@ namespace BusinessEntity.Components
 
         public async Task RefreshTreeAsync()
         {
+            if (!UserContextService.HasSelectedSpace)
+            {
+                Logger.LogWarning("Cannot refresh tree - no space selected");
+                return;
+            }
+            
             IsLoading = true;
             StateHasChanged();
             
             try
             {
-                TreeData = await BuildTreeAsync();
+                await UpdateTreeForCurrentSpace();
             }
             finally
             {
                 IsLoading = false;
                 StateHasChanged();
-            }
-        }
-
-        // Метод для создания дополнительных тестовых данных
-        public async Task CreateAdditionalTestDataAsync()
-        {
-            try
-            {
-                // Получаем корневые сущности
-                var rootEntities = await BusinessEntityHelper.GetRootEntitiesAsync();
-                var demoSpace = rootEntities.FirstOrDefault(e => e.EntityType == BusinessEntityTypeEnum.Space);
-                
-                if (demoSpace != null)
-                {
-                    // Создаем дополнительную страницу прямо в Space
-                    var directPage = await BusinessEntityHelper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Direct Page in Space");
-                    
-                    // Получаем типы отношений
-                    var relationTypes = BusinessEntityHelper.GetType().Assembly
-                        .GetTypes()
-                        .Where(t => t.GetInterfaces().Contains(typeof(IPossibleEntityRelationTypesProvider)))
-                        .FirstOrDefault();
-                    
-                    if (relationTypes != null)
-                    {
-                        var provider = Activator.CreateInstance(relationTypes) as IPossibleEntityRelationTypesProvider;
-                        var spaceContainsPage = provider?.GetPossibleRelations()
-                            .FirstOrDefault(r => r.RelationName == "basic:space-contains-page");
-                        
-                        if (spaceContainsPage != null)
-                        {
-                            await BusinessEntityHelper.CreateRelation(demoSpace, directPage, spaceContainsPage, "");
-                        }
-                    }
-                }
-                
-                Logger.LogInformation("Additional test data created successfully");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error creating additional test data");
-            }
-        }
+            }        }
 
         public async Task CreateAdditionalTestDataAndRefreshAsync()
         {
+            if (!UserContextService.HasSelectedSpace)
+            {
+                Logger.LogWarning("Cannot create test data - no space selected");
+                return;
+            }
+
             IsLoading = true;
             StateHasChanged();
             
             try
             {
-                await CreateAdditionalTestDataAsync();
-                TreeData = await BuildTreeAsync();
+                // Создаем дополнительные тестовые данные в выбранном пространстве
+                await SampleDataService.InitializeSampleDataAsync();
+                await UpdateTreeForCurrentSpace();
             }
             finally
             {
@@ -231,5 +236,37 @@ namespace BusinessEntity.Components
             }
             return sb.ToString();
         }
+        
+        private async Task<IEnumerable<TreeNodeItemViewModelBase>> BuildTreeForSpaceAsync(Guid spaceId)
+        {
+            try
+            {
+                // Получаем дочерние сущности выбранного пространства (не включая само пространство)
+                var childEntities = await BusinessEntityHelper.GetChildEntitiesAsync(spaceId);
+                var treeNodes = new List<TreeNodeItemViewModelBase>();
+
+                foreach (var entity in childEntities)
+                {
+                    var treeNode = await BuildTreeNodeAsync(entity);
+                    treeNodes.Add(treeNode);
+                }
+
+                return treeNodes;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error building tree for space {SpaceId}", spaceId);
+                return new List<TreeNodeItemViewModelBase>();
+            }
+        }
+
+        public void Dispose()
+        {
+            // Отписываемся от события при уничтожении компонента
+            if (UserContextService != null)
+            {
+                UserContextService.SelectedSpaceChanged -= OnSelectedSpaceChanged;
+            }
+        }
     }
-} 
+}

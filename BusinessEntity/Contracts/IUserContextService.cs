@@ -8,5 +8,7 @@ namespace BusinessEntity.Contracts
 
         void SetSpace(Guid id, string name);
         void ClearSpace();
+        
+        event Action<Guid?> SelectedSpaceChanged;
     }
-} 
+}
