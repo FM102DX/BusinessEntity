@@ -6,6 +6,7 @@ using BusinessEntity.Core.Classes;
 using SampleOnlineMall.WebLogger.Services;
 using System.Linq;
 using BusinessEntity.Contracts;
+using Radzen;
 
 namespace BusinessEntity.Components
 {
@@ -16,6 +17,7 @@ namespace BusinessEntity.Components
         [Inject] public ILogger<TreeComponent> Logger { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
+        [Inject] public ContextMenuService ContextMenu { get; set; } = default!;
 
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
         
@@ -258,6 +260,24 @@ namespace BusinessEntity.Components
                 Logger.LogError(ex, "Error building tree for space {SpaceId}", spaceId);
                 return new List<TreeNodeItemViewModelBase>();
             }
+        }
+
+        private void ShowContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+        {
+            var menuItems = new List<ContextMenuItem>()
+            {
+                new ContextMenuItem() { Text = "Пункт А", Value = "A" },
+                new ContextMenuItem() { Text = "Пункт Б", Value = "B" }
+            };
+
+            ContextMenu.Open(e, menuItems, async (item) =>
+            {
+                // Пример: логируем выбор пункта меню
+                if (WebLogger != null)
+                {
+                    await WebLogger.Information($"Context menu selected: {item?.Value}");
+                }
+            });
         }
 
         public void Dispose()

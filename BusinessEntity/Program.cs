@@ -26,7 +26,8 @@ namespace BusinessEntity
 			// Add services to the container.
 			builder.Services.AddControllers();
 			builder.Services.AddRazorPages();
-			builder.Services.AddServerSideBlazor();
+			builder.Services.AddServerSideBlazor()
+				.AddCircuitOptions(options => { options.DetailedErrors = true; });
 			builder.Services.AddEndpointsApiExplorer();
 			builder.Services.AddAutoMapper(typeof(Program));
 

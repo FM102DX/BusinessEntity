@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using BusinessEntity.Contracts;
 using SampleOnlineMall.WebLogger.Services;
+using Microsoft.AspNetCore.Components.Authorization;
 
 namespace BusinessEntity.Pages
 {
@@ -10,6 +11,7 @@ namespace BusinessEntity.Pages
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Logging> Logger { get; set; } = default!;
         [Inject] public IWebLoggerService WebLogger { get; set; } = default!;
+        [CascadingParameter] private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
 
         private string LogMessage { get; set; } = string.Empty;
         private string StatusMessage { get; set; } = string.Empty;
@@ -24,18 +26,18 @@ namespace BusinessEntity.Pages
         {
             try
             {
-                var isAuthenticated = await AuthService.IsUserAuthenticatedAsync();
-                
-                if (!isAuthenticated)
+                var authState = await AuthenticationStateTask;
+                var user = authState.User;
+
+                if (user.Identity == null || !user.Identity.IsAuthenticated)
                 {
                     Logger.LogInformation("Anonymous user accessed Logging page - redirecting to login");
                     RedirectToLogin();
+                    return; // Прекращаем дальнейшее выполнение, т.к. произойдёт редирект
                 }
-                else
-                {
-                    var userName = await AuthService.GetUserNameAsync();
-                    Logger.LogInformation($"User {userName} accessed Logging page");
-                }
+
+                var userName = user.Identity.Name ?? "Unknown";
+                Logger.LogInformation("User {UserName} accessed Logging page", userName);
             }
             catch (Exception ex)
             {

@@ -1,10 +1,12 @@
 @using BusinessEntity.Models
 @using Radzen
 @using Radzen.Blazor
-
 @if (Visible)
 {
-    <div class="card h-100 d-flex flex-column" style="height: 100%;">
+    <div id="main-tree-container" class="card h-100 d-flex flex-column" style="height: 100%;"
+         @oncontextmenu="ShowContextMenu"
+         @oncontextmenu:preventDefault
+         @oncontextmenu:stopPropagation>
         <div class="card-header d-flex justify-content-between align-items-center">
             <h6 class="mb-0">Структура бизнес-сущностей</h6>
         </div>
@@ -29,4 +31,7 @@
             }
         </div>
     </div>
+
+    @* Host component for dynamic Radzen context menus *@
+    <RadzenContextMenu />
 }
