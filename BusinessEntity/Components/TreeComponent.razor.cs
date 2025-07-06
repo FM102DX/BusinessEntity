@@ -260,9 +260,7 @@ namespace BusinessEntity.Components
                 Logger.LogError(ex, "Error building tree for space {SpaceId}", spaceId);
                 return new List<TreeNodeItemViewModelBase>();
             }
-        }
-
-        private void ShowContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+        }        private void OnTreeContextMenu(TreeItemContextMenuEventArgs args)
         {
             var menuItems = new List<ContextMenuItem>()
             {
@@ -270,9 +268,9 @@ namespace BusinessEntity.Components
                 new ContextMenuItem() { Text = "Пункт Б", Value = "B" }
             };
 
-            ContextMenu.Open(e, menuItems, async (item) =>
+            // TreeItemContextMenuEventArgs уже наследуется от MouseEventArgs, поэтому используем args напрямую
+            ContextMenu.Open(args, menuItems, async (item) =>
             {
-                // Пример: логируем выбор пункта меню
                 if (WebLogger != null)
                 {
                     await WebLogger.Information($"Context menu selected: {item?.Value}");

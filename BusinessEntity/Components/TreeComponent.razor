@@ -3,17 +3,15 @@
 @using Radzen.Blazor
 @if (Visible)
 {
-    <div id="main-tree-container" class="card h-100 d-flex flex-column" style="height: 100%;"
-         @oncontextmenu="ShowContextMenu"
-         @oncontextmenu:preventDefault
-         @oncontextmenu:stopPropagation>
+    <div id="main-tree-container" class="card h-100 d-flex flex-column" style="height: 100%;">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h6 class="mb-0">Структура бизнес-сущностей</h6>
         </div>
         <div class="card-body p-2 flex-grow-1" style="overflow-y: auto;">
             @if (TreeData != null && TreeData.Any())
             {
-                <RadzenTree Data="@TreeData" Style="width: 100%; height: 100%;">
+                <RadzenTree Data="@TreeData" Style="width: 100%; height: 100%;"
+                            ItemContextMenu="@OnTreeContextMenu">
                     <RadzenTreeLevel Text="@GetNodeText" ChildrenProperty="Children" />
                 </RadzenTree>
             }
