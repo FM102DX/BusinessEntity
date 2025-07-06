@@ -130,19 +130,23 @@ namespace BusinessEntity.Components
                 Logger.LogError(ex, "Error building tree");
                 return new List<TreeNodeItemViewModelBase>();
             }
-        }
-
-        private async Task<TreeNodeItemViewModelBase> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entity)
+        }        private async Task<TreeNodeItemViewModelBase> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entity)
         {
             var icon = GetEntityIcon(entity.EntityType);
-            var treeNodeVm = new TreeNodeItemViewModelBase
+              // Создаем соответствующий тип наследника в зависимости от типа сущности
+            TreeNodeItemViewModelBase treeNodeVm = entity.EntityType switch
             {
-                Title = entity.Name,
-                Icon = icon,
-                Entity = entity,
-                EntityType = entity.EntityType.ToString(),
-                Expanded = true
+                BusinessEntityTypeEnum.Folder => new FolderTreeNodeItemViewModel(WebLogger),
+                BusinessEntityTypeEnum.Page => new DocumentTreeNodeItemViewModel(WebLogger),
+                _ => new FolderTreeNodeItemViewModel(WebLogger) // По умолчанию используем Folder
             };
+
+            // Заполняем общие свойства
+            treeNodeVm.Title = entity.Name;
+            treeNodeVm.Icon = icon;
+            treeNodeVm.Entity = entity;
+            treeNodeVm.EntityType = entity.EntityType.ToString();
+            treeNodeVm.Expanded = true;
 
             // Получаем дочерние сущности
             var children = await BusinessEntityHelper.GetChildEntitiesAsync(entity.Id);
@@ -197,32 +201,10 @@ namespace BusinessEntity.Components
             {
                 IsLoading = false;
                 StateHasChanged();
-            }        }
-
-        public async Task CreateAdditionalTestDataAndRefreshAsync()
-        {
-            if (!UserContextService.HasSelectedSpace)
-            {
-                Logger.LogWarning("Cannot create test data - no space selected");
-                return;
-            }
-
-            IsLoading = true;
-            StateHasChanged();
-            
-            try
-            {
-                // Создаем дополнительные тестовые данные в выбранном пространстве
-                await SampleDataService.InitializeSampleDataAsync();
-                await UpdateTreeForCurrentSpace();
-            }
-            finally
-            {
-                IsLoading = false;
-                StateHasChanged();
             }
         }
 
+ 
         private string DumpTree(IEnumerable<TreeNodeItemViewModelBase> nodes, int indentLevel)
         {
             var sb = new System.Text.StringBuilder();
@@ -262,23 +244,34 @@ namespace BusinessEntity.Components
             }
         }        private void OnTreeContextMenu(TreeItemContextMenuEventArgs args)
         {
-            var menuItems = new List<ContextMenuItem>()
+            // Получаем выбранный узел дерева
+            var selectedNode = args.Value as TreeNodeItemViewModelBase;
+            if (selectedNode == null)
             {
-                new ContextMenuItem() { Text = "Пункт А", Value = "A" },
-                new ContextMenuItem() { Text = "Пункт Б", Value = "B" }
-            };
+                Logger.LogWarning("Unable to get selected tree node from context menu args");
+                return;
+            }
+
+            // Получаем пункты меню из модели
+            var menuItems = selectedNode.CreateContextMenu();
 
             // TreeItemContextMenuEventArgs уже наследуется от MouseEventArgs, поэтому используем args напрямую
             ContextMenu.Open(args, menuItems, async (item) =>
             {
                 if (WebLogger != null)
                 {
-                    await WebLogger.Information($"Context menu selected: {item?.Value}");
+                    var selectedText = item?.Text ?? "Неизвестный пункт";
+                    var nodeType = selectedNode.MenuText;
+                    await WebLogger.Information($"Выбран пункт '{selectedText}' для {nodeType} '{selectedNode.Title}'");
+                }
+                  // Напрямую вызываем обработчик в ViewModel
+                var actionValue = item?.Value?.ToString();
+                if (!string.IsNullOrEmpty(actionValue))
+                {
+                    await selectedNode.HandleMenuActionAsync(actionValue);
                 }
             });
-        }
-
-        public void Dispose()
+        }        public void Dispose()
         {
             // Отписываемся от события при уничтожении компонента
             if (UserContextService != null)

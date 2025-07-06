@@ -1,9 +1,18 @@
 using BusinessEntity.Core.Classes;
+using Radzen;
+using SampleOnlineMall.WebLogger.Services;
 
 namespace BusinessEntity.Models
 {
-    public class TreeNodeItemViewModelBase
+    public abstract class TreeNodeItemViewModelBase
     {
+        protected readonly IWebLoggerService? _webLogger;
+
+        protected TreeNodeItemViewModelBase(IWebLoggerService? webLogger = null)
+        {
+            _webLogger = webLogger;
+        }
+
         public string Title { get; set; } = string.Empty;
         public string Icon { get; set; } = string.Empty;
         public BusinessEntity.Core.Classes.BusinessEntity? Entity { get; set; }
@@ -16,5 +25,15 @@ namespace BusinessEntity.Models
         
         // Вспомогательное свойство для определения наличия дочерних элементов
         public bool HasChildren => Children?.Any() == true;
+        
+        // Виртуальные свойства для текста и иконки меню
+        public virtual string MenuText => "Элемент";
+        public virtual string MenuIcon => "help";
+        
+        // Абстрактный метод для создания контекстного меню
+        public abstract List<ContextMenuItem> CreateContextMenu();
+        
+        // Абстрактный метод для обработки действий меню
+        public abstract Task HandleMenuActionAsync(string action);
     }
 }
