@@ -11,8 +11,9 @@
             @if (TreeData != null && TreeData.Any())
             {
                 <RadzenTree Data="@TreeData" Style="width: 100%; height: 100%;"
-                            ItemContextMenu="@OnTreeContextMenu">
-                    <RadzenTreeLevel Text="@GetNodeText" ChildrenProperty="Children" />
+                            ItemContextMenu="@OnTreeContextMenu"
+                            AllowCheckBoxes="false">
+                    <RadzenTreeLevel Text="@GetNodeText" ChildrenProperty="Children" Expanded="@IsNodeExpanded" />
                 </RadzenTree>
             }
             else if (IsLoading)

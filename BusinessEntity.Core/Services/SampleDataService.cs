@@ -51,8 +51,8 @@ namespace BusinessEntity.Core.Services
                 var folderContainsFolder = relationTypes.FirstOrDefault(r => r.RelationName == "basic:folder-contains-folder");
 
                 // Создаём несколько страниц прямо в пространстве "Документы"
-                var directPage1 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Welcome Page");
-                var directPage2 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Quick Start Guide");
+                var directPage1 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Document, "Welcome Document");
+                var directPage2 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Document, "Quick Start Guide");
                 
                 if (spaceContainsPage != null)
                 {
@@ -75,9 +75,9 @@ namespace BusinessEntity.Core.Services
                     int pageCount = i == 1 ? 2 : 3; // В первой папке 2 страницы, в остальных по 3
                     for (int j = 1; j <= pageCount; j++)
                     {
-                        var page = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, $"Document {i}-{j}");
+                        var page = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Document, $"Document {i}-{j}");
                         
-                        // Связываем Folder с Page
+                        // Связываем Folder с Document
                         if (folderContainsPage != null)
                         {
                             await _helper.CreateRelation(folder, page, folderContainsPage, "");
@@ -91,7 +91,7 @@ namespace BusinessEntity.Core.Services
                         await _helper.CreateRelation(folder, subFolder, folderContainsFolder, "");
                         
                         // Добавляем страницу в подпапку
-                        var subPage = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Sub-document 1-1-1");
+                        var subPage = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Document, "Sub-document 1-1-1");
                         if (folderContainsPage != null)
                         {
                             await _helper.CreateRelation(subFolder, subPage, folderContainsPage, "");
@@ -100,7 +100,7 @@ namespace BusinessEntity.Core.Services
                 }
 
                 // Демонстрация дублирования: добавляем одну из страниц также в другую папку
-                var existingPage = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Shared Document");
+                var existingPage = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Document, "Shared Document");
                 if (folderContainsPage != null)
                 {
                     // Получаем первые две папки для демонстрации дублирования
@@ -115,8 +115,8 @@ namespace BusinessEntity.Core.Services
 
                 // Заполняем пространство "Новости"
                 // 1) Прямые страницы
-                var newsDirect1 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Новости дня");
-                var newsDirect2 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, "Аналитика");
+                var newsDirect1 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Document, "Новости дня");
+                var newsDirect2 = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Document, "Аналитика");
 
                 if (spaceContainsPage != null)
                 {
@@ -137,7 +137,7 @@ namespace BusinessEntity.Core.Services
                     // В каждой рубрике по 2 новости
                     for (int j = 1; j <= 2; j++)
                     {
-                        var newsArticle = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Page, $"Новость {i}-{j}");
+                        var newsArticle = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Document, $"Новость {i}-{j}");
                         if (folderContainsPage != null)
                         {
                             await _helper.CreateRelation(newsFolder, newsArticle, folderContainsPage, "");

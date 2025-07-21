@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 
 namespace BusinessEntity.Core.Classes
 {
-    public class Page : BusinessEntityBase, IBusinessEntity
+    public class Document : BusinessEntityBase, IBusinessEntity
     {
-        public override BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Page;
+        public override BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Document;
     }
 }

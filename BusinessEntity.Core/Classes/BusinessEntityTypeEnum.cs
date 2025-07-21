@@ -10,7 +10,7 @@ namespace BusinessEntity.Core.Classes
     {
         Space=100,
         Folder = 200,
-        Page = 300,
+        Document = 300,
 
         Undefined = 9999
     }

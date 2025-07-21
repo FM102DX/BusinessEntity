@@ -88,6 +88,8 @@ function Action20 {
 }
 
 function BuildAndRunBusinessLogicContainers {
+    
+    BuildAndRunContainer -container (GetContainerByName -containerName 'postgres-production-db')
     BuildAndRunContainer -container (GetContainerByName -containerName 'admin-node')
     BuildAndRunContainer -container (GetContainerByName -containerName 'assort-api-container')
     BuildAndRunContainer -container (GetContainerByName -containerName 'web_logger-container')
@@ -102,82 +104,54 @@ function SelectContainerAndRun {
     BuildAndRunContainer -container $container
     AjustNetworks   # Подключаем все контейнеры к общей сети после запуска нового
 }
-
 function BuildAndRunPostgresContainer {
     param(
-        [Parameter(Mandatory)]
-        [PSCustomObject]$container
+        [string]$Network    = 'docker-business-entity-common-bridge',
+        [string]$DataVolume = 'pgdata',
+        [string]$ImageTag   = 'latest'
     )
 
-    # Извлекаем параметры из объекта
-    $name           = $container.Name
-    $portInt        = $container.PortInt
-    $portExt        = $container.PortExt
-    $dockerfilePath = $container.DockerfilePath
-    $envDbName      = $container.EnvDbName
-    $envDbUser      = $container.EnvDbUser
-    $envDbPassword  = $container.EnvDbPassword
-    $logPath        = $container.LogPath
-    $networkName    = "docker-business-entity-common-bridge"
-
-    # Контекст сборки — папка, где лежит Dockerfile
-    $contextPath = Split-Path $dockerfilePath -Parent
-
-    # Убедимся, что директория для логов существует
-    if (-not (Test-Path $logPath)) {
-        New-Item -ItemType Directory -Path $logPath | Out-Null
+    # найдём наш контейнер
+    $c = $containers | Where-Object Name -eq 'postgres-production-db'
+    if (-not $c) {
+        Write-Error "Конфиг для 'postgres-production-db' не найден."
+        return
     }
 
-    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $buildLog  = Join-Path $logPath "$name-build-$timestamp.log"
-    $runLog    = Join-Path $logPath "$name-run-$timestamp.log"
+    # удаляем старый контейнер (том останется нетронутым)
+    docker rm -f $c.Name --volumes | Out-Null
 
-    try {
-        Write-Host "[$timestamp] Сборка Docker-образа '$name' из Dockerfile '$dockerfilePath'..."
-        & docker build `
-            --file $dockerfilePath `
-            --tag $name `
-            $contextPath 2>&1 `
-            | Tee-Object -FilePath $buildLog
-
-        if ($LASTEXITCODE -ne 0) {
-            throw "Ошибка при сборке образа. См. лог: $buildLog"
-        }
-
-        # Проверяем, есть ли уже контейнер с таким именем, и если есть — останавливаем и удаляем
-        $existing = docker ps -a --filter "name=^/$name$" --format "{{.Names}}"
-        if ($existing -eq $name) {
-            Write-Host "Контейнер '$name' уже существует. Останавливаю и удаляю..."
-            docker stop $name 2>&1 | Tee-Object -FilePath $runLog -Append
-            docker rm   $name 2>&1 | Tee-Object -FilePath $runLog -Append
-        }
-
-        Write-Host "Запуск контейнера '$name' в сети '$networkName' с портом хоста $portExt на порт контейнера $portInt..."
-        & docker run -d `
-            --name $name `
-            --network $networkName `
-            -e "POSTGRES_DB=$envDbName" `
-            -e "POSTGRES_USER=$envDbUser" `
-            -e "POSTGRES_PASSWORD=$envDbPassword" `
-            -p "$portExt`:$portInt" `
-            $name 2>&1 `
-            | Tee-Object -FilePath $runLog
-
-        if ($LASTEXITCODE -ne 0) {
-            throw "Ошибка при запуске контейнера. См. лог: $runLog"
-        }
-
-        # Автоматически подключаем контейнер к общей сети
-        Connect-ContainerToSharedNetwork -containerName $name
-
-        Write-Host "Контейнер '$name' успешно запущен в сети '$networkName'."
-        Write-Host "Логи сохранены в:"
-        Write-Host "  Build: $buildLog"
-        Write-Host "  Run:   $runLog"
+    # проверяем, что Dockerfile действительно есть
+    if (-not (Test-Path $c.DockerfilePath)) {
+        Write-Error "Dockerfile не найден по пути: $($c.DockerfilePath)"
+        return
     }
-    catch {
-        Write-Error $_
+
+    # контекст сборки — папка, где лежит Dockerfile
+    $ctx = Split-Path -Parent $c.DockerfilePath
+
+    # собираем образ
+    docker build `
+        -t "$($c.Name):$ImageTag" `
+        -f $c.DockerfilePath `
+        $ctx
+
+    # убеждаемся, что папка для логов есть
+    if (-not (Test-Path $c.LogPath)) {
+        New-Item -ItemType Directory -Path $c.LogPath -Force | Out-Null
     }
+
+    # запускаем контейнер
+    docker run -d `
+        --name      $c.Name `
+        --network   $Network `
+        -p          "$($c.PortExt):$($c.PortInt)" `
+        -e          "POSTGRES_DB=$($c.EnvDbName)" `
+        -e          "POSTGRES_USER=$($c.EnvDbUser)" `
+        -e          "POSTGRES_PASSWORD=$($c.EnvDbPassword)" `
+        -v          "$($DataVolume):/var/lib/postgresql/data" `
+        -v          "$($c.LogPath):/var/log/postgresql" `
+        "$($c.Name):$ImageTag"
 }
 function BuildAndRunContainer {
     param (

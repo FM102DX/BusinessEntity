@@ -6,6 +6,7 @@ using BusinessEntity.Core.Classes;
 using SampleOnlineMall.WebLogger.Services;
 using System.Linq;
 using BusinessEntity.Contracts;
+using BusinessEntity.Services;
 using Radzen;
 
 namespace BusinessEntity.Components
@@ -14,6 +15,7 @@ namespace BusinessEntity.Components
     {
         [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
         [Inject] public BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
+        [Inject] public SpaceHelper SpaceHelper { get; set; } = default!;
         [Inject] public ILogger<TreeComponent> Logger { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
@@ -76,13 +78,52 @@ namespace BusinessEntity.Components
                 return;
             }
 
-            // Если пространство выбрано - строим дерево для этого пространства
+            // Если пространство выбрано - строим дерево с корневым пространством
             IsLoading = true;
-            TreeData = await BuildTreeForSpaceAsync(UserContextService.CurrentSpaceId!.Value);
+            
+            var space = await SpaceHelper.GetAsync(UserContextService.CurrentSpaceId!.Value);
+            if (space == null)
+            {
+                Logger.LogWarning("Space with ID {SpaceId} not found", UserContextService.CurrentSpaceId);
+                TreeData = new List<TreeNodeItemViewModelBase>();
+                Visible = false;
+                IsLoading = false;
+                return;
+            }
+
+            var rootSpaceNode = await BuildSpaceRootAsync(space);
+            TreeData = new[] { rootSpaceNode };
             Visible = true;
             IsLoading = false;
             
             Logger.LogInformation($"Tree built for space: {UserContextService.CurrentSpaceName}");
+        }
+
+        private async Task<SpaceTreeNodeItemViewModel> BuildSpaceRootAsync(BusinessEntity.Core.Classes.BusinessEntity space)
+        {
+            var rootVm = new SpaceTreeNodeItemViewModel(WebLogger)
+            {
+                Title = space.Name,
+                Icon = GetEntityIcon(space.EntityType),
+                Entity = space,
+                EntityType = space.EntityType.ToString(),
+                Expanded = true,
+                // Устанавливаем обратный вызов для создания сущностей
+                OnEntityCreateRequested = OnEntityCreateRequestedAsync
+            };
+
+            // Получаем все элементы верхнего уровня в пространстве через BusinessEntityHelper
+            var rootEntities = await BusinessEntityHelper.GetChildEntitiesAsync(space.Id);
+            var childNodes = new List<TreeNodeItemViewModelBase>();
+
+            foreach (var entity in rootEntities)
+            {
+                var childNode = await BuildTreeNodeAsync(entity);
+                childNodes.Add(childNode);
+            }
+
+            rootVm.Children = childNodes;
+            return rootVm;
         }
 
         private async Task<IEnumerable<TreeNodeItemViewModelBase>> BuildTreeAsync()
@@ -134,10 +175,12 @@ namespace BusinessEntity.Components
         {
             var icon = GetEntityIcon(entity.EntityType);
               // Создаем соответствующий тип наследника в зависимости от типа сущности
-            TreeNodeItemViewModelBase treeNodeVm = entity.EntityType switch
+            // Space не обрабатываем здесь, так как он создается через BuildSpaceRootAsync
+            TreeNodeItemViewModelBase treeNodeVm = entity.EntityType.ToString() switch
             {
-                BusinessEntityTypeEnum.Folder => new FolderTreeNodeItemViewModel(WebLogger),
-                BusinessEntityTypeEnum.Page => new DocumentTreeNodeItemViewModel(WebLogger),
+                "Folder" => new FolderTreeNodeItemViewModel(WebLogger),
+                "Document" => new DocumentTreeNodeItemViewModel(WebLogger),
+                "Page" => new DocumentTreeNodeItemViewModel(WebLogger),
                 _ => new FolderTreeNodeItemViewModel(WebLogger) // По умолчанию используем Folder
             };
 
@@ -148,7 +191,7 @@ namespace BusinessEntity.Components
             treeNodeVm.EntityType = entity.EntityType.ToString();
             treeNodeVm.Expanded = true;
 
-            // Получаем дочерние сущности
+            // Получаем дочерние сущности через BusinessEntityHelper для получения детей
             var children = await BusinessEntityHelper.GetChildEntitiesAsync(entity.Id);
             var childNodes = new List<TreeNodeItemViewModelBase>(); 
 
@@ -162,13 +205,14 @@ namespace BusinessEntity.Components
             return treeNodeVm;
         }
 
-        private string GetEntityIcon(BusinessEntityTypeEnum entityType)
+        private string GetEntityIcon(object entityType)
         {
-            return entityType switch
+            return entityType?.ToString() switch
             {
-                BusinessEntityTypeEnum.Space => "📁",
-                BusinessEntityTypeEnum.Folder => "📂",
-                BusinessEntityTypeEnum.Page => "📄",
+                "Space" => "📁",
+                "Folder" => "📂",
+                "Document" => "📄",
+                "Page" => "📄",
                 _ => "❓"
             };
         }
@@ -177,7 +221,8 @@ namespace BusinessEntity.Components
         {
             if (data is TreeNodeItemViewModelBase node)
             {
-                return $"{GetEntityIcon(node.Entity?.EntityType ?? BusinessEntityTypeEnum.Space)} {node.Title}";
+                var entityType = node.Entity?.EntityType.ToString() ?? "Space";
+                return $"{GetEntityIcon(entityType)} {node.Title}";
             }
             return "Unknown";
         }
@@ -278,6 +323,51 @@ namespace BusinessEntity.Components
             {
                 UserContextService.SelectedSpaceChanged -= OnSelectedSpaceChanged;
             }
+        }
+
+        /// <summary>
+        /// Обработчик запроса на создание новой сущности
+        /// </summary>
+        private async Task OnEntityCreateRequestedAsync(TreeNodeItemViewModelBase parentNode, string entityType)
+        {
+            try
+            {
+                if (parentNode?.Entity == null)
+                {
+                    Logger.LogWarning("Cannot create entity - parent node or entity is null");
+                    return;
+                }
+
+                Logger.LogInformation($"Creating new {entityType} in parent {parentNode.Entity.Name}");
+
+                // Пока что просто логируем. TODO: Реализовать создание сущности когда найдем правильный метод
+                Logger.LogInformation($"TODO: Create {entityType} entity under {parentNode.Entity.Name}");
+                
+                // Имитируем успешное создание
+                await Task.Delay(100);
+
+                // Обновляем дерево
+                await UpdateTreeForCurrentSpace();
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, $"Error creating {entityType} entity");
+            }
+        }
+
+        private bool IsNodeExpanded(object data)
+        {
+            if (data is TreeNodeItemViewModelBase node)
+            {
+                // Узлы пространства всегда развернуты
+                if (node.Entity?.EntityType.ToString() == "Space")
+                {
+                    return true;
+                }
+                return node.Expanded;
+            }
+            return false;
         }
     }
 }

@@ -145,6 +145,9 @@ namespace BusinessEntity
             // Регистрируем BusinessEntityHelper
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
 
+            // Регистрируем SpaceHelper
+            builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
+
             // Регистрируем SampleDataService как Scoped (не Singleton), так как он зависит от Scoped BusinessEntityHelper
             builder.Services.AddScoped<BusinessEntity.Core.Contracts.ISampleDataService, BusinessEntity.Core.Services.SampleDataService>();
 

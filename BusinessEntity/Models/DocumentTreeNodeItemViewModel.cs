@@ -10,7 +10,8 @@ namespace BusinessEntity.Models
         }
 
         public override string MenuText => "Документ";
-        public override string MenuIcon => "description";        public override List<ContextMenuItem> CreateContextMenu()
+        public override string MenuIcon => "description";        
+        public override List<ContextMenuItem> CreateContextMenu()
         {
             return new List<ContextMenuItem>()
             {
@@ -27,7 +28,8 @@ namespace BusinessEntity.Models
                     Icon = "delete"
                 }
             };
-        }        public override async Task HandleMenuActionAsync(string action)
+        }        
+        public override async Task HandleMenuActionAsync(string action)
         {
             switch (action)
             {
