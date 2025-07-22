@@ -154,6 +154,9 @@ namespace BusinessEntity
             // Регистрируем UserContextService для хранения выбранного пространства
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
 
+            // Регистрируем TreeSelectionService для управления выбором узлов дерева
+            builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
+
             var connectionString = builder.Configuration.GetConnectionString("DockerConnection");
 			var optionsBuilder = new DbContextOptionsBuilder<KmsBusinessEntityDbContext>();
 			optionsBuilder.UseNpgsql(connectionString);

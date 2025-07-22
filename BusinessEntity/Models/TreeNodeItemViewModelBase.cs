@@ -26,6 +26,9 @@ namespace BusinessEntity.Models
         public bool Expanded { get; set; } = false;
         public string EntityType { get; set; } = string.Empty;
         
+        // Состояние выбора узла для мульти-селекта
+        public bool IsSelected { get; set; } = false;
+        
         // Вспомогательное свойство для определения наличия дочерних элементов
         public bool HasChildren => Children?.Any() == true;
         
@@ -41,5 +44,17 @@ namespace BusinessEntity.Models
         
         // Абстрактный метод для обработки действий меню
         public abstract Task HandleMenuActionAsync(string action);
+
+        // Метод для переключения состояния выбора
+        public void ToggleSelection()
+        {
+            IsSelected = !IsSelected;
+        }
+
+        // Метод для установки состояния выбора
+        public void SetSelected(bool selected)
+        {
+            IsSelected = selected;
+        }
     }
 }

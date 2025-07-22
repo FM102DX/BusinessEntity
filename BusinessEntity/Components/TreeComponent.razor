@@ -1,19 +1,73 @@
 @using BusinessEntity.Models
 @using Radzen
 @using Radzen.Blazor
+
+<style>
+    .tree-node-selected {
+        background-color: #0078d4 !important;
+        color: white !important;
+        /* Убираем все изменения размеров */
+        border-radius: 0;
+        padding: 0;
+        margin: 0;
+        font-weight: inherit; /* Не меняем толщину шрифта */
+        border: none;
+        outline: none;
+    }
+    
+    .tree-multiselect-mode {
+        border-left: 3px solid #2196f3;
+        padding-left: 5px;
+    }
+
+    .rz-treeview-item {
+        cursor: pointer;
+    }
+
+    .rz-treeview-item:hover {
+        background-color: #f5f5f5;
+    }
+
+    /* Убираем стандартное выделение Radzen */
+    .rz-treeview-item.rz-state-highlight {
+        background: none !important;
+    }
+    
+    /* Убираем фокус outline */
+    .rz-treeview-item:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Убираем изменения размеров для всех элементов дерева */
+    .rz-treeview-item-content {
+        padding: 2px 4px;
+        margin: 1px 0;
+        display: inline-block;
+        min-height: 20px;
+        line-height: 16px;
+    }
+</style>
+
 @if (Visible)
 {
     <div id="main-tree-container" class="card h-100 d-flex flex-column" style="height: 100%;">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h6 class="mb-0">Структура бизнес-сущностей</h6>
+            @if (IsMultiSelectMode)
+            {
+                <small class="text-primary">Выбрано: @SelectedNodes.Count</small>
+            }
         </div>
-        <div class="card-body p-2 flex-grow-1" style="overflow-y: auto;">
+        <div class="card-body p-2 flex-grow-1 @(IsMultiSelectMode ? "tree-multiselect-mode" : "")" style="overflow-y: auto;">
             @if (TreeData != null && TreeData.Any())
             {
                 <RadzenTree Data="@TreeData" Style="width: 100%; height: 100%;"
                             ItemContextMenu="@OnTreeContextMenu"
+                            Change="@OnTreeNodeClick"
                             AllowCheckBoxes="false">
-                    <RadzenTreeLevel Text="@GetNodeText" ChildrenProperty="Children" Expanded="@IsNodeExpanded" />
+                    <RadzenTreeLevel Text="@GetNodeText" ChildrenProperty="Children" Expanded="@IsNodeExpanded" 
+                                     Template="@TreeNodeTemplate" />
                 </RadzenTree>
             }
             else if (IsLoading)
@@ -33,4 +87,18 @@
 
     @* Host component for dynamic Radzen context menus *@
     <RadzenContextMenu />
+}
+
+@code {
+    private RenderFragment<RadzenTreeItem> TreeNodeTemplate => (context) => __builder =>
+    {
+        var node = context.Value as TreeNodeItemViewModelBase;
+        var cssClass = node?.IsSelected == true ? "tree-node-selected" : "";
+        var component = this; // Ссылка на компонент
+        
+        <span class="@cssClass" @onclick="async () => await component.OnNodeClicked(node)" 
+              @onclick:stopPropagation="true" @onclick:preventDefault="true">
+            @context.Text
+        </span>
+    };
 }

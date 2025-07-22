@@ -8,6 +8,8 @@ using System.Linq;
 using BusinessEntity.Contracts;
 using BusinessEntity.Services;
 using Radzen;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.JSInterop;
 
 namespace BusinessEntity.Components
 {
@@ -20,13 +22,20 @@ namespace BusinessEntity.Components
         [Inject] IWebLoggerService? WebLogger { get; set; }
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
         [Inject] public ContextMenuService ContextMenu { get; set; } = default!;
+        [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
+        [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
 
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
+        [Parameter] public EventCallback<List<TreeNodeItemViewModelBase>> OnMultipleNodesSelected { get; set; }
         
         private IEnumerable<TreeNodeItemViewModelBase> TreeData { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsLoading { get; set; } = true;
         private bool Visible { get; set; } = false;
-
+        
+        // Состояние мульти-селекта
+        private List<TreeNodeItemViewModelBase> SelectedNodes { get; set; } = new List<TreeNodeItemViewModelBase>();
+        private bool IsMultiSelectMode { get; set; } = false;
+        
         protected override async Task OnInitializedAsync()
         {
             try
@@ -54,6 +63,11 @@ namespace BusinessEntity.Components
             }
         }
 
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            await base.OnAfterRenderAsync(firstRender);
+        }
+
         private async void OnSelectedSpaceChanged(Guid? spaceId)
         {
             try
@@ -78,6 +92,10 @@ namespace BusinessEntity.Components
                 return;
             }
             IsLoading = true;
+            
+            // Очищаем выбранные узлы при смене пространства
+            ClearSelection();
+            
             var rootSpaceNode = await BuildSpaceRootAsync(space);
             TreeData = new[] { rootSpaceNode };
             Visible = true;
@@ -171,11 +189,175 @@ namespace BusinessEntity.Components
             if (data is TreeNodeItemViewModelBase node)
             {
                 var entityType = node.Entity?.EntityType.ToString() ?? "Space";
-                return $"{GetEntityIcon(entityType)} {node.Title}";
+                var icon = GetEntityIcon(entityType);
+                // Убираем галочку, оставляем только иконку и название
+                return $"{icon} {node.Title}";
             }
             return "Unknown";
         }
 
+        // Обработчик изменений в дереве (пустой, так как используем прямые клики)
+        private async Task OnTreeNodeClick(TreeEventArgs args)
+        {
+            // Логику выбора обрабатываем в OnNodeClicked в razor-файле
+            await Task.CompletedTask;
+        }
+
+        // Публичный метод для обработки кликов по узлам (вызывается из razor)
+        public async Task OnNodeClicked(TreeNodeItemViewModelBase? node)
+        {
+            if (node == null) 
+            {
+                Logger.LogWarning("OnNodeClicked: node is null");
+                return;
+            }
+            
+            try
+            {
+                // Получаем состояние клавиш из JavaScript
+                var keyState = await JSRuntime.InvokeAsync<System.Text.Json.JsonElement>("TreeMultiSelect.getKeyState");
+                
+                bool ctrlPressed = false;
+                bool shiftPressed = false;
+                
+                // Правильно парсим JsonElement
+                if (keyState.TryGetProperty("ctrl", out var ctrlProperty))
+                {
+                    ctrlPressed = ctrlProperty.GetBoolean();
+                }
+                
+                if (keyState.TryGetProperty("shift", out var shiftProperty))
+                {
+                    shiftPressed = shiftProperty.GetBoolean();
+                }
+
+                await HandleNodeSelection(node, ctrlPressed, shiftPressed);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error getting key state from JavaScript");
+                // Fallback к обычному выбору
+                await HandleNodeSelection(node, false, false);
+            }
+        }
+
+        // Обработка выбора узла с учетом модификаторов клавиш
+        private async Task HandleNodeSelection(TreeNodeItemViewModelBase node, bool ctrlPressed, bool shiftPressed)
+        {
+            try
+            {
+                // Запрещаем выбор диапазона с Shift
+                if (shiftPressed)
+                {
+                    Logger.LogInformation("Shift selection is disabled in tree");
+                    return;
+                }
+
+                if (ctrlPressed)
+                {
+                    // Мульти-селект с Ctrl
+                    if (node.IsSelected)
+                    {
+                        // Убираем из выбранных
+                        node.SetSelected(false);
+                        SelectedNodes.Remove(node);
+                    }
+                    else
+                    {
+                        // Добавляем к выбранным
+                        node.SetSelected(true);
+                        SelectedNodes.Add(node);
+                    }
+                    IsMultiSelectMode = SelectedNodes.Count > 1;
+                }
+                else
+                {
+                    // Обычный выбор - принудительно очищаем все и выбираем только текущий
+                    ClearSelection(); // Это уже вызывает StateHasChanged()
+                    
+                    node.SetSelected(true);
+                    SelectedNodes.Add(node);
+                    IsMultiSelectMode = false;
+                }
+
+                // Уведомляем сервис о изменении выбора
+                TreeSelectionService.SetSelectedNodes(SelectedNodes);
+                
+                // Уведомляем родительский компонент (для обратной совместимости)
+                if (SelectedNodes.Count == 1)
+                {
+                    await OnNodeSelected.InvokeAsync(SelectedNodes.First());
+                }
+                
+                if (SelectedNodes.Count > 0 && OnMultipleNodesSelected.HasDelegate)
+                {
+                    await OnMultipleNodesSelected.InvokeAsync(new List<TreeNodeItemViewModelBase>(SelectedNodes));
+                }
+
+                Logger.LogInformation($"Selected {SelectedNodes.Count} nodes. Multi-select mode: {IsMultiSelectMode}");
+                
+                // Принудительное обновление UI
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error handling node selection");
+            }
+        }
+
+        // Очистка выбора всех узлов
+        private void ClearSelection()
+        {
+            foreach (var node in SelectedNodes)
+            {
+                node.SetSelected(false);
+            }
+            SelectedNodes.Clear();
+            IsMultiSelectMode = false;
+            
+            // Принудительно очищаем состояние во всем дереве
+            ClearSelectionRecursive(TreeData);
+            
+            // Обновляем UI
+            StateHasChanged();
+        }
+
+        // Рекурсивная очистка выделения во всем дереве
+        private void ClearSelectionRecursive(IEnumerable<TreeNodeItemViewModelBase> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                node.SetSelected(false);
+                
+                if (node.Children?.Any() == true)
+                {
+                    ClearSelectionRecursive(node.Children);
+                }
+            }
+        }
+
+        // Программный выбор всех узлов
+        public void SelectAll()
+        {
+            ClearSelection();
+            SelectAllNodesRecursive(TreeData);
+            IsMultiSelectMode = SelectedNodes.Count > 1;
+            StateHasChanged();
+        }
+
+        private void SelectAllNodesRecursive(IEnumerable<TreeNodeItemViewModelBase> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                node.SetSelected(true);
+                SelectedNodes.Add(node);
+                
+                if (node.Children?.Any() == true)
+                {
+                    SelectAllNodesRecursive(node.Children);
+                }
+            }
+        }
 
         private string DumpTree(IEnumerable<TreeNodeItemViewModelBase> nodes, int indentLevel)
         {

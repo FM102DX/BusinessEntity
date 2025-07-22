@@ -24,6 +24,21 @@
                 </div>
             }
         </div>
+
+        @* Информация о выбранных узлах дерева *@
+        <div class="selected-nodes-info">
+            <div class="alert alert-secondary">
+                <strong>Состояние выбора:</strong> @GetSelectedNodesInfo()
+                @if (IsMultiSelectActive)
+                {
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            Используйте Ctrl+клик для мульти-селекта. Shift+клик отключен.
+                        </small>
+                    </div>
+                }
+            </div>
+        </div>
     </Authorized>
     <NotAuthorized>
         <div class="container mt-5">
@@ -43,6 +58,10 @@
 
 <style>
     .user-info-container {
+        margin-bottom: 20px;
+    }
+
+    .selected-nodes-info {
         margin-bottom: 20px;
     }
 

@@ -19,6 +19,7 @@ namespace BusinessEntity.Pages
         [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
         [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
         [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
+        [Inject] public BusinessEntity.Services.ITreeSelectionService TreeSelectionService { get; set; } = default!;
         
         private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }
@@ -27,7 +28,9 @@ namespace BusinessEntity.Pages
         private IEnumerable<string> EntityTypeEnums { get; set; } = new List<string>();
         private IEnumerable<string> RelationTypeEnums { get; set; } = new List<string>();
         private List<BusinessEntity.Core.Classes.BusinessEntity> BusinessEntities { get; set; } = new List<BusinessEntity.Core.Classes.BusinessEntity>();
-        private TreeNodeItemViewModelBase? SelectedTreeNode { get; set; }
+        
+        // Состояние выбранных узлов дерева через сервис
+        private bool IsMultiSelectActive => TreeSelectionService.IsMultiSelectActive;
 
         protected override async Task OnInitializedAsync()
         {
@@ -68,10 +71,26 @@ namespace BusinessEntity.Pages
                 {
                     Logger.LogInformation("Anonymous user accessed main page");
                 }
+
+                // Подписываемся на изменения выбора в дереве
+                TreeSelectionService.SelectionChanged += OnTreeSelectionChanged;
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error loading user information on main page");
+            }
+        }
+
+        private void OnTreeSelectionChanged(List<TreeNodeItemViewModelBase> selectedNodes)
+        {
+            try
+            {
+                Logger.LogInformation($"Tree selection changed: {selectedNodes.Count} nodes selected");
+                StateHasChanged(); // Обновляем UI при изменении выбора
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error handling tree selection change");
             }
         }
 
@@ -89,22 +108,10 @@ namespace BusinessEntity.Pages
             }
         }
 
-        private void OnTreeNodeSelected(TreeNodeItemViewModelBase selectedNode)
+        // Вспомогательные методы для работы с выбранными узлами
+        private string GetSelectedNodesInfo()
         {
-            try
-            {
-                SelectedTreeNode = selectedNode;
-                Logger.LogInformation($"Tree node selected: {selectedNode?.Title} (Type: {selectedNode?.EntityType})");
-                
-                // Здесь можно добавить дополнительную логику обработки выбранного узла
-                // Например, показать детали сущности в правой панели
-                
-                StateHasChanged();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error handling tree node selection");
-            }
+            return TreeSelectionService.GetSelectedNodesInfo();
         }
     }
 }
