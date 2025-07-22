@@ -104,7 +104,7 @@ namespace BusinessEntity.Core.Services
                 if (folderContainsPage != null)
                 {
                     // Получаем первые две папки для демонстрации дублирования
-                    var allFolders = await _helper.GetChildEntitiesAsync(documentsSpace.Id);
+                    var allFolders = await _helper.GetContainedEntitiesAsync(documentsSpace.Id);
                     var folders = allFolders.Where(e => e.EntityType == BusinessEntityTypeEnum.Folder).Take(2).ToList();
                     
                     foreach (var folder in folders)

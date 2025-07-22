@@ -40,7 +40,7 @@ namespace BusinessEntity.Components
                 UserContextService.SelectedSpaceChanged += OnSelectedSpaceChanged;
                 
                 // Проверяем текущее состояние пространства
-                await UpdateTreeForCurrentSpace();
+                await DrawTreeForCurrentSpace();
                 
                 Logger.LogInformation("TreeComponent initialized successfully");
             }
@@ -58,7 +58,7 @@ namespace BusinessEntity.Components
         {
             try
             {
-                await UpdateTreeForCurrentSpace();
+                await DrawTreeForCurrentSpace();
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
@@ -67,36 +67,21 @@ namespace BusinessEntity.Components
             }
         }
 
-        private async Task UpdateTreeForCurrentSpace()
+        private async Task DrawTreeForCurrentSpace()
         {
-            if (!UserContextService.HasSelectedSpace)
+            var space = await SpaceHelper.GetSpaceByIdAsync(UserContextService.CurrentSpaceId!.Value);
+            if (space == null)
             {
                 // Если пространство не выбрано - скрываем дерево
                 TreeData = new List<TreeNodeItemViewModelBase>();
                 Visible = false;
-                Logger.LogInformation("No space selected - hiding tree");
                 return;
             }
-
-            // Если пространство выбрано - строим дерево с корневым пространством
             IsLoading = true;
-            
-            var space = await SpaceHelper.GetAsync(UserContextService.CurrentSpaceId!.Value);
-            if (space == null)
-            {
-                Logger.LogWarning("Space with ID {SpaceId} not found", UserContextService.CurrentSpaceId);
-                TreeData = new List<TreeNodeItemViewModelBase>();
-                Visible = false;
-                IsLoading = false;
-                return;
-            }
-
             var rootSpaceNode = await BuildSpaceRootAsync(space);
             TreeData = new[] { rootSpaceNode };
             Visible = true;
             IsLoading = false;
-            
-            Logger.LogInformation($"Tree built for space: {UserContextService.CurrentSpaceName}");
         }
 
         private async Task<SpaceTreeNodeItemViewModel> BuildSpaceRootAsync(BusinessEntity.Core.Classes.BusinessEntity space)
@@ -113,7 +98,7 @@ namespace BusinessEntity.Components
             };
 
             // Получаем все элементы верхнего уровня в пространстве через BusinessEntityHelper
-            var rootEntities = await BusinessEntityHelper.GetChildEntitiesAsync(space.Id);
+            var rootEntities = await BusinessEntityHelper.GetContainedEntitiesAsync(space.Id);
             var childNodes = new List<TreeNodeItemViewModelBase>();
 
             foreach (var entity in rootEntities)
@@ -126,52 +111,7 @@ namespace BusinessEntity.Components
             return rootVm;
         }
 
-        private async Task<IEnumerable<TreeNodeItemViewModelBase>> BuildTreeAsync()
-        {
-            try
-            {
-                var allBusinessEntities = await BusinessEntityHelper.GetAllBusinessEntities();
-                var treeNodes = new List<TreeNodeItemViewModelBase>();
-
-                if (UserContextService.HasSelectedSpace)
-                {
-                    var currentSpace = allBusinessEntities.FirstOrDefault(e => e.Id == UserContextService.CurrentSpaceId);
-                    if (currentSpace != null)
-                    {
-                        var children = await BusinessEntityHelper.GetChildEntitiesAsync(currentSpace.Id);
-                        foreach (var child in children)
-                        {
-                            var node = await BuildTreeNodeAsync(child);
-                            treeNodes.Add(node);
-                        }
-                    }
-                }
-                else
-                {
-                    // Fallback: если пространство не выбрано (теоретически не должно быть) – покажем все пространства
-                    var rootSpaces = allBusinessEntities.Where(x => x.EntityType == BusinessEntityTypeEnum.Space);
-                    foreach (var space in rootSpaces)
-                    {
-                        var node = await BuildTreeNodeAsync(space);
-                        treeNodes.Add(node);
-                    }
-                }
-
-                // Dump
-                if (WebLogger != null)
-                {
-                    var treeDumpText = DumpTree(treeNodes, 0);
-                    await WebLogger.Information($"Tree dump:\n{treeDumpText}");
-                }
-
-                return treeNodes;
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error building tree");
-                return new List<TreeNodeItemViewModelBase>();
-            }
-        }        private async Task<TreeNodeItemViewModelBase> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entity)
+        private async Task<TreeNodeItemViewModelBase> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entity)
         {
             var icon = GetEntityIcon(entity.EntityType);
               // Создаем соответствующий тип наследника в зависимости от типа сущности
@@ -192,7 +132,7 @@ namespace BusinessEntity.Components
             treeNodeVm.Expanded = true;
 
             // Получаем дочерние сущности через BusinessEntityHelper для получения детей
-            var children = await BusinessEntityHelper.GetChildEntitiesAsync(entity.Id);
+            var children = await BusinessEntityHelper.GetContainedEntitiesAsync(entity.Id);
             var childNodes = new List<TreeNodeItemViewModelBase>(); 
 
             foreach (var child in children)
@@ -227,29 +167,7 @@ namespace BusinessEntity.Components
             return "Unknown";
         }
 
-        public async Task RefreshTreeAsync()
-        {
-            if (!UserContextService.HasSelectedSpace)
-            {
-                Logger.LogWarning("Cannot refresh tree - no space selected");
-                return;
-            }
-            
-            IsLoading = true;
-            StateHasChanged();
-            
-            try
-            {
-                await UpdateTreeForCurrentSpace();
-            }
-            finally
-            {
-                IsLoading = false;
-                StateHasChanged();
-            }
-        }
 
- 
         private string DumpTree(IEnumerable<TreeNodeItemViewModelBase> nodes, int indentLevel)
         {
             var sb = new System.Text.StringBuilder();
@@ -266,34 +184,12 @@ namespace BusinessEntity.Components
             return sb.ToString();
         }
         
-        private async Task<IEnumerable<TreeNodeItemViewModelBase>> BuildTreeForSpaceAsync(Guid spaceId)
-        {
-            try
-            {
-                // Получаем дочерние сущности выбранного пространства (не включая само пространство)
-                var childEntities = await BusinessEntityHelper.GetChildEntitiesAsync(spaceId);
-                var treeNodes = new List<TreeNodeItemViewModelBase>();
-
-                foreach (var entity in childEntities)
-                {
-                    var treeNode = await BuildTreeNodeAsync(entity);
-                    treeNodes.Add(treeNode);
-                }
-
-                return treeNodes;
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Error building tree for space {SpaceId}", spaceId);
-                return new List<TreeNodeItemViewModelBase>();
-            }
-        }        private void OnTreeContextMenu(TreeItemContextMenuEventArgs args)
+       private void OnTreeContextMenu(TreeItemContextMenuEventArgs args)
         {
             // Получаем выбранный узел дерева
             var selectedNode = args.Value as TreeNodeItemViewModelBase;
             if (selectedNode == null)
             {
-                Logger.LogWarning("Unable to get selected tree node from context menu args");
                 return;
             }
 
@@ -303,12 +199,6 @@ namespace BusinessEntity.Components
             // TreeItemContextMenuEventArgs уже наследуется от MouseEventArgs, поэтому используем args напрямую
             ContextMenu.Open(args, menuItems, async (item) =>
             {
-                if (WebLogger != null)
-                {
-                    var selectedText = item?.Text ?? "Неизвестный пункт";
-                    var nodeType = selectedNode.MenuText;
-                    await WebLogger.Information($"Выбран пункт '{selectedText}' для {nodeType} '{selectedNode.Title}'");
-                }
                   // Напрямую вызываем обработчик в ViewModel
                 var actionValue = item?.Value?.ToString();
                 if (!string.IsNullOrEmpty(actionValue))
@@ -316,7 +206,8 @@ namespace BusinessEntity.Components
                     await selectedNode.HandleMenuActionAsync(actionValue);
                 }
             });
-        }        public void Dispose()
+        }        
+       public void Dispose()
         {
             // Отписываемся от события при уничтожении компонента
             if (UserContextService != null)
@@ -347,7 +238,7 @@ namespace BusinessEntity.Components
                 await Task.Delay(100);
 
                 // Обновляем дерево
-                await UpdateTreeForCurrentSpace();
+                await DrawTreeForCurrentSpace();
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)

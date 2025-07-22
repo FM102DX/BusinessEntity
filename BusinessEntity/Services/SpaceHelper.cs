@@ -15,7 +15,7 @@ namespace BusinessEntity.Services
         /// <summary>
         /// Получает пространство по ID
         /// </summary>
-        public async Task<BusinessEntity.Core.Classes.BusinessEntity?> GetAsync(Guid spaceId)
+        public async Task<BusinessEntity.Core.Classes.BusinessEntity?> GetSpaceByIdAsync(Guid spaceId)
         {
             var spaces = await _repository.GetAllAsync(e => e.Id == spaceId && e.EntityType.ToString() == "Space");
             return spaces.FirstOrDefault();

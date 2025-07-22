@@ -97,7 +97,7 @@ namespace BusinessEntity.Core.Services
             return await _relationRepository.GetAllAsync(r => r.ObjectAId == entityId || r.ObjectBId == entityId, ct: ct);
         }
 
-        public async Task<IEnumerable<Classes.BusinessEntity>> GetChildEntitiesAsync(Guid parentId)
+        public async Task<IEnumerable<Classes.BusinessEntity>> GetContainedEntitiesAsync(Guid parentId)
         {
             var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString());
             var childIds = relations.Select(r => r.ObjectBId).ToList();
