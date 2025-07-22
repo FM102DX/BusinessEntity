@@ -7,6 +7,9 @@ using SampleOnlineMall.WebLogger.Services;
 
 namespace BusinessEntity.Core.Services
 {
+    /// <summary>
+    /// Хелпер для работы с бизнес-сущностями
+    /// </summary>
     public class BusinessEntityHelper
     {
         private readonly IAsyncRepository<Classes.BusinessEntity> _businessEntityRepository;
@@ -97,9 +100,12 @@ namespace BusinessEntity.Core.Services
             return await _relationRepository.GetAllAsync(r => r.ObjectAId == entityId || r.ObjectBId == entityId, ct: ct);
         }
 
-        public async Task<IEnumerable<Classes.BusinessEntity>> GetContainedEntitiesAsync(Guid parentId)
+        /// <summary>
+        /// Получает все бизнес-сущности, содержащиеся в родительской сущности
+        /// </summary>
+        public async Task<IEnumerable<Classes.BusinessEntity>> GetContainedEntitiesAsync(Guid parentId, CancellationToken ct = default)
         {
-            var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString());
+            var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString(), ct: ct);
             var childIds = relations.Select(r => r.ObjectBId).ToList();
             
             var children = new List<Classes.BusinessEntity>();
@@ -127,6 +133,74 @@ namespace BusinessEntity.Core.Services
             
             // Сортируем корневые элементы по дате создания
             return rootEntities.OrderBy(e => e.CreatedDate);
+        }
+
+        /// <summary>
+        /// Генерирует новое имя для элемента на основе типа и существующих элементов у родителя
+        /// </summary>
+        private async Task<string> GetNewItemNameAsync(
+            Classes.BusinessEntity parent,
+            BusinessEntityTypeEnum newType,
+            CancellationToken ct = default)
+        {
+            var baseName = $"New{newType}"; // "NewFolder"
+            var children = await GetContainedEntitiesAsync(parent.Id, ct);
+            var sameTypeChildren = children.Where(c => c.EntityType == newType)
+                                          .Select(c => c.Name)
+                                          .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Ищем свободный суффикс
+            for (var i = 1; ; i++)
+            {
+                var candidateName = $"{baseName}{i}";
+                if (!sameTypeChildren.Contains(candidateName))
+                    return candidateName;
+            }
+        }
+
+        /// <summary>
+        /// Создает новую подпапку внутри родительской папки или пространства
+        /// </summary>
+        public async Task<Classes.BusinessEntity> CreateSubFolderAsync(
+            Classes.BusinessEntity parent,
+            CancellationToken ct = default)
+        {
+            if (parent.EntityType != BusinessEntityTypeEnum.Folder && parent.EntityType != BusinessEntityTypeEnum.Space)
+            {
+                throw new ArgumentException("Parent must be a Folder or Space", nameof(parent));
+            }
+
+            // Генерируем уникальное имя
+            var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Folder, ct);
+
+            // Создаем новую сущность
+            var entity = new Classes.BusinessEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                EntityType = BusinessEntityTypeEnum.Folder,
+                BusinessEntityType = BusinessEntityTypeEnum.Folder
+            };
+
+            // Сохраняем сущность
+            await _businessEntityRepository.AddAsync(entity, ct);
+
+            // Создаем связь между родителем и дочерним элементом
+            var relation = new Relation
+            {
+                Id = Guid.NewGuid(),
+                ObjectAId = parent.Id,
+                ObjectBId = entity.Id,
+                RelationType = BusinessEntityRelationTypeEnum.Contains.ToString(),
+                RelationParams = ""
+            };
+
+            // Сохраняем связь
+            await _relationRepository.AddAsync(relation, ct);
+
+            _webLogger?.Information($"Created new folder '{name}' (ID: {entity.Id}) under parent '{parent.Name}' (ID: {parent.Id})");
+
+            return entity;
         }
     }
 } 

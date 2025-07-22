@@ -18,7 +18,7 @@ namespace BusinessEntity.Pages
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
         [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
         [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
-        [Inject] public BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
+        [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         
         private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }

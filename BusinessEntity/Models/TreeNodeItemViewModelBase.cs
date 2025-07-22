@@ -17,8 +17,11 @@ namespace BusinessEntity.Models
         public string Icon { get; set; } = string.Empty;
         public BusinessEntity.Core.Classes.BusinessEntity? Entity { get; set; }
         
+        // Родительский узел
+        public TreeNodeItemViewModelBase? Parent { get; set; }
+        
         // Свойство Children должно быть public и никогда не null для корректной работы с Radzen Tree
-        public IEnumerable<TreeNodeItemViewModelBase> Children { get; set; } = new List<TreeNodeItemViewModelBase>();
+        public List<TreeNodeItemViewModelBase> Children { get; set; } = new List<TreeNodeItemViewModelBase>();
         
         public bool Expanded { get; set; } = false;
         public string EntityType { get; set; } = string.Empty;

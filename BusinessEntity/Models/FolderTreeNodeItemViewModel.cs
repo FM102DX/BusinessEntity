@@ -9,11 +9,26 @@ namespace BusinessEntity.Models
         {
         }
 
+        public FolderTreeNodeItemViewModel(BusinessEntity.Core.Classes.BusinessEntity entity, IWebLoggerService? webLogger = null) : base(webLogger)
+        {
+            Entity = entity;
+            Title = entity.Name;
+            EntityType = entity.EntityType.ToString();
+        }
+
         public override string MenuText => "Папка";
-        public override string MenuIcon => "folder";        public override List<ContextMenuItem> CreateContextMenu()
+        public override string MenuIcon => "folder";
+
+        public override List<ContextMenuItem> CreateContextMenu()
         {
             return new List<ContextMenuItem>()
             {
+                new ContextMenuItem() 
+                { 
+                    Text = "Создать папку", 
+                    Value = "CreateFolder", 
+                    Icon = "create_new_folder"
+                },
                 new ContextMenuItem() 
                 { 
                     Text = "Создать документ", 
@@ -33,10 +48,15 @@ namespace BusinessEntity.Models
                     Icon = "delete"
                 }
             };
-        }        public override async Task HandleMenuActionAsync(string action)
+        }
+
+        public override async Task HandleMenuActionAsync(string action)
         {
             switch (action)
             {
+                case "CreateFolder":
+                    await OnCreateFolderAsync();
+                    break;
                 case "CreateDocument":
                     await OnCreateDocumentAsync();
                     break;
@@ -52,7 +72,20 @@ namespace BusinessEntity.Models
                         await _webLogger.Warning($"Unknown folder action: {action}");
                     break;
             }
-        }        // Заглушки-обработчики для действий с папками
+        }
+
+        // Обработчик создания подпапки
+        private async Task OnCreateFolderAsync()
+        {
+            if (_webLogger != null)
+                await _webLogger.Information($"Создание новой папки в папке: {Title}");
+            
+            // Вызываем обратный вызов для создания папки
+            if (OnEntityCreateRequested != null)
+                await OnEntityCreateRequested(this, "Folder");
+        }
+
+        // Заглушки-обработчики для действий с папками
         private async Task OnCreateDocumentAsync()
         {
             if (_webLogger != null)

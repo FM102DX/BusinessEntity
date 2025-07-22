@@ -14,7 +14,7 @@ namespace BusinessEntity.Components
     public partial class TreeComponent : ComponentBase, IDisposable
     {
         [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
-        [Inject] public BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
+        [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         [Inject] public SpaceHelper SpaceHelper { get; set; } = default!;
         [Inject] public ILogger<TreeComponent> Logger { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
@@ -118,18 +118,27 @@ namespace BusinessEntity.Components
             // Space не обрабатываем здесь, так как он создается через BuildSpaceRootAsync
             TreeNodeItemViewModelBase treeNodeVm = entity.EntityType.ToString() switch
             {
-                "Folder" => new FolderTreeNodeItemViewModel(WebLogger),
+                "Folder" => new FolderTreeNodeItemViewModel(entity, WebLogger),
                 "Document" => new DocumentTreeNodeItemViewModel(WebLogger),
                 "Page" => new DocumentTreeNodeItemViewModel(WebLogger),
-                _ => new FolderTreeNodeItemViewModel(WebLogger) // По умолчанию используем Folder
+                _ => new FolderTreeNodeItemViewModel(entity, WebLogger) // По умолчанию используем Folder
             };
 
-            // Заполняем общие свойства
-            treeNodeVm.Title = entity.Name;
+            // Заполняем общие свойства (некоторые уже заполнены в конструкторе для Folder)
+            if (entity.EntityType.ToString() != "Folder")
+            {
+                treeNodeVm.Title = entity.Name;
+                treeNodeVm.Entity = entity;
+                treeNodeVm.EntityType = entity.EntityType.ToString();
+            }
             treeNodeVm.Icon = icon;
-            treeNodeVm.Entity = entity;
-            treeNodeVm.EntityType = entity.EntityType.ToString();
             treeNodeVm.Expanded = true;
+
+            // Устанавливаем обратный вызов для создания сущностей у папок
+            if (entity.EntityType.ToString() == "Folder")
+            {
+                treeNodeVm.OnEntityCreateRequested = OnEntityCreateRequestedAsync;
+            }
 
             // Получаем дочерние сущности через BusinessEntityHelper для получения детей
             var children = await BusinessEntityHelper.GetContainedEntitiesAsync(entity.Id);
@@ -199,11 +208,19 @@ namespace BusinessEntity.Components
             // TreeItemContextMenuEventArgs уже наследуется от MouseEventArgs, поэтому используем args напрямую
             ContextMenu.Open(args, menuItems, async (item) =>
             {
-                  // Напрямую вызываем обработчик в ViewModel
-                var actionValue = item?.Value?.ToString();
-                if (!string.IsNullOrEmpty(actionValue))
+                try
                 {
-                    await selectedNode.HandleMenuActionAsync(actionValue);
+                    // Напрямую вызываем обработчик в ViewModel
+                    var actionValue = item?.Value?.ToString();
+                    if (!string.IsNullOrEmpty(actionValue))
+                    {
+                        await selectedNode.HandleMenuActionAsync(actionValue);
+                    }
+                }
+                finally
+                {
+                    // Закрываем контекстное меню после выполнения действия
+                    ContextMenu.Close();
                 }
             });
         }        
@@ -231,14 +248,34 @@ namespace BusinessEntity.Components
 
                 Logger.LogInformation($"Creating new {entityType} in parent {parentNode.Entity.Name}");
 
-                // Пока что просто логируем. TODO: Реализовать создание сущности когда найдем правильный метод
-                Logger.LogInformation($"TODO: Create {entityType} entity under {parentNode.Entity.Name}");
-                
-                // Имитируем успешное создание
-                await Task.Delay(100);
+                switch (entityType)
+                {
+                    case "Folder":
+                        // Создаем новую папку через BusinessEntityHelper
+                        var newEntity = await BusinessEntityHelper.CreateSubFolderAsync(parentNode.Entity);
+                        
+                        // Создаем view model для новой папки используя новый конструктор
+                        var childNode = new FolderTreeNodeItemViewModel(newEntity, WebLogger)
+                        {
+                            Icon = GetEntityIcon(newEntity.EntityType),
+                            Expanded = false,
+                            Parent = parentNode,
+                            OnEntityCreateRequested = OnEntityCreateRequestedAsync // Устанавливаем колбэк для новой папки
+                        };
+                        
+                        // Добавляем новую ноду в дерево
+                        parentNode.Children.Add(childNode);
+                        parentNode.Expanded = true; // Разворачиваем родительскую ноду
+                        
+                        Logger.LogInformation($"Successfully created folder '{newEntity.Name}' under '{parentNode.Entity.Name}'");
+                        break;
+                        
+                    default:
+                        Logger.LogInformation($"TODO: Create {entityType} entity under {parentNode.Entity.Name}");
+                        break;
+                }
 
-                // Обновляем дерево
-                await DrawTreeForCurrentSpace();
+                // Обновляем UI
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
