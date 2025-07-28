@@ -29,6 +29,9 @@ namespace BusinessEntity.Models
         // Состояние выбора узла для мульти-селекта
         public bool IsSelected { get; set; } = false;
         
+        // Состояние перетаскивания узла
+        public bool IsDragging { get; set; } = false;
+        
         // Вспомогательное свойство для определения наличия дочерних элементов
         public bool HasChildren => Children?.Any() == true;
         
@@ -55,6 +58,12 @@ namespace BusinessEntity.Models
         public void SetSelected(bool selected)
         {
             IsSelected = selected;
+        }
+        
+        // Метод для установки состояния перетаскивания
+        public void SetDragging(bool dragging)
+        {
+            IsDragging = dragging;
         }
     }
 }

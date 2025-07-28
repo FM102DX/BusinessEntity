@@ -13,6 +13,7 @@ namespace BusinessEntity.Services
         void SetSelectedNodes(List<TreeNodeItemViewModelBase> nodes);
         void ClearSelection();
         string GetSelectedNodesInfo();
+        List<string> GetSelectedTitles();
     }
 
     public class TreeSelectionService : ITreeSelectionService
@@ -57,6 +58,11 @@ namespace BusinessEntity.Services
             if (spaces > 0) info.Add($"пространств: {spaces}");
             
             return $"Выбрано {_selectedNodes.Count} элементов ({string.Join(", ", info)})";
+        }
+        
+        public List<string> GetSelectedTitles()
+        {
+            return _selectedNodes.Select(n => n.Title).ToList();
         }
     }
 } 

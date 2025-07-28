@@ -8,6 +8,7 @@ using System.Linq;
 using BusinessEntity.Contracts;
 using BusinessEntity.Services;
 using Radzen;
+using Radzen.Blazor;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 
@@ -94,7 +95,7 @@ namespace BusinessEntity.Components
             IsLoading = true;
             
             // Очищаем выбранные узлы при смене пространства
-            ClearSelection();
+            await ClearSelection();
             
             var rootSpaceNode = await BuildSpaceRootAsync(space);
             TreeData = new[] { rootSpaceNode };
@@ -242,104 +243,89 @@ namespace BusinessEntity.Components
         }
 
         // Обработка выбора узла с учетом модификаторов клавиш
-        private async Task HandleNodeSelection(TreeNodeItemViewModelBase node, bool ctrlPressed, bool shiftPressed)
+        private async Task HandleNodeSelection(TreeNodeItemViewModelBase clickedNode, bool isCtrlPressed, bool isShiftPressed)
         {
-            try
-            {
-                // Запрещаем выбор диапазона с Shift
-                if (shiftPressed)
-                {
-                    Logger.LogInformation("Shift selection is disabled in tree");
-                    return;
-                }
+            if (clickedNode == null) return;
 
-                if (ctrlPressed)
+            // Игнорируем Shift+click (запрещаем выбор диапазона)
+            if (isShiftPressed) return;
+
+            if (isCtrlPressed)
+            {
+                // Ctrl+click: добавить/убрать из выделения
+                if (clickedNode.IsSelected)
                 {
-                    // Мульти-селект с Ctrl
-                    if (node.IsSelected)
-                    {
-                        // Убираем из выбранных
-                        node.SetSelected(false);
-                        SelectedNodes.Remove(node);
-                    }
-                    else
-                    {
-                        // Добавляем к выбранным
-                        node.SetSelected(true);
-                        SelectedNodes.Add(node);
-                    }
-                    IsMultiSelectMode = SelectedNodes.Count > 1;
+                    clickedNode.SetSelected(false);
+                    SelectedNodes.Remove(clickedNode);
                 }
                 else
                 {
-                    // Обычный выбор - принудительно очищаем все и выбираем только текущий
-                    ClearSelection(); // Это уже вызывает StateHasChanged()
-                    
-                    node.SetSelected(true);
-                    SelectedNodes.Add(node);
-                    IsMultiSelectMode = false;
+                    clickedNode.SetSelected(true);
+                    SelectedNodes.Add(clickedNode);
                 }
-
-                // Уведомляем сервис о изменении выбора
-                TreeSelectionService.SetSelectedNodes(SelectedNodes);
-                
-                // Уведомляем родительский компонент (для обратной совместимости)
-                if (SelectedNodes.Count == 1)
-                {
-                    await OnNodeSelected.InvokeAsync(SelectedNodes.First());
-                }
-                
-                if (SelectedNodes.Count > 0 && OnMultipleNodesSelected.HasDelegate)
-                {
-                    await OnMultipleNodesSelected.InvokeAsync(new List<TreeNodeItemViewModelBase>(SelectedNodes));
-                }
-
-                Logger.LogInformation($"Selected {SelectedNodes.Count} nodes. Multi-select mode: {IsMultiSelectMode}");
-                
-                // Принудительное обновление UI
-                StateHasChanged();
             }
-            catch (Exception ex)
+            else
             {
-                Logger.LogError(ex, "Error handling node selection");
+                // Обычный click: очистить все выделения и выделить только текущий узел
+                await ClearSelection();
+                clickedNode.SetSelected(true);
+                SelectedNodes.Add(clickedNode);
             }
+
+            // Обновляем состояние мульти-селекта
+            IsMultiSelectMode = SelectedNodes.Count > 1;
+            
+            // Обновляем сервис выделения
+            TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
+            
+            // Принудительно обновляем UI
+            await InvokeAsync(StateHasChanged);
         }
 
-        // Очистка выбора всех узлов
-        private void ClearSelection()
+        private async Task ClearSelection()
         {
-            foreach (var node in SelectedNodes)
+            // Очищаем коллекцию выбранных узлов
+            foreach (var node in SelectedNodes.ToList())
             {
                 node.SetSelected(false);
             }
             SelectedNodes.Clear();
+            
+            // Рекурсивно очищаем все узлы в дереве
+            if (TreeData != null)
+            {
+                foreach (var rootNode in TreeData)
+                {
+                    ClearSelectionRecursive(rootNode);
+                }
+            }
+            
             IsMultiSelectMode = false;
+            TreeSelectionService.ClearSelection();
             
-            // Принудительно очищаем состояние во всем дереве
-            ClearSelectionRecursive(TreeData);
-            
-            // Обновляем UI
-            StateHasChanged();
+            // Принудительно обновляем UI
+            await InvokeAsync(StateHasChanged);
         }
 
-        // Рекурсивная очистка выделения во всем дереве
-        private void ClearSelectionRecursive(IEnumerable<TreeNodeItemViewModelBase> nodes)
+        private void ClearSelectionRecursive(TreeNodeItemViewModelBase node)
         {
-            foreach (var node in nodes)
+            if (node == null) return;
+            
+            node.SetSelected(false);
+            
+            if (node.Children != null)
             {
-                node.SetSelected(false);
-                
-                if (node.Children?.Any() == true)
+                foreach (var child in node.Children.Cast<TreeNodeItemViewModelBase>())
                 {
-                    ClearSelectionRecursive(node.Children);
+                    ClearSelectionRecursive(child);
                 }
             }
         }
 
         // Программный выбор всех узлов
-        public void SelectAll()
+        public async Task SelectAll()
         {
-            ClearSelection();
+            await ClearSelection();
             SelectAllNodesRecursive(TreeData);
             IsMultiSelectMode = SelectedNodes.Count > 1;
             StateHasChanged();
@@ -479,5 +465,218 @@ namespace BusinessEntity.Components
             }
             return false;
         }
+
+        #region Drag & Drop Handlers
+
+        /// <summary>
+        /// Обработчик начала перетаскивания узла
+        /// </summary>
+        private async Task OnDragStart(DragEventArgs e, TreeNodeItemViewModelBase? draggedNode)
+        {
+            try
+            {
+                if (draggedNode == null)
+                {
+                    Logger.LogWarning("OnDragStart: dragged node is null");
+                    return;
+                }
+
+                Logger.LogInformation($"Drag started for node: {draggedNode.Title}");
+
+                // Проверяем, входит ли перетаскиваемый узел в выбранные
+                if (!SelectedNodes.Contains(draggedNode))
+                {
+                    // Если узел не выбран, очищаем выбор и выбираем только его
+                    await ClearSelection();
+                    draggedNode.SetSelected(true);
+                    SelectedNodes.Add(draggedNode);
+                    TreeSelectionService.SetSelectedNodes(SelectedNodes);
+                }
+
+                // Помечаем все выбранные узлы как перетаскиваемые
+                foreach (var node in SelectedNodes)
+                {
+                    node.SetDragging(true);
+                }
+
+                // Информация о перетаскиваемых узлах сохраняется в поле SelectedNodes
+                var draggedTitles = SelectedNodes.Select(n => n.Title).ToList();
+
+                Logger.LogInformation($"Dragging {SelectedNodes.Count} selected nodes");
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error in OnDragStart");
+            }
+        }
+
+        /// <summary>
+        /// Обработчик перетаскивания над целью
+        /// </summary>
+        private void OnDragOver(DragEventArgs e)
+        {
+            // Разрешаем drop операцию
+            // В Blazor preventDefault() выполняется через атрибут @ondragover:preventDefault="true"
+        }
+
+        /// <summary>
+        /// Обработчик входа в зону drop
+        /// </summary>
+        private void OnDragEnter(DragEventArgs e, TreeNodeItemViewModelBase? targetNode)
+        {
+            if (targetNode != null && CanDropToTarget(targetNode))
+            {
+                // Добавляем CSS класс для визуального индикатора
+                // Это потребует дополнительной логики состояния
+            }
+        }
+
+        /// <summary>
+        /// Обработчик выхода из зоны drop
+        /// </summary>
+        private void OnDragLeave(DragEventArgs e, TreeNodeItemViewModelBase? targetNode)
+        {
+            // Убираем визуальный индикатор
+        }
+
+        /// <summary>
+        /// Обработчик завершения перетаскивания (drop)
+        /// </summary>
+        private async Task OnDrop(DragEventArgs e, TreeNodeItemViewModelBase? targetNode)
+        {
+            try
+            {
+                if (targetNode == null)
+                {
+                    Logger.LogWarning("OnDrop: target node is null");
+                    return;
+                }
+
+                // Проверяем, можно ли дропнуть в эту цель
+                if (!CanDropToTarget(targetNode))
+                {
+                    Logger.LogInformation($"Drop cancelled: cannot drop to {targetNode.EntityType} '{targetNode.Title}'");
+                    return;
+                }
+
+                // Получаем список перетаскиваемых узлов
+                var draggedNodes = SelectedNodes.Where(n => n.IsDragging).ToList();
+                if (!draggedNodes.Any())
+                {
+                    Logger.LogWarning("OnDrop: no dragged nodes found");
+                    return;
+                }
+
+                // Проверяем, не пытаемся ли дропнуть узел в самого себя или своих потомков
+                if (IsDropToSelfOrDescendant(draggedNodes, targetNode))
+                {
+                    Logger.LogInformation("Drop cancelled: cannot drop node to itself or its descendant");
+                    return;
+                }
+
+                // Логируем операцию
+                var draggedTitles = draggedNodes.Select(n => n.Title).ToList();
+                Logger.LogInformation($"Dropped: [{string.Join(", ", draggedTitles)}] -> {targetNode.Title} (ID: {targetNode.Entity?.Id})");
+
+                // TODO: Здесь будет реальная бизнес-логика перемещения
+                // Пока что только логируем операцию
+
+                // Убираем флаги перетаскивания
+                ClearDraggingFlags();
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error in OnDrop");
+            }
+        }
+
+        /// <summary>
+        /// Обработчик окончания перетаскивания (независимо от результата)
+        /// </summary>
+        private async Task OnDragEnd(DragEventArgs e, TreeNodeItemViewModelBase? draggedNode)
+        {
+            try
+            {
+                Logger.LogInformation("Drag operation ended");
+                
+                // Убираем флаги перетаскивания у всех узлов
+                ClearDraggingFlags();
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error in OnDragEnd");
+            }
+        }
+
+        /// <summary>
+        /// Проверяет, можно ли дропнуть в указанную цель
+        /// </summary>
+        private bool CanDropToTarget(TreeNodeItemViewModelBase targetNode)
+        {
+            // Можно дропать только в папки и пространства
+            return targetNode.EntityType == "Folder" || targetNode.EntityType == "Space";
+        }
+
+        /// <summary>
+        /// Проверяет, не пытаемся ли дропнуть узел в самого себя или своих потомков
+        /// </summary>
+        private bool IsDropToSelfOrDescendant(List<TreeNodeItemViewModelBase> draggedNodes, TreeNodeItemViewModelBase targetNode)
+        {
+            foreach (var draggedNode in draggedNodes)
+            {
+                // Проверяем, не является ли цель самим перетаскиваемым узлом
+                if (draggedNode == targetNode)
+                    return true;
+
+                // Проверяем, не является ли цель потомком перетаскиваемого узла
+                if (IsDescendantOf(targetNode, draggedNode))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Проверяет, является ли node потомком ancestor
+        /// </summary>
+        private bool IsDescendantOf(TreeNodeItemViewModelBase node, TreeNodeItemViewModelBase ancestor)
+        {
+            var current = node.Parent;
+            while (current != null)
+            {
+                if (current == ancestor)
+                    return true;
+                current = current.Parent;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Убирает флаги перетаскивания у всех узлов
+        /// </summary>
+        private void ClearDraggingFlags()
+        {
+            ClearDraggingFlagsRecursive(TreeData);
+        }
+
+        /// <summary>
+        /// Рекурсивно убирает флаги перетаскивания
+        /// </summary>
+        private void ClearDraggingFlagsRecursive(IEnumerable<TreeNodeItemViewModelBase> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                node.SetDragging(false);
+                
+                if (node.Children?.Any() == true)
+                {
+                    ClearDraggingFlagsRecursive(node.Children);
+                }
+            }
+        }
+
+        #endregion
     }
 }

@@ -15,9 +15,21 @@
         outline: none;
     }
     
-    .tree-multiselect-mode {
-        border-left: 3px solid #2196f3;
-        padding-left: 5px;
+    .tree-node-dragging {
+        opacity: 0.5;
+        background-color: #ddd !important;
+        color: #666 !important;
+        cursor: move;
+    }
+    
+    .tree-node-drag-over {
+        background-color: #e3f2fd !important;
+        border: 2px dashed #2196f3 !important;
+    }
+    
+    .tree-multiselect-mode .card-header {
+        background-color: #e3f2fd;
+        border-bottom: 2px solid #2196f3;
     }
 
     .rz-treeview-item {
@@ -39,27 +51,39 @@
         box-shadow: none !important;
     }
 
-    /* Убираем изменения размеров для всех элементов дерева */
+    /* Контроль размеров для элементов дерева */
     .rz-treeview-item-content {
         padding: 2px 4px;
-        margin: 1px 0;
+        margin: 0;
         display: inline-block;
-        min-height: 20px;
-        line-height: 16px;
+        line-height: normal;
+        box-sizing: border-box;
+    }
+
+    /* Убираем лишние отступы и обеспечиваем корректную высоту */
+    .rz-treeview {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+
+    /* Основной контейнер дерева */
+    #main-tree-container {
+        overflow: hidden;
+    }
+
+    /* Card-body должен показывать скролл только при необходимости */
+    #main-tree-container .card-body {
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 8px;
     }
 </style>
 
 @if (Visible)
 {
-    <div id="main-tree-container" class="card h-100 d-flex flex-column" style="height: 100%;">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h6 class="mb-0">Структура бизнес-сущностей</h6>
-            @if (IsMultiSelectMode)
-            {
-                <small class="text-primary">Выбрано: @SelectedNodes.Count</small>
-            }
-        </div>
-        <div class="card-body p-2 flex-grow-1 @(IsMultiSelectMode ? "tree-multiselect-mode" : "")" style="overflow-y: auto;">
+    <div id="main-tree-container" class="card h-100 d-flex flex-column @(IsMultiSelectMode ? "tree-multiselect-mode" : "")" style="height: 100%;">
+        <div class="card-body flex-grow-1">
             @if (TreeData != null && TreeData.Any())
             {
                 <RadzenTree Data="@TreeData" Style="width: 100%; height: 100%;"
@@ -93,11 +117,29 @@
     private RenderFragment<RadzenTreeItem> TreeNodeTemplate => (context) => __builder =>
     {
         var node = context.Value as TreeNodeItemViewModelBase;
-        var cssClass = node?.IsSelected == true ? "tree-node-selected" : "";
+        var cssClasses = new List<string>();
+        
+        if (node?.IsSelected == true)
+            cssClasses.Add("tree-node-selected");
+            
+        if (node?.IsDragging == true)
+            cssClasses.Add("tree-node-dragging");
+            
+        var cssClass = string.Join(" ", cssClasses);
         var component = this; // Ссылка на компонент
         
-        <span class="@cssClass" @onclick="async () => await component.OnNodeClicked(node)" 
-              @onclick:stopPropagation="true" @onclick:preventDefault="true">
+        <span class="@cssClass" 
+              draggable="true"
+              @onclick="async () => await component.OnNodeClicked(node)" 
+              @onclick:stopPropagation="true" 
+              @onclick:preventDefault="true"
+              @ondragstart="async (e) => await component.OnDragStart(e, node)"
+              @ondragend="async (e) => await component.OnDragEnd(e, node)"
+              @ondragover="component.OnDragOver"
+              @ondragover:preventDefault="true"
+              @ondrop="async (e) => await component.OnDrop(e, node)"
+              @ondragenter="(e) => component.OnDragEnter(e, node)"
+              @ondragleave="(e) => component.OnDragLeave(e, node)">
             @context.Text
         </span>
     };
