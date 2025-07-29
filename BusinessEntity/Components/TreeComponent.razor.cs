@@ -19,7 +19,6 @@ namespace BusinessEntity.Components
         [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
         [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         [Inject] public SpaceHelper SpaceHelper { get; set; } = default!;
-        [Inject] public ILogger<TreeComponent> Logger { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
         [Inject] public ContextMenuService ContextMenu { get; set; } = default!;
@@ -52,11 +51,11 @@ namespace BusinessEntity.Components
                 // Проверяем текущее состояние пространства
                 await DrawTreeForCurrentSpace();
                 
-                Logger.LogInformation("TreeComponent initialized successfully");
+                WebLogger?.Information("TreeComponent initialized successfully");
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error initializing TreeComponent");
+                WebLogger?.Error(ex);
             }
             finally
             {
@@ -78,7 +77,7 @@ namespace BusinessEntity.Components
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error handling space change in TreeComponent");
+                WebLogger?.Error(ex);
             }
         }
 
@@ -235,19 +234,27 @@ namespace BusinessEntity.Components
         {
             if (clickedNode == null) return;
 
+            WebLogger?.Information($"HandleNodeSelection started for node: {clickedNode.Title}, Ctrl: {isCtrlPressed}, Shift: {isShiftPressed}");
+
             // Игнорируем Shift+click (запрещаем выбор диапазона)
-            if (isShiftPressed) return;
+            if (isShiftPressed) 
+            {
+                WebLogger?.Information("Shift+click ignored");
+                return;
+            }
 
             if (isCtrlPressed)
             {
                 // Ctrl+click: добавить/убрать из выделения
                 if (clickedNode.IsSelected)
                 {
+                    WebLogger?.Information($"Ctrl+click: deselecting node {clickedNode.Title}");
                     clickedNode.SetSelected(false);
                     SelectedNodes.Remove(clickedNode);
                 }
                 else
                 {
+                    WebLogger?.Information($"Ctrl+click: selecting node {clickedNode.Title}");
                     clickedNode.SetSelected(true);
                     SelectedNodes.Add(clickedNode);
                 }
@@ -255,53 +262,154 @@ namespace BusinessEntity.Components
             else
             {
                 // Обычный click: полностью очистить все выделения и выделить только текущий узел
-                ClearAllSelections();
+                WebLogger?.Information($"Normal click: clearing all selections and selecting {clickedNode.Title}");
+                await ClearAllSelections(); // ← ИСПРАВЛЕНО: добавлен await
+                WebLogger?.Information($"After ClearAllSelections, now selecting {clickedNode.Title}");
                 clickedNode.SetSelected(true);
                 SelectedNodes.Add(clickedNode);
+                WebLogger?.Information($"Node {clickedNode.Title} selected, SelectedNodes count: {SelectedNodes.Count}");
             }
 
             // Обновляем состояние мульти-селекта
             IsMultiSelectMode = SelectedNodes.Count > 1;
+            WebLogger?.Information($"IsMultiSelectMode set to: {IsMultiSelectMode}");
             
             // Обновляем сервис выделения
             TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
+            WebLogger?.Information($"TreeSelectionService updated with {SelectedNodes.Count} nodes");
             
             // Принудительно обновляем UI
             await InvokeAsync(StateHasChanged);
+            WebLogger?.Information("HandleNodeSelection completed");
         }
 
         // Новый метод для полной очистки всех выделений
-        private async Task ClearAllSelections()
+        public async Task ClearAllSelections()
         {
+            // Получаем информацию о том, кто вызвал метод
+            var stackTrace = new System.Diagnostics.StackTrace();
+            var callingMethod = stackTrace.GetFrame(1)?.GetMethod()?.Name ?? "Unknown";
+            
+            WebLogger?.Information($"ClearAllSelections started (called from: {callingMethod}). Current SelectedNodes count: {SelectedNodes.Count}");
+            
+            // Логируем текущие выделенные узлы
+            foreach (var node in SelectedNodes)
+            {
+                WebLogger?.Information($"Currently selected node: {node.Title}, IsSelected: {node.IsSelected}");
+            }
+            
             SelectedNodes.Clear();
+            WebLogger?.Information("SelectedNodes collection cleared");
             
             // Затем рекурсивно проходим по всему дереву и принудительно снимаем выделение
             if (TreeData != null)
             {
+                WebLogger?.Information($"Processing {TreeData.Count()} root nodes");
                 foreach (var rootNode in TreeData)
                 {
                     ForceCleanSelectionRecursive(rootNode);
                 }
             }
+            
             IsMultiSelectMode = false;
+            WebLogger?.Information("IsMultiSelectMode set to false");
+            
             TreeSelectionService.ClearSelection();
+            WebLogger?.Information("TreeSelectionService.ClearSelection() called");
+            
             StateHasChanged();
             await Task.Delay(1); // Небольшая задержка для обновления DOM
             await InvokeAsync(StateHasChanged);
+            
+            // Принудительно обновляем CSS-классы через JavaScript
+            try
+            {
+                var removedCount = await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
+                WebLogger?.Information($"JavaScript removed {removedCount} selected CSS classes");
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error(ex);
+            }
+            
+            WebLogger?.Information("ClearAllSelections completed");
+            
+            // Проверяем, остались ли выделенные узлы после очистки
+            await VerifySelectionCleared();
         }
 
         // Принудительная очистка выделения для всех узлов
         private void ForceCleanSelectionRecursive(TreeNodeItemViewModelBase node)
         {
             if (node == null) return;
+            
+            bool wasSelected = node.IsSelected;
             node.SetSelected(false);
             node.IsDragging = false;
+            
+            if (wasSelected)
+            {
+                WebLogger?.Information($"Cleared selection for node: {node.Title}");
+            }
+            
             // Рекурсивно обрабатываем дочерние узлы
             if (node.Children != null)
             {
                 foreach (var child in node.Children.Cast<TreeNodeItemViewModelBase>())
                 {
                     ForceCleanSelectionRecursive(child);
+                }
+            }
+        }
+
+        // Метод для проверки того, что выделение полностью очищено
+        private async Task VerifySelectionCleared()
+        {
+            var stillSelectedNodes = new List<TreeNodeItemViewModelBase>();
+            
+            if (TreeData != null)
+            {
+                foreach (var rootNode in TreeData)
+                {
+                    FindSelectedNodesRecursive(rootNode, stillSelectedNodes);
+                }
+            }
+            
+            if (stillSelectedNodes.Any())
+            {
+                WebLogger?.Warning($"Found {stillSelectedNodes.Count} nodes that are still selected after clearing:");
+                foreach (var node in stillSelectedNodes)
+                {
+                    WebLogger?.Warning($"Still selected: {node.Title}, IsSelected: {node.IsSelected}");
+                    // Принудительно очищаем еще раз
+                    node.SetSelected(false);
+                }
+                
+                // Принудительно обновляем UI еще раз
+                StateHasChanged();
+                await InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                WebLogger?.Information("Verification passed: no nodes are selected");
+            }
+        }
+
+        // Рекурсивный поиск выделенных узлов
+        private void FindSelectedNodesRecursive(TreeNodeItemViewModelBase node, List<TreeNodeItemViewModelBase> selectedNodes)
+        {
+            if (node == null) return;
+            
+            if (node.IsSelected)
+            {
+                selectedNodes.Add(node);
+            }
+            
+            if (node.Children != null)
+            {
+                foreach (var child in node.Children.Cast<TreeNodeItemViewModelBase>())
+                {
+                    FindSelectedNodesRecursive(child, selectedNodes);
                 }
             }
         }
@@ -385,11 +493,11 @@ namespace BusinessEntity.Components
             {
                 if (parentNode?.Entity == null)
                 {
-                    Logger.LogWarning("Cannot create entity - parent node or entity is null");
+                    WebLogger?.Warning("Cannot create entity - parent node or entity is null");
                     return;
                 }
 
-                Logger.LogInformation($"Creating new {entityType} in parent {parentNode.Entity.Name}");
+                WebLogger?.Information($"Creating new {entityType} in parent {parentNode.Entity.Name}");
 
                 switch (entityType)
                 {
@@ -410,11 +518,11 @@ namespace BusinessEntity.Components
                         parentNode.Children.Add(childNode);
                         parentNode.Expanded = true; // Разворачиваем родительскую ноду
                         
-                        Logger.LogInformation($"Successfully created folder '{newEntity.Name}' under '{parentNode.Entity.Name}'");
+                        WebLogger?.Information($"Successfully created folder '{newEntity.Name}' under '{parentNode.Entity.Name}'");
                         break;
                         
                     default:
-                        Logger.LogInformation($"TODO: Create {entityType} entity under {parentNode.Entity.Name}");
+                        WebLogger?.Information($"TODO: Create {entityType} entity under {parentNode.Entity.Name}");
                         break;
                 }
 
@@ -423,7 +531,7 @@ namespace BusinessEntity.Components
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, $"Error creating {entityType} entity");
+                WebLogger?.Error(ex);
             }
         }
 
@@ -452,11 +560,11 @@ namespace BusinessEntity.Components
             {
                 if (draggedNode == null)
                 {
-                    Logger.LogWarning("OnDragStart: dragged node is null");
+                    WebLogger?.Warning("OnDragStart: dragged node is null");
                     return;
                 }
 
-                Logger.LogInformation($"Drag started for node: {draggedNode.Title}");
+                WebLogger?.Information($"Drag started for node: {draggedNode.Title}");
 
                 // Проверяем, входит ли перетаскиваемый узел в выбранные
                 if (!SelectedNodes.Contains(draggedNode))
@@ -477,12 +585,12 @@ namespace BusinessEntity.Components
                 // Информация о перетаскиваемых узлах сохраняется в поле SelectedNodes
                 var draggedTitles = SelectedNodes.Select(n => n.Title).ToList();
 
-                Logger.LogInformation($"Dragging {SelectedNodes.Count} selected nodes");
+                WebLogger?.Information($"Dragging {SelectedNodes.Count} selected nodes");
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error in OnDragStart");
+                WebLogger?.Error(ex);
             }
         }
 
@@ -524,14 +632,14 @@ namespace BusinessEntity.Components
             {
                 if (targetNode == null)
                 {
-                    Logger.LogWarning("OnDrop: target node is null");
+                    WebLogger?.Warning("OnDrop: target node is null");
                     return;
                 }
 
                 // Проверяем, можно ли дропнуть в эту цель
                 if (!CanDropToTarget(targetNode))
                 {
-                    Logger.LogInformation($"Drop cancelled: cannot drop to {targetNode.EntityType} '{targetNode.Title}'");
+                    WebLogger?.Information($"Drop cancelled: cannot drop to {targetNode.EntityType} '{targetNode.Title}'");
                     return;
                 }
 
@@ -539,20 +647,20 @@ namespace BusinessEntity.Components
                 var draggedNodes = SelectedNodes.Where(n => n.IsDragging).ToList();
                 if (!draggedNodes.Any())
                 {
-                    Logger.LogWarning("OnDrop: no dragged nodes found");
+                    WebLogger?.Warning("OnDrop: no dragged nodes found");
                     return;
                 }
 
                 // Проверяем, не пытаемся ли дропнуть узел в самого себя или своих потомков
                 if (IsDropToSelfOrDescendant(draggedNodes, targetNode))
                 {
-                    Logger.LogInformation("Drop cancelled: cannot drop node to itself or its descendant");
+                    WebLogger?.Information("Drop cancelled: cannot drop node to itself or its descendant");
                     return;
                 }
 
                 // Логируем операцию
                 var draggedTitles = draggedNodes.Select(n => n.Title).ToList();
-                Logger.LogInformation($"Dropped: [{string.Join(", ", draggedTitles)}] -> {targetNode.Title} (ID: {targetNode.Entity?.Id})");
+                WebLogger?.Information($"Dropped: [{string.Join(", ", draggedTitles)}] -> {targetNode.Title} (ID: {targetNode.Entity?.Id})");
 
                 // TODO: Здесь будет реальная бизнес-логика перемещения
                 // Пока что только логируем операцию
@@ -563,7 +671,7 @@ namespace BusinessEntity.Components
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error in OnDrop");
+                WebLogger?.Error(ex);
             }
         }
 
@@ -574,7 +682,7 @@ namespace BusinessEntity.Components
         {
             try
             {
-                Logger.LogInformation("Drag operation ended");
+                WebLogger?.Information("Drag operation ended");
                 
                 // Убираем флаги перетаскивания у всех узлов
                 ClearDraggingFlags();
@@ -582,7 +690,7 @@ namespace BusinessEntity.Components
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error in OnDragEnd");
+                WebLogger?.Error(ex);
             }
         }
 

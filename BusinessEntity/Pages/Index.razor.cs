@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Services;
