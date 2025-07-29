@@ -31,13 +31,13 @@ window.TreeMultiSelect = {
     forceRefreshTreeSelection: function () {
         try {
             // Находим все элементы с классом tree-node-selected
-            const selectedElements = document.querySelectorAll('.tree-node-selected');
-            console.log(`Found ${selectedElements.length} elements with tree-node-selected class`);
+            const selectedElements = document.querySelectorAll('.rz-treenode-content-selected');
+            console.log(`Found ${selectedElements.length} elements with rz-treenode-content-selected`);
             
             // Принудительно удаляем класс выделения
             selectedElements.forEach((element, index) => {
-                console.log(`Removing tree-node-selected class from element ${index}: ${element.textContent}`);
-                element.classList.remove('tree-node-selected');
+                console.log(`Removing rz-treenode-content-selected class from element ${index}: ${element.textContent}`);
+                element.classList.remove('rz-treenode-content-selected');
                 
                 // Принудительно обновляем стили
                 element.style.backgroundColor = '';

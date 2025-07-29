@@ -286,19 +286,10 @@ namespace BusinessEntity.Components
         // Новый метод для полной очистки всех выделений
         public async Task ClearAllSelections()
         {
-            // Получаем информацию о том, кто вызвал метод
-            var stackTrace = new System.Diagnostics.StackTrace();
-            var callingMethod = stackTrace.GetFrame(1)?.GetMethod()?.Name ?? "Unknown";
-            
-            WebLogger?.Information($"ClearAllSelections started (called from: {callingMethod}). Current SelectedNodes count: {SelectedNodes.Count}");
-            
-            // Логируем текущие выделенные узлы
-            foreach (var node in SelectedNodes)
-            {
-                WebLogger?.Information($"Currently selected node: {node.Title}, IsSelected: {node.IsSelected}");
-            }
+            WebLogger?.Information($"ClearAllSelections started. Current SelectedNodes count: {SelectedNodes.Count} They are: {String.Join(", ",SelectedNodes.Select(x=>x.Title).ToList())}");
             
             SelectedNodes.Clear();
+
             WebLogger?.Information("SelectedNodes collection cleared");
             
             // Затем рекурсивно проходим по всему дереву и принудительно снимаем выделение
@@ -310,48 +301,22 @@ namespace BusinessEntity.Components
                     ForceCleanSelectionRecursive(rootNode);
                 }
             }
-            
             IsMultiSelectMode = false;
-            WebLogger?.Information("IsMultiSelectMode set to false");
-            
             TreeSelectionService.ClearSelection();
-            WebLogger?.Information("TreeSelectionService.ClearSelection() called");
-            
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
             await Task.Delay(1); // Небольшая задержка для обновления DOM
             await InvokeAsync(StateHasChanged);
-            
             // Принудительно обновляем CSS-классы через JavaScript
-            try
-            {
-                var removedCount = await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
-                WebLogger?.Information($"JavaScript removed {removedCount} selected CSS classes");
-            }
-            catch (Exception ex)
-            {
-                WebLogger?.Error(ex);
-            }
-            
-            WebLogger?.Information("ClearAllSelections completed");
-            
-            // Проверяем, остались ли выделенные узлы после очистки
-            await VerifySelectionCleared();
+            await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
         }
 
         // Принудительная очистка выделения для всех узлов
         private void ForceCleanSelectionRecursive(TreeNodeItemViewModelBase node)
         {
             if (node == null) return;
-            
             bool wasSelected = node.IsSelected;
             node.SetSelected(false);
             node.IsDragging = false;
-            
-            if (wasSelected)
-            {
-                WebLogger?.Information($"Cleared selection for node: {node.Title}");
-            }
-            
             // Рекурсивно обрабатываем дочерние узлы
             if (node.Children != null)
             {
@@ -359,39 +324,6 @@ namespace BusinessEntity.Components
                 {
                     ForceCleanSelectionRecursive(child);
                 }
-            }
-        }
-
-        // Метод для проверки того, что выделение полностью очищено
-        private async Task VerifySelectionCleared()
-        {
-            var stillSelectedNodes = new List<TreeNodeItemViewModelBase>();
-            
-            if (TreeData != null)
-            {
-                foreach (var rootNode in TreeData)
-                {
-                    FindSelectedNodesRecursive(rootNode, stillSelectedNodes);
-                }
-            }
-            
-            if (stillSelectedNodes.Any())
-            {
-                WebLogger?.Warning($"Found {stillSelectedNodes.Count} nodes that are still selected after clearing:");
-                foreach (var node in stillSelectedNodes)
-                {
-                    WebLogger?.Warning($"Still selected: {node.Title}, IsSelected: {node.IsSelected}");
-                    // Принудительно очищаем еще раз
-                    node.SetSelected(false);
-                }
-                
-                // Принудительно обновляем UI еще раз
-                StateHasChanged();
-                await InvokeAsync(StateHasChanged);
-            }
-            else
-            {
-                WebLogger?.Information("Verification passed: no nodes are selected");
             }
         }
 
