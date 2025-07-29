@@ -95,8 +95,9 @@ namespace BusinessEntity.Components
             IsLoading = true;
             
             // Очищаем выбранные узлы при смене пространства
-            await ClearSelection();
-            
+            await ClearAllSelections();
+
+
             var rootSpaceNode = await BuildSpaceRootAsync(space);
             TreeData = new[] { rootSpaceNode };
             Visible = true;
@@ -207,39 +208,26 @@ namespace BusinessEntity.Components
         // Публичный метод для обработки кликов по узлам (вызывается из razor)
         public async Task OnNodeClicked(TreeNodeItemViewModelBase? node)
         {
-            if (node == null) 
-            {
-                Logger.LogWarning("OnNodeClicked: node is null");
-                return;
-            }
-            
-            try
-            {
-                // Получаем состояние клавиш из JavaScript
-                var keyState = await JSRuntime.InvokeAsync<System.Text.Json.JsonElement>("TreeMultiSelect.getKeyState");
-                
-                bool ctrlPressed = false;
-                bool shiftPressed = false;
-                
-                // Правильно парсим JsonElement
-                if (keyState.TryGetProperty("ctrl", out var ctrlProperty))
-                {
-                    ctrlPressed = ctrlProperty.GetBoolean();
-                }
-                
-                if (keyState.TryGetProperty("shift", out var shiftProperty))
-                {
-                    shiftPressed = shiftProperty.GetBoolean();
-                }
+            if (node == null) return;
 
-                await HandleNodeSelection(node, ctrlPressed, shiftPressed);
-            }
-            catch (Exception ex)
+            // Получаем состояние клавиш из JavaScript
+            var keyState = await JSRuntime.InvokeAsync<System.Text.Json.JsonElement>("TreeMultiSelect.getKeyState");
+
+            bool ctrlPressed = false;
+            bool shiftPressed = false;
+
+            // Правильно парсим JsonElement
+            if (keyState.TryGetProperty("ctrl", out var ctrlProperty))
             {
-                Logger.LogError(ex, "Error getting key state from JavaScript");
-                // Fallback к обычному выбору
-                await HandleNodeSelection(node, false, false);
+                ctrlPressed = ctrlProperty.GetBoolean();
             }
+
+            if (keyState.TryGetProperty("shift", out var shiftProperty))
+            {
+                shiftPressed = shiftProperty.GetBoolean();
+            }
+
+            await HandleNodeSelection(node, ctrlPressed, shiftPressed);
         }
 
         // Обработка выбора узла с учетом модификаторов клавиш
@@ -266,8 +254,8 @@ namespace BusinessEntity.Components
             }
             else
             {
-                // Обычный click: очистить все выделения и выделить только текущий узел
-                await ClearSelection();
+                // Обычный click: полностью очистить все выделения и выделить только текущий узел
+                ClearAllSelections();
                 clickedNode.SetSelected(true);
                 SelectedNodes.Add(clickedNode);
             }
@@ -282,53 +270,40 @@ namespace BusinessEntity.Components
             await InvokeAsync(StateHasChanged);
         }
 
-        private async Task ClearSelection()
+        // Новый метод для полной очистки всех выделений
+        private async Task ClearAllSelections()
         {
-            // Очищаем коллекцию выбранных узлов
-            foreach (var node in SelectedNodes.ToList())
-            {
-                node.SetSelected(false);
-            }
             SelectedNodes.Clear();
             
-            // Рекурсивно очищаем все узлы в дереве
+            // Затем рекурсивно проходим по всему дереву и принудительно снимаем выделение
             if (TreeData != null)
             {
                 foreach (var rootNode in TreeData)
                 {
-                    ClearSelectionRecursive(rootNode);
+                    ForceCleanSelectionRecursive(rootNode);
                 }
             }
-            
             IsMultiSelectMode = false;
             TreeSelectionService.ClearSelection();
-            
-            // Принудительно обновляем UI
+            StateHasChanged();
+            await Task.Delay(1); // Небольшая задержка для обновления DOM
             await InvokeAsync(StateHasChanged);
         }
 
-        private void ClearSelectionRecursive(TreeNodeItemViewModelBase node)
+        // Принудительная очистка выделения для всех узлов
+        private void ForceCleanSelectionRecursive(TreeNodeItemViewModelBase node)
         {
             if (node == null) return;
-            
             node.SetSelected(false);
-            
+            node.IsDragging = false;
+            // Рекурсивно обрабатываем дочерние узлы
             if (node.Children != null)
             {
                 foreach (var child in node.Children.Cast<TreeNodeItemViewModelBase>())
                 {
-                    ClearSelectionRecursive(child);
+                    ForceCleanSelectionRecursive(child);
                 }
             }
-        }
-
-        // Программный выбор всех узлов
-        public async Task SelectAll()
-        {
-            await ClearSelection();
-            SelectAllNodesRecursive(TreeData);
-            IsMultiSelectMode = SelectedNodes.Count > 1;
-            StateHasChanged();
         }
 
         private void SelectAllNodesRecursive(IEnumerable<TreeNodeItemViewModelBase> nodes)
@@ -487,7 +462,7 @@ namespace BusinessEntity.Components
                 if (!SelectedNodes.Contains(draggedNode))
                 {
                     // Если узел не выбран, очищаем выбор и выбираем только его
-                    await ClearSelection();
+                    await ClearAllSelections();
                     draggedNode.SetSelected(true);
                     SelectedNodes.Add(draggedNode);
                     TreeSelectionService.SetSelectedNodes(SelectedNodes);
@@ -678,5 +653,7 @@ namespace BusinessEntity.Components
         }
 
         #endregion
+
+
     }
 }
