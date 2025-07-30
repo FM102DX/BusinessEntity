@@ -197,16 +197,10 @@ namespace BusinessEntity.Components
             return "Unknown";
         }
 
-        // Обработчик изменений в дереве (пустой, так как используем прямые клики)
-        private async Task OnTreeNodeClick(TreeEventArgs args)
-        {
-            // Логику выбора обрабатываем в OnNodeClicked в razor-файле
-            await Task.CompletedTask;
-        }
-
         // Публичный метод для обработки кликов по узлам (вызывается из razor)
         public async Task OnNodeClicked(TreeNodeItemViewModelBase? node)
         {
+            WebLogger?.Information($"[OnNodeClicked]--Enter");
             if (node == null) return;
 
             // Получаем состояние клавиш из JavaScript
@@ -232,14 +226,13 @@ namespace BusinessEntity.Components
         // Обработка выбора узла с учетом модификаторов клавиш
         private async Task HandleNodeSelection(TreeNodeItemViewModelBase clickedNode, bool isCtrlPressed, bool isShiftPressed)
         {
+
+            WebLogger?.Information($"[HandleNodeSelection]--Enter; started for node: {clickedNode.Title}, Ctrl: {isCtrlPressed}, Shift: {isShiftPressed}");
             if (clickedNode == null) return;
-
-            WebLogger?.Information($"HandleNodeSelection started for node: {clickedNode.Title}, Ctrl: {isCtrlPressed}, Shift: {isShiftPressed}");
-
+            
             // Игнорируем Shift+click (запрещаем выбор диапазона)
             if (isShiftPressed) 
             {
-                WebLogger?.Information("Shift+click ignored");
                 return;
             }
 
@@ -248,13 +241,11 @@ namespace BusinessEntity.Components
                 // Ctrl+click: добавить/убрать из выделения
                 if (clickedNode.IsSelected)
                 {
-                    WebLogger?.Information($"Ctrl+click: deselecting node {clickedNode.Title}");
                     clickedNode.SetSelected(false);
                     SelectedNodes.Remove(clickedNode);
                 }
                 else
                 {
-                    WebLogger?.Information($"Ctrl+click: selecting node {clickedNode.Title}");
                     clickedNode.SetSelected(true);
                     SelectedNodes.Add(clickedNode);
                 }
@@ -262,40 +253,31 @@ namespace BusinessEntity.Components
             else
             {
                 // Обычный click: полностью очистить все выделения и выделить только текущий узел
-                WebLogger?.Information($"Normal click: clearing all selections and selecting {clickedNode.Title}");
-                await ClearAllSelections(); // ← ИСПРАВЛЕНО: добавлен await
-                WebLogger?.Information($"After ClearAllSelections, now selecting {clickedNode.Title}");
+                await ClearAllSelections();
                 clickedNode.SetSelected(true);
                 SelectedNodes.Add(clickedNode);
-                WebLogger?.Information($"Node {clickedNode.Title} selected, SelectedNodes count: {SelectedNodes.Count}");
             }
 
             // Обновляем состояние мульти-селекта
             IsMultiSelectMode = SelectedNodes.Count > 1;
-            WebLogger?.Information($"IsMultiSelectMode set to: {IsMultiSelectMode}");
             
             // Обновляем сервис выделения
             TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
-            WebLogger?.Information($"TreeSelectionService updated with {SelectedNodes.Count} nodes");
             
             // Принудительно обновляем UI
             await InvokeAsync(StateHasChanged);
-            WebLogger?.Information("HandleNodeSelection completed");
         }
 
         // Новый метод для полной очистки всех выделений
         public async Task ClearAllSelections()
         {
-            WebLogger?.Information($"ClearAllSelections started. Current SelectedNodes count: {SelectedNodes.Count} They are: {String.Join(", ",SelectedNodes.Select(x=>x.Title).ToList())}");
+            WebLogger?.Information($"[ClearAllSelections]--Enter. Current SelectedNodes count: {SelectedNodes.Count} They are: {String.Join(", ",SelectedNodes.Select(x=>x.Title).ToList())}");
             
             SelectedNodes.Clear();
 
-            WebLogger?.Information("SelectedNodes collection cleared");
-            
             // Затем рекурсивно проходим по всему дереву и принудительно снимаем выделение
             if (TreeData != null)
             {
-                WebLogger?.Information($"Processing {TreeData.Count()} root nodes");
                 foreach (var rootNode in TreeData)
                 {
                     ForceCleanSelectionRecursive(rootNode);
@@ -303,8 +285,6 @@ namespace BusinessEntity.Components
             }
             IsMultiSelectMode = false;
             TreeSelectionService.ClearSelection();
-            await InvokeAsync(StateHasChanged);
-            await Task.Delay(1); // Небольшая задержка для обновления DOM
             await InvokeAsync(StateHasChanged);
             // Принудительно обновляем CSS-классы через JavaScript
             await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
