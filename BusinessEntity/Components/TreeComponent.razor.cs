@@ -514,6 +514,9 @@ namespace BusinessEntity.Components
                     node.SetDragging(true);
                 }
 
+                // Создаем всплывающий элемент с именами перетаскиваемых элементов
+                await CreateDragTooltip();
+
                 // Информация о перетаскиваемых узлах сохраняется в поле SelectedNodes
                 var draggedTitles = SelectedNodes.Select(n => n.Title).ToList();
 
@@ -529,10 +532,21 @@ namespace BusinessEntity.Components
         /// <summary>
         /// Обработчик перетаскивания над целью
         /// </summary>
-        private void OnDragOver(DragEventArgs e)
+        private async Task OnDragOver(DragEventArgs e)
         {
             // Разрешаем drop операцию
             // В Blazor preventDefault() выполняется через атрибут @ondragover:preventDefault="true"
+            
+            // Обновляем позицию всплывающего элемента
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("updateDragTooltipPosition", e.ClientX, e.ClientY);
+            }
+            catch (Exception ex)
+            {
+                // Игнорируем ошибки обновления позиции, так как это не критично
+                WebLogger?.Warning($"Failed to update tooltip position: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -590,9 +604,13 @@ namespace BusinessEntity.Components
                     return;
                 }
 
-                // Логируем операцию
+                // Логируем операцию одной строкой в веб-логгер
                 var draggedTitles = draggedNodes.Select(n => n.Title).ToList();
-                WebLogger?.Information($"Dropped: [{string.Join(", ", draggedTitles)}] -> {targetNode.Title} (ID: {targetNode.Entity?.Id})");
+                var logMessage = $"DRAG_DROP_COMPLETED: [{string.Join(", ", draggedTitles)}] dropped to '{targetNode.Title}' (ID: {targetNode.Entity?.Id})";
+                WebLogger?.Information(logMessage);
+
+                // Удаляем всплывающий элемент
+                await RemoveDragTooltip();
 
                 // TODO: Здесь будет реальная бизнес-логика перемещения
                 // Пока что только логируем операцию
@@ -615,6 +633,9 @@ namespace BusinessEntity.Components
             try
             {
                 WebLogger?.Information("Drag operation ended");
+                
+                // Удаляем всплывающий элемент
+                await RemoveDragTooltip();
                 
                 // Убираем флаги перетаскивания у всех узлов
                 ClearDraggingFlags();
@@ -689,6 +710,41 @@ namespace BusinessEntity.Components
                 {
                     ClearDraggingFlagsRecursive(node.Children);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Создает всплывающий элемент с именами перетаскиваемых элементов
+        /// </summary>
+        private async Task CreateDragTooltip()
+        {
+            try
+            {
+                var draggedTitles = SelectedNodes.Where(n => n.IsDragging).Select(n => n.Title).ToList();
+                if (!draggedTitles.Any()) return;
+
+                var tooltipContent = string.Join("<br/>", draggedTitles);
+                
+                await JSRuntime.InvokeVoidAsync("createDragTooltip", tooltipContent);
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error($"Error creating drag tooltip: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Удаляет всплывающий элемент
+        /// </summary>
+        private async Task RemoveDragTooltip()
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("removeDragTooltip");
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error($"Error removing drag tooltip: {ex.Message}");
             }
         }
 

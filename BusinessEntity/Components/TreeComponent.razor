@@ -143,7 +143,7 @@
                                   @onclick:preventDefault="true"
                                   @ondragstart="async (e) => await OnDragStart(e, node)"
                                   @ondragend="async (e) => await OnDragEnd(e, node)"
-                                  @ondragover="OnDragOver"
+                                  @ondragover="async (e) => await OnDragOver(e)"
                                   @ondragover:preventDefault="true"
                                   @ondrop="async (e) => await OnDrop(e, node)"
                                   @ondragenter="(e) => OnDragEnter(e, node)"
