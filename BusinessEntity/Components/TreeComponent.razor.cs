@@ -200,7 +200,8 @@ namespace BusinessEntity.Components
         // Публичный метод для обработки кликов по узлам (вызывается из razor)
         public async Task OnNodeClicked(TreeNodeItemViewModelBase? node)
         {
-            WebLogger?.Information($"[OnNodeClicked]--Enter");
+            //WebLogger?.Information($"[OnNodeClicked]--Enter");
+            Console.WriteLine($"[OnNodeClicked]--Enter");
             if (node == null) return;
 
             // Получаем состояние клавиш из JavaScript
@@ -227,7 +228,8 @@ namespace BusinessEntity.Components
         private async Task HandleNodeSelection(TreeNodeItemViewModelBase clickedNode, bool isCtrlPressed, bool isShiftPressed)
         {
 
-            WebLogger?.Information($"[HandleNodeSelection]--Enter; started for node: {clickedNode.Title}, Ctrl: {isCtrlPressed}, Shift: {isShiftPressed}");
+            //WebLogger?.Information($"[HandleNodeSelection]--Enter; started for node: {clickedNode.Title}, Ctrl: {isCtrlPressed}, Shift: {isShiftPressed}");
+            Console.WriteLine($"[HandleNodeSelection]--Enter; started for node: {clickedNode.Title}, Ctrl: {isCtrlPressed}, Shift: {isShiftPressed}");
             if (clickedNode == null) return;
             
             // Игнорируем Shift+click (запрещаем выбор диапазона)
@@ -271,8 +273,8 @@ namespace BusinessEntity.Components
         // Новый метод для полной очистки всех выделений
         public async Task ClearAllSelections()
         {
-            WebLogger?.Information($"[ClearAllSelections]--Enter. Current SelectedNodes count: {SelectedNodes.Count} They are: {String.Join(", ",SelectedNodes.Select(x=>x.Title).ToList())}");
-            
+            //WebLogger?.Information($"[ClearAllSelections]--Enter. Current SelectedNodes count: {SelectedNodes.Count} They are: {String.Join(", ",SelectedNodes.Select(x=>x.Title).ToList())}");
+            Console.WriteLine($"[ClearAllSelections]--Enter. Current SelectedNodes count: {SelectedNodes.Count} They are: {String.Join(", ", SelectedNodes.Select(x => x.Title).ToList())}");
             SelectedNodes.Clear();
 
             // Затем рекурсивно проходим по всему дереву и принудительно снимаем выделение
