@@ -16,32 +16,32 @@ namespace BusinessEntity.Core.Services
         {
             _possibleRelations = new List<MacroRelationType>
             {
-                // Дополнительные примеры отношений
+                // Дополнительные примеры отношений - используем VisuallyContains для визуального размещения
                 new MacroRelationType(
                     relationName: "basic:space-contains-folder",
                     typeA: BusinessEntityTypeEnum.Space,
                     typeB: BusinessEntityTypeEnum.Folder,
-                    relationType: BusinessEntityRelationTypeEnum.Contains
+                    relationType: BusinessEntityRelationTypeEnum.VisuallyContains
                 ),
                 // Space может содержать Document напрямую
                 new MacroRelationType(
                     relationName: "basic:space-contains-page",
                     typeA: BusinessEntityTypeEnum.Space,
                     typeB: BusinessEntityTypeEnum.Document,
-                    relationType: BusinessEntityRelationTypeEnum.Contains
+                    relationType: BusinessEntityRelationTypeEnum.VisuallyContains
                 ),
                 // Тестовый объект: Папка содержит страницу
                 new MacroRelationType(
                     relationName: "basic:folder-contains-page",
                     typeA: BusinessEntityTypeEnum.Folder,
                     typeB: BusinessEntityTypeEnum.Document,
-                    relationType: BusinessEntityRelationTypeEnum.Contains
+                    relationType: BusinessEntityRelationTypeEnum.VisuallyContains
                 ),
                 new MacroRelationType(
                     relationName: "basic:folder-contains-folder",
                     typeA: BusinessEntityTypeEnum.Folder,
                     typeB: BusinessEntityTypeEnum.Folder,
-                    relationType: BusinessEntityRelationTypeEnum.Contains
+                    relationType: BusinessEntityRelationTypeEnum.VisuallyContains
                 )
             };
         }

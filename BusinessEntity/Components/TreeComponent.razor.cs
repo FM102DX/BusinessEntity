@@ -594,8 +594,34 @@ namespace BusinessEntity.Components
                 // Удаляем всплывающий элемент
                 await RemoveDragTooltip();
 
-                // TODO: Здесь будет реальная бизнес-логика перемещения
-                // Пока что только логируем операцию
+                // Реальная бизнес-логика перемещения
+                foreach (var draggedNode in draggedNodes)
+                {
+                    if (draggedNode.Entity != null && targetNode.Entity != null)
+                    {
+                        try
+                        {
+                            // Используем BusinessEntityHelper для изменения визуального родителя
+                            await BusinessEntityHelper.ChangeVisualFolderParentForItem(
+                                draggedNode.Entity, targetNode.Entity);
+                            
+                            WebLogger?.Information($"Successfully moved '{draggedNode.Title}' to '{targetNode.Title}'");
+                        }
+                        catch (Exception moveEx)
+                        {
+                            WebLogger?.Error($"Failed to move '{draggedNode.Title}' to '{targetNode.Title}': {moveEx.Message}");
+                        }
+                    }
+                }
+
+                // Обновляем дерево после перемещения
+                await DrawTreeForCurrentSpace();
+
+                // Сбрасываем выделение со всех элементов
+                await ClearAllSelections();
+
+                // Выделяем целевой элемент (тот, в который было выполнено перетаскивание)
+                await SelectNodeAfterTreeRefresh(targetNode.Entity?.Id);
 
                 // Убираем флаги перетаскивания
                 ClearDraggingFlags();
@@ -728,6 +754,58 @@ namespace BusinessEntity.Components
             {
                 WebLogger?.Error($"Error removing drag tooltip: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Выделяет узел с указанным ID после обновления дерева
+        /// </summary>
+        private async Task SelectNodeAfterTreeRefresh(Guid? entityId)
+        {
+            if (entityId == null) return;
+
+            try
+            {
+                // Ищем узел с указанным ID в обновленном дереве
+                var nodeToSelect = FindNodeByEntityId(TreeData, entityId.Value);
+                if (nodeToSelect != null)
+                {
+                    // Выделяем найденный узел
+                    await OnNodeClicked(nodeToSelect);
+                    WebLogger?.Information($"Selected target node after drag: '{nodeToSelect.Title}'");
+                }
+                else
+                {
+                    WebLogger?.Warning($"Could not find node with ID {entityId} to select after drag");
+                }
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error($"Error selecting node after drag: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Рекурсивно ищет узел по ID сущности
+        /// </summary>
+        private TreeNodeItemViewModelBase? FindNodeByEntityId(IEnumerable<TreeNodeItemViewModelBase> nodes, Guid entityId)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.Entity?.Id == entityId)
+                {
+                    return node;
+                }
+
+                if (node.Children != null)
+                {
+                    var found = FindNodeByEntityId(node.Children.Cast<TreeNodeItemViewModelBase>(), entityId);
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+            }
+            return null;
         }
 
         #endregion

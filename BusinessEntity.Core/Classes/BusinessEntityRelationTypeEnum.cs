@@ -14,6 +14,9 @@ namespace BusinessEntity.Core.Classes
 
         //например, фолдер содержит фолдер или энтити
         Contains = 1000,
+        
+        //визуальное содержание в дереве UI
+        VisuallyContains = 1100,
 
         Undefined = 9999
     }

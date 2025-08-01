@@ -74,6 +74,38 @@ namespace BusinessEntity.Core.Services
             return await _relationRepository.AddAsync(relation);
         }
 
+        /// <summary>
+        /// Удаляет все связи определенного типа между двумя сущностями
+        /// </summary>
+        /// <param name="entityA">Первая сущность</param>
+        /// <param name="entityB">Вторая сущность</param>
+        /// <param name="macroRelationType">Тип отношения для удаления</param>
+        /// <returns>Количество удаленных связей</returns>
+        public async Task<int> RemoveRelation(IBusinessEntity entityA, IBusinessEntity entityB, MacroRelationType macroRelationType)
+        {
+            _webLogger?.Information($"RemoveRelation: {entityA?.Name} -> {entityB?.Name} relation={macroRelationType?.RelationType}");
+            if (entityA == null) throw new ArgumentNullException(nameof(entityA));
+            if (entityB == null) throw new ArgumentNullException(nameof(entityB));
+            if (macroRelationType == null) throw new ArgumentNullException(nameof(macroRelationType));
+
+            // Находим все связи такого типа между сущностями А и Б
+            var relationsToRemove = await _relationRepository.GetAllAsync(r => 
+                r.ObjectAId == entityA.Id && 
+                r.ObjectBId == entityB.Id && 
+                r.RelationType == macroRelationType.RelationType.ToString());
+
+            int removedCount = 0;
+            foreach (var relation in relationsToRemove)
+            {
+                await _relationRepository.DeleteAsync(relation.Id);
+                removedCount++;
+                _webLogger?.Debug($"Removed relation: ID={relation.Id}, Type={relation.RelationType}");
+            }
+
+            _webLogger?.Information($"Removed {removedCount} relations of type {macroRelationType.RelationType} between {entityA.Name} and {entityB.Name}");
+            return removedCount;
+        }
+
         public async Task<Classes.BusinessEntity?> GetBusinessEntityById(Guid id)
         {
             _webLogger?.Debug($"GetBusinessEntityById: id={id}");
@@ -101,11 +133,11 @@ namespace BusinessEntity.Core.Services
         }
 
         /// <summary>
-        /// Получает все бизнес-сущности, содержащиеся в родительской сущности
+        /// Получает все бизнес-сущности, содержащиеся в родительской сущности (визуально)
         /// </summary>
         public async Task<IEnumerable<Classes.BusinessEntity>> GetContainedEntitiesAsync(Guid parentId, CancellationToken ct = default)
         {
-            var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString(), ct: ct);
+            var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString(), ct: ct);
             var childIds = relations.Select(r => r.ObjectBId).ToList();
             
             var children = new List<Classes.BusinessEntity>();
@@ -124,10 +156,10 @@ namespace BusinessEntity.Core.Services
 
         public async Task<IEnumerable<Classes.BusinessEntity>> GetRootEntitiesAsync()
         {
-            // Находим все сущности, которые НЕ являются объектом B в отношении "Contains"
+            // Находим все сущности, которые НЕ являются объектом B в отношении "VisuallyContains"
             var allEntities = await _businessEntityRepository.GetAllAsync();
-            var containsRelations = await _relationRepository.GetAllAsync(r => r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString());
-            var childIds = containsRelations.Select(r => r.ObjectBId).ToHashSet();
+            var visuallyContainsRelations = await _relationRepository.GetAllAsync(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
+            var childIds = visuallyContainsRelations.Select(r => r.ObjectBId).ToHashSet();
             
             var rootEntities = allEntities.Where(e => !childIds.Contains(e.Id));
             
@@ -185,13 +217,13 @@ namespace BusinessEntity.Core.Services
             // Сохраняем сущность
             await _businessEntityRepository.AddAsync(entity, ct);
 
-            // Создаем связь между родителем и дочерним элементом
+            // Создаем связь между родителем и дочерним элементом (визуальная связь)
             var relation = new Relation
             {
                 Id = Guid.NewGuid(),
                 ObjectAId = parent.Id,
                 ObjectBId = entity.Id,
-                RelationType = BusinessEntityRelationTypeEnum.Contains.ToString(),
+                RelationType = BusinessEntityRelationTypeEnum.VisuallyContains.ToString(),
                 RelationParams = ""
             };
 
@@ -202,5 +234,176 @@ namespace BusinessEntity.Core.Services
 
             return entity;
         }
+
+        /// <summary>
+        /// Изменяет визуального родителя для элемента в визуальном дереве
+        /// </summary>
+        /// <param name="child">Дочерняя сущность, для которой меняется родитель</param>
+        /// <param name="newVisualParent">Новый визуальный родитель</param>
+        public async Task ChangeVisualFolderParentForItem(Classes.BusinessEntity child, Classes.BusinessEntity newVisualParent)
+        {
+            _webLogger?.Information($"ChangeVisualFolderParentForItem: Moving '{child?.Name}' to new visual parent '{newVisualParent?.Name}'");
+            
+            if (child == null) throw new ArgumentNullException(nameof(child));
+            if (newVisualParent == null) throw new ArgumentNullException(nameof(newVisualParent));
+
+            // Находим текущего визуального родителя данного элемента
+            var currentVisualParentRelations = await _relationRepository.GetAllAsync(r => 
+                r.ObjectBId == child.Id && 
+                r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
+
+            // Создаем MacroRelationType для VisuallyContains
+            var visuallyContainsRelationType = new MacroRelationType
+            {
+                RelationType = BusinessEntityRelationTypeEnum.VisuallyContains
+            };
+
+            // Удаляем все существующие связи VisuallyContains для данного child
+            foreach (var currentRelation in currentVisualParentRelations)
+            {
+                var currentParent = await _businessEntityRepository.GetByIdAsync(currentRelation.ObjectAId);
+                if (currentParent != null)
+                {
+                    _webLogger?.Debug($"Removing visual relation between '{currentParent.Name}' and '{child.Name}'");
+                    await RemoveRelation(currentParent, child, visuallyContainsRelationType);
+                }
+            }
+
+            // Создаем новую связь VisuallyContains между новым родителем и child
+            await CreateRelation(newVisualParent, child, visuallyContainsRelationType);
+            
+            _webLogger?.Information($"Successfully moved '{child.Name}' to new visual parent '{newVisualParent.Name}'");
+        }
+
+        /// <summary>
+        /// Перманентно удаляет бизнес-энтити из системы вместе с рекурсивным удалением всех дочерних элементов
+        /// </summary>
+        /// <param name="entityId">ID бизнес-энтити для удаления</param>
+        /// <param name="ct">CancellationToken</param>
+        /// <returns>Кортеж (bool успех, List&lt;string&gt; сообщения)</returns>
+        public async Task<(bool success, List<string> messages)> RemoveBusinessEntityPermanently(Guid entityId, CancellationToken ct = default)
+        {
+            var messages = new List<string>();
+            
+            // Проверяем, существует ли сущность
+            var entity = await _entityRepository.GetByIdAsync(entityId, ct);
+            if (entity == null)
+            {
+                // Если сущность не найдена, возвращаем true и пустой список (как указано в требованиях)
+                return (true, new List<string>());
+            }
+            
+            // Сначала рекурсивно удаляем всех потомков
+            var childrenRemovalResult = await RemoveChildrenRecursively(entityId, ct);
+            if (!childrenRemovalResult.success)
+            {
+                // Если не удалось удалить детей, не удаляем родителя
+                return childrenRemovalResult;
+            }
+            
+            // Проверяем, можно ли удалить саму сущность
+            var canDelete = await CanDelete(entityId, ct);
+            if (!canDelete)
+            {
+                messages.Add($"Не удается удалить бизнес-энтити '{entity.Name}' (ID: {entityId})");
+                return (false, messages);
+            }
+            
+            // Удаляем все связи сущности
+            await RemoveAllEntityRelations(entityId, ct);
+            
+            // Удаляем саму сущность
+            await _entityRepository.DeleteAsync(entityId, ct);
+            
+            return (true, new List<string>());
+        }
+        
+        /// <summary>
+        /// Рекурсивно удаляет всех потомков бизнес-энтити в визуальном дереве
+        /// </summary>
+        /// <param name="parentId">ID родительской сущности</param>
+        /// <param name="ct">CancellationToken</param>
+        /// <returns>Кортеж (bool успех, List&lt;string&gt; сообщения)</returns>
+        private async Task<(bool success, List<string> messages)> RemoveChildrenRecursively(Guid parentId, CancellationToken ct = default)
+        {
+            var allMessages = new List<string>();
+            
+            // Получаем всех прямых потомков (связи типа VisuallyContains, где parentId является ObjectA)
+            var childRelations = await _relationRepository.GetAllAsync(
+                r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString(), 
+                ct: ct);
+            
+            foreach (var relation in childRelations)
+            {
+                var childId = relation.ObjectBId;
+                
+                // Проверяем, существует ли дочерняя сущность
+                var childEntity = await _entityRepository.GetByIdAsync(childId, ct);
+                if (childEntity == null)
+                {
+                    // Если дочерняя сущность не найдена, просто продолжаем
+                    continue;
+                }
+                
+                // Рекурсивно удаляем всех потомков этого ребенка
+                var childrenResult = await RemoveChildrenRecursively(childId, ct);
+                if (!childrenResult.success)
+                {
+                    // Добавляем сообщения от неудачного удаления потомков
+                    allMessages.AddRange(childrenResult.messages);
+                    return (false, allMessages);
+                }
+                
+                // Проверяем, можно ли удалить самого ребенка
+                var canDeleteChild = await CanDelete(childId, ct);
+                if (!canDeleteChild)
+                {
+                    allMessages.Add($"Не удается удалить дочернюю бизнес-энтити '{childEntity.Name}' (ID: {childId})");
+                    return (false, allMessages);
+                }
+                
+                // Удаляем все связи дочерней сущности
+                await RemoveAllEntityRelations(childId, ct);
+                
+                // Удаляем саму дочернюю сущность
+                await _entityRepository.DeleteAsync(childId, ct);
+            }
+            
+            return (true, allMessages);
+        }
+        
+        /// <summary>
+        /// Проверяет, можно ли удалить бизнес-энтити (пока заглушка, всегда возвращает true)
+        /// </summary>
+        /// <param name="entityId">ID бизнес-энтити</param>
+        /// <param name="ct">CancellationToken</param>
+        /// <returns>true, если сущность можно удалить</returns>
+        private async Task<bool> CanDelete(Guid entityId, CancellationToken ct = default)
+        {
+            // Заглушка - пока всегда возвращаем true
+            // В будущем здесь будет логика проверки возможности удаления
+            await Task.CompletedTask;
+            return true;
+        }
+        
+        /// <summary>
+        /// Удаляет все связи бизнес-энтити (где сущность выступает как ObjectA или ObjectB)
+        /// </summary>
+        /// <param name="entityId">ID бизнес-энтити</param>
+        /// <param name="ct">CancellationToken</param>
+        private async Task RemoveAllEntityRelations(Guid entityId, CancellationToken ct = default)
+        {
+            // Получаем все связи, где сущность является ObjectA
+            var relationsAsA = await _relationRepository.GetAllAsync(r => r.ObjectAId == entityId, ct: ct);
+            
+            // Получаем все связи, где сущность является ObjectB
+            var relationsAsB = await _relationRepository.GetAllAsync(r => r.ObjectBId == entityId, ct: ct);
+            
+            // Удаляем все найденные связи
+            foreach (var relation in relationsAsA.Concat(relationsAsB))
+            {
+                await _relationRepository.DeleteAsync(relation.Id, ct);
+            }
+        }
     }
-} 
+}
