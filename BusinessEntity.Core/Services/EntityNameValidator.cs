@@ -1,3 +1,4 @@
+using SampleOnlineMall.WebLogger.Services;
 using System.Text.RegularExpressions;
 
 namespace BusinessEntity.Core.Services
@@ -5,31 +6,34 @@ namespace BusinessEntity.Core.Services
     /// <summary>
     /// Утилитарный класс для валидации имен бизнес-сущностей
     /// </summary>
-    public static class EntityNameValidator
+    public class EntityNameValidator
     {
-        /// <summary>
-        /// Проверяет, является ли имя сущности валидным
-        /// </summary>
-        /// <param name="name">Имя для проверки</param>
-        /// <returns>true, если имя валидно</returns>
-        public static bool IsValidEntityName(string name)
+        private readonly IWebLoggerService _webLogger;
+
+        public EntityNameValidator(IWebLoggerService webLogger)
+        {
+            _webLogger = webLogger ?? throw new ArgumentNullException(nameof(webLogger));
+        }
+
+        public bool IsValidEntityName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
                 return false;
 
             // Обрезаем пробелы в начале и конце
             var trimmedName = name.Trim();
-            
+
             if (string.IsNullOrEmpty(trimmedName))
                 return false;
 
-            // Проверяем, что все символы допустимы (кириллица, латиница, пробелы, _, -)
-            var allowedCharsPattern = @"^[а-яёА-ЯЁa-zA-Z\s_\-]+$";
+            // Проверяем, что все символы допустимы:
+            // любые буквы, цифры, пробелы, подчёркивания, дефисы
+            var allowedCharsPattern = @"^[\p{L}\p{Nd}\s_-]+$";
             if (!Regex.IsMatch(trimmedName, allowedCharsPattern))
                 return false;
 
-            // Проверяем, что есть хотя бы одна буква (кириллица или латиница)
-            var hasLetterPattern = @"[а-яёА-ЯЁa-zA-Z]";
+            // Проверяем, что есть хотя бы одна буква (любой алфавит)
+            var hasLetterPattern = @"\p{L}";
             if (!Regex.IsMatch(trimmedName, hasLetterPattern))
                 return false;
 
@@ -37,13 +41,13 @@ namespace BusinessEntity.Core.Services
         }
 
         /// <summary>
-        /// Нормализует имя сущности (обрезает пробелы)
+        /// Нормализует имя сущности, обрезая пробелы по краям
         /// </summary>
-        /// <param name="name">Имя для нормализации</param>
+        /// <param name="name">Исходное имя</param>
         /// <returns>Нормализованное имя</returns>
-        public static string NormalizeName(string name)
+        public string NormalizeEntityName(string name)
         {
-            return name?.Trim() ?? string.Empty;
+            return string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim();
         }
     }
 }

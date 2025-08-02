@@ -102,7 +102,8 @@ function SelectContainerAndRun {
         return $null
     }
     BuildAndRunContainer -container $container
-    AjustNetworks   # Подключаем все контейнеры к общей сети после запуска нового
+    # Убрано автоматическое переподключение всех контейнеров к сети
+    # AjustNetworks вызывается только вручную через пункт меню 03
 }
 function BuildAndRunPostgresContainer {
     param(
@@ -221,12 +222,13 @@ function BuildAndRunContainer {
         return
     }
 
-    # Автоматически подключаем контейнер к общей сети
+    # Подключаем только новый контейнер к общей сети (без переподключения остальных)
     Connect-ContainerToSharedNetwork -containerName $container.Name
 
     Write-Host "Получение IP-адреса контейнера..."
     $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container.Name
-    Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP"
+    Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP" -ForegroundColor Green
+    Write-Host "✓ Контейнер '$($container.Name)' успешно пересобран и запущен." -ForegroundColor Green
 }
 
 # Функция для автоматического подключения контейнера к общей сети
@@ -347,13 +349,23 @@ function Action378 {
     }
 }
 
+# Функция для запуска сервиса Authentik
+function Action37 {
+  
+}
+
+# Функция для генерации .env файла для Authentik
+function Action371 {
+  
+}
+
 function Show-Menu {
     Write-Host "Меню:" -ForegroundColor Green
     Write-Host "00   -- Вывести статус докер-сетей"
-    Write-Host "03   -- Настроить общую сеть (AjustNetworks)"
+    Write-Host "03   -- Настроить общую сеть и переподключить ВСЕ контейнеры (только при проблемах с сетью)"
     Write-Host "10   -- Подключиться к выбранному контейнеру"
     Write-Host "20   -- Вывести диагностическую информацию для выбранного контейнера"
-    Write-Host "30   -- Сбилдить и запустить контейнер"
+    Write-Host "30   -- Пересобрать и запустить отдельный контейнер (безопасно)"
     Write-Host "35   -- Сбилдить и запустить production_db контейнер"
     Write-Host "37   -- Запустить сервис Authentik"
     Write-Host "371  -- Сгенерировать .env для Authentik"

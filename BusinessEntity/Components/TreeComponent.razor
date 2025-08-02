@@ -138,6 +138,7 @@
                             AllowCheckBoxes="false">
                     <RadzenTreeLevel Text="@GetNodeText"
                                      ChildrenProperty="Children"
+                                     HasChildren="@NodeHasChildren"
                                      Expanded="@IsNodeExpanded">
                         <Template Context="item">
                             @{
@@ -159,6 +160,7 @@
                                 <input type="text" 
                                        class="form-control form-control-sm tree-editing-input @(HasValidationError ? "tree-editing-error" : "")"
                                        @bind="EditingText" 
+                                       @bind:event="oninput"
                                        @onkeydown="OnEditKeyDownAsync"
                                        @onblur="async () => await FinishEditingAsync(true)"
                                        @ref="editingInput"
