@@ -23,8 +23,8 @@ namespace BusinessEntity.Models
                 },
                 new ContextMenuItem() 
                 { 
-                    Text = "Удалить в корзину", 
-                    Value = "DeleteToTrash", 
+                    Text = "Удалить", 
+                    Value = "Delete", 
                     Icon = "delete"
                 }
             };
@@ -36,15 +36,16 @@ namespace BusinessEntity.Models
                 case "Rename":
                     await OnRenameAsync();
                     break;
-                case "DeleteToTrash":
-                    await OnDeleteToTrashAsync();
+                case "Delete":
+                    await OnDeleteAsync();
                     break;
                 default:
                     // Логируем неизвестное действие, если есть логгер
                     if (_webLogger != null)
                         await _webLogger.Warning($"Unknown document action: {action}");
                     break;
-            }        }
+            }
+        }
 
         // Заглушки-обработчики для действий с документами
         private async Task OnRenameAsync()
@@ -57,6 +58,16 @@ namespace BusinessEntity.Models
         {
             if (_webLogger != null)
                 await _webLogger.Information($"Удаление документа в корзину: {Title}");
+        }
+
+        private async Task OnDeleteAsync()
+        {
+            if (_webLogger != null)
+                await _webLogger.Information($"Запрос на удаление документа: {Title}");
+            
+            // Вызываем обратный вызов для удаления через TreeComponent
+            if (OnEntityDeleteRequested != null)
+                await OnEntityDeleteRequested(this);
         }
     }
 }

@@ -113,7 +113,9 @@ namespace BusinessEntity.Components
                 EntityType = space.EntityType.ToString(),
                 Expanded = true,
                 // Устанавливаем обратный вызов для создания сущностей
-                OnEntityCreateRequested = OnEntityCreateRequestedAsync
+                OnEntityCreateRequested = OnEntityCreateRequestedAsync,
+                // Устанавливаем обратный вызов для удаления сущностей
+                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync
             };
 
             // Получаем все элементы верхнего уровня в пространстве через BusinessEntityHelper
@@ -158,6 +160,9 @@ namespace BusinessEntity.Components
             {
                 treeNodeVm.OnEntityCreateRequested = OnEntityCreateRequestedAsync;
             }
+            
+            // Устанавливаем обратный вызов для удаления сущностей для всех типов узлов
+            treeNodeVm.OnEntityDeleteRequested = OnEntityDeleteRequestedAsync;
 
             // Получаем дочерние сущности через BusinessEntityHelper для получения детей
             var children = await BusinessEntityHelper.GetContainedEntitiesAsync(entity.Id);
@@ -425,7 +430,8 @@ namespace BusinessEntity.Components
                             Icon = GetEntityIcon(newEntity.EntityType),
                             Expanded = false,
                             Parent = parentNode,
-                            OnEntityCreateRequested = OnEntityCreateRequestedAsync // Устанавливаем колбэк для новой папки
+                            OnEntityCreateRequested = OnEntityCreateRequestedAsync, // Устанавливаем колбэк для новой папки
+                            OnEntityDeleteRequested = OnEntityDeleteRequestedAsync // Устанавливаем колбэк для удаления новой папки
                         };
                         
                         // Добавляем новую ноду в дерево
@@ -447,6 +453,154 @@ namespace BusinessEntity.Components
             {
                 WebLogger?.Error(ex);
             }
+        }
+
+        /// <summary>
+        /// Обработчик запроса на удаление сущности или нескольких сущностей
+        /// </summary>
+        private async Task OnEntityDeleteRequestedAsync(TreeNodeItemViewModelBase nodeToDelete)
+        {
+            try
+            {
+                // Определяем, какие элементы будут удалены
+                var nodesToDelete = new List<TreeNodeItemViewModelBase>();
+                
+                // Если есть мультиселект и удаляемый узел входит в выделенные, удаляем все выделенные
+                if (SelectedNodes.Count > 1 && SelectedNodes.Contains(nodeToDelete))
+                {
+                    nodesToDelete.AddRange(SelectedNodes);
+                }
+                else
+                {
+                    // Иначе удаляем только тот узел, на котором была вызвана команда
+                    nodesToDelete.Add(nodeToDelete);
+                }
+
+                // Подсчитываем количество элементов для удаления
+                var count = nodesToDelete.Count;
+                var message = count == 1 ? $"Удалить 1 элемент?" : $"Удалить {count} элементов?";
+
+                // Показываем подтверждающий диалог
+                var confirmed = await ShowConfirmationDialog(message);
+                if (!confirmed)
+                {
+                    WebLogger?.Information("Пользователь отменил удаление");
+                    return;
+                }
+
+                // Удаляем каждый элемент
+                var deletedNodes = new List<TreeNodeItemViewModelBase>();
+                foreach (var node in nodesToDelete)
+                {
+                    if (node?.Entity == null)
+                    {
+                        WebLogger?.Warning($"Cannot delete node - Entity is null");
+                        continue;
+                    }
+
+                    WebLogger?.Information($"Deleting entity '{node.Title}' (ID: {node.Entity.Id})");
+                    
+                    try
+                    {
+                        // Удаляем через BusinessEntityHelper
+                        await BusinessEntityHelper.RemoveBusinessEntity(node.Entity.Id);
+                        WebLogger?.Information($"Successfully deleted entity '{node.Title}'");
+                        deletedNodes.Add(node);
+                    }
+                    catch (Exception ex)
+                    {
+                        WebLogger?.Warning($"Failed to delete entity '{node.Title}': {ex.Message}");
+                    }
+                }
+
+                // Удаляем успешно удаленные узлы из дерева
+                foreach (var deletedNode in deletedNodes)
+                {
+                    RemoveNodeFromTree(deletedNode);
+                }
+
+                // Очищаем выделение после удаления
+                await ClearAllSelections();
+
+                // Принудительно обновляем дерево через JavaScript
+                await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
+
+                // Обновляем UI
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error(ex);
+            }
+        }
+
+        /// <summary>
+        /// Показывает диалог подтверждения удаления
+        /// </summary>
+        private async Task<bool> ShowConfirmationDialog(string message)
+        {
+            // Простая реализация через JavaScript confirm
+            // В реальном проекте можно использовать более красивый диалог
+            return await JSRuntime.InvokeAsync<bool>("confirm", message);
+        }
+
+        /// <summary>
+        /// Удаляет узел из дерева
+        /// </summary>
+        private void RemoveNodeFromTree(TreeNodeItemViewModelBase nodeToRemove)
+        {
+            if (nodeToRemove == null) return;
+            
+            WebLogger?.Information($"Removing node '{nodeToRemove.Title}' from tree");
+            
+            // Рекурсивно удаляем узел из всего дерева
+            RemoveNodeRecursively(TreeData, nodeToRemove);
+            
+            // Удаляем из списка выделенных узлов, если он там есть
+            SelectedNodes.Remove(nodeToRemove);
+            
+            // Очищаем ссылки узла для предотвращения утечек памяти
+            nodeToRemove.Parent = null;
+            nodeToRemove.Children.Clear();
+        }
+
+        /// <summary>
+        /// Рекурсивно ищет и удаляет узел из коллекций дерева
+        /// </summary>
+        private bool RemoveNodeRecursively(IEnumerable<TreeNodeItemViewModelBase> nodes, TreeNodeItemViewModelBase nodeToRemove)
+        {
+            if (nodes == null) return false;
+            
+            foreach (var node in nodes.ToList()) // ToList() для избежания изменения коллекции во время итерации
+            {
+                // Проверяем дочерние элементы текущего узла
+                if (node.Children.Contains(nodeToRemove))
+                {
+                    node.Children.Remove(nodeToRemove);
+                    return true;
+                }
+                
+                // Рекурсивно проверяем дочерние элементы
+                if (RemoveNodeRecursively(node.Children, nodeToRemove))
+                {
+                    return true;
+                }
+            }
+            
+            // Если это корневой элемент, удаляем из TreeData
+            if (TreeData.Contains(nodeToRemove))
+            {
+                var treeDataList = TreeData.ToList();
+                var removed = treeDataList.Remove(nodeToRemove);
+                if (removed)
+                {
+                    TreeData = treeDataList;
+                    WebLogger?.Information($"Removed root element '{nodeToRemove.Title}' from TreeData");
+                    return true;
+                }
+            }
+            
+            return false;
         }
 
         private bool IsNodeExpanded(object data)

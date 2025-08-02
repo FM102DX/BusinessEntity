@@ -286,7 +286,7 @@ namespace BusinessEntity.Core.Services
             var messages = new List<string>();
             
             // Проверяем, существует ли сущность
-            var entity = await _entityRepository.GetByIdAsync(entityId, ct);
+            var entity = await _businessEntityRepository.GetByIdAsync(entityId);
             if (entity == null)
             {
                 // Если сущность не найдена, возвращаем true и пустой список (как указано в требованиях)
@@ -313,7 +313,7 @@ namespace BusinessEntity.Core.Services
             await RemoveAllEntityRelations(entityId, ct);
             
             // Удаляем саму сущность
-            await _entityRepository.DeleteAsync(entityId, ct);
+            await _businessEntityRepository.DeleteAsync(entityId, ct);
             
             return (true, new List<string>());
         }
@@ -338,7 +338,7 @@ namespace BusinessEntity.Core.Services
                 var childId = relation.ObjectBId;
                 
                 // Проверяем, существует ли дочерняя сущность
-                var childEntity = await _entityRepository.GetByIdAsync(childId, ct);
+                var childEntity = await _businessEntityRepository.GetByIdAsync(childId, ct);
                 if (childEntity == null)
                 {
                     // Если дочерняя сущность не найдена, просто продолжаем
@@ -366,7 +366,7 @@ namespace BusinessEntity.Core.Services
                 await RemoveAllEntityRelations(childId, ct);
                 
                 // Удаляем саму дочернюю сущность
-                await _entityRepository.DeleteAsync(childId, ct);
+                await _businessEntityRepository.DeleteAsync(childId, ct);
             }
             
             return (true, allMessages);
