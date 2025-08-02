@@ -10,5 +10,10 @@ namespace BusinessEntity.Core.Classes
     public class Folder : BusinessEntityBase,IBusinessEntity
     {
         public override BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Folder;
+        
+        /// <summary>
+        /// Папки можно переименовывать в визуальном дереве
+        /// </summary>
+        public override bool IsRenameableInVisualTree { get; set; } = true;
     }
 }

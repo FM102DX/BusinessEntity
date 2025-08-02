@@ -12,5 +12,9 @@ namespace BusinessEntity.Core.Classes
         
         public virtual BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Undefined;
 
+        /// <summary>
+        /// Определяет, можно ли переименовывать данную сущность в визуальном дереве
+        /// </summary>
+        public virtual bool IsRenameableInVisualTree { get; set; } = false;
     }
 }

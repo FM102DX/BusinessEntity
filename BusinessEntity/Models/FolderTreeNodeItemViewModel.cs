@@ -1,5 +1,6 @@
 using Radzen;
 using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.Core.Services;
 
 namespace BusinessEntity.Models
 {
@@ -21,7 +22,7 @@ namespace BusinessEntity.Models
 
         public override List<ContextMenuItem> CreateContextMenu()
         {
-            return new List<ContextMenuItem>()
+            var menuItems = new List<ContextMenuItem>()
             {
                 new ContextMenuItem() 
                 { 
@@ -34,20 +35,32 @@ namespace BusinessEntity.Models
                     Text = "Создать документ", 
                     Value = "CreateDocument", 
                     Icon = "note_add"
-                },
-                new ContextMenuItem() 
-                { 
-                    Text = "Переименовать", 
-                    Value = "Rename", 
-                    Icon = "edit"
-                },
-                new ContextMenuItem() 
-                { 
-                    Text = "Удалить", 
-                    Value = "Delete", 
-                    Icon = "delete"
                 }
             };
+
+            // Добавляем пункт "Переименовать" только если сущность поддерживает переименование
+            if (Entity != null && Entity.BusinessEntityType == BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Folder)
+            {
+                // Проверяем, поддерживает ли сущность переименование
+                if (Entity.IsRenameableInVisualTree)
+                {
+                    menuItems.Add(new ContextMenuItem() 
+                    { 
+                        Text = "Переименовать", 
+                        Value = "Rename", 
+                        Icon = "edit"
+                    });
+                }
+            }
+
+            menuItems.Add(new ContextMenuItem() 
+            { 
+                Text = "Удалить", 
+                Value = "Delete", 
+                Icon = "delete"
+            });
+
+            return menuItems;
         }
 
         public override async Task HandleMenuActionAsync(string action)
@@ -96,6 +109,13 @@ namespace BusinessEntity.Models
         {
             if (_webLogger != null)
                 await _webLogger.Information($"Переименование папки: {Title}");
+            
+            // Вызываем обратный вызов для переименования через TreeComponent
+            if (OnEntityRenameRequested != null)
+            {
+                // Запрашиваем новое имя (это будет реализовано в TreeComponent)
+                await OnEntityRenameRequested(this, Title);
+            }
         }
 
         private async Task OnDeleteToTrashAsync()

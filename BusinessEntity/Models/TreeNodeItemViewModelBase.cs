@@ -45,6 +45,9 @@ namespace BusinessEntity.Models
         // Делегат для обратного вызова в TreeComponent для удаления сущностей
         public Func<TreeNodeItemViewModelBase, Task>? OnEntityDeleteRequested { get; set; }
         
+        // Делегат для обратного вызова переименования в TreeComponent
+        public Func<TreeNodeItemViewModelBase, string, Task<bool>>? OnEntityRenameRequested { get; set; }
+        
         // Абстрактный метод для создания контекстного меню
         public abstract List<ContextMenuItem> CreateContextMenu();
         

@@ -36,6 +36,15 @@ namespace BusinessEntity.Components
         private List<TreeNodeItemViewModelBase> SelectedNodes { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsMultiSelectMode { get; set; } = false;
         
+        // Состояние inline-редактирования
+        private TreeNodeItemViewModelBase? EditingNode { get; set; } = null;
+        private string EditingText { get; set; } = string.Empty;
+        private ElementReference editingInput;
+        
+        // Состояние валидации при редактировании
+        private bool HasValidationError { get; set; } = false;
+        private string ValidationErrorMessage { get; set; } = string.Empty;
+        
         protected override async Task OnInitializedAsync()
         {
             try
@@ -115,7 +124,9 @@ namespace BusinessEntity.Components
                 // Устанавливаем обратный вызов для создания сущностей
                 OnEntityCreateRequested = OnEntityCreateRequestedAsync,
                 // Устанавливаем обратный вызов для удаления сущностей
-                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync
+                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
+                // Устанавливаем обратный вызов для переименования сущностей
+                OnEntityRenameRequested = OnEntityRenameRequestedAsync
             };
 
             // Получаем все элементы верхнего уровня в пространстве через BusinessEntityHelper
@@ -163,6 +174,9 @@ namespace BusinessEntity.Components
             
             // Устанавливаем обратный вызов для удаления сущностей для всех типов узлов
             treeNodeVm.OnEntityDeleteRequested = OnEntityDeleteRequestedAsync;
+            
+            // Устанавливаем обратный вызов для переименования сущностей для всех типов узлов
+            treeNodeVm.OnEntityRenameRequested = OnEntityRenameRequestedAsync;
 
             // Получаем дочерние сущности через BusinessEntityHelper для получения детей
             var children = await BusinessEntityHelper.GetContainedEntitiesAsync(entity.Id);
@@ -431,7 +445,8 @@ namespace BusinessEntity.Components
                             Expanded = false,
                             Parent = parentNode,
                             OnEntityCreateRequested = OnEntityCreateRequestedAsync, // Устанавливаем колбэк для новой папки
-                            OnEntityDeleteRequested = OnEntityDeleteRequestedAsync // Устанавливаем колбэк для удаления новой папки
+                            OnEntityDeleteRequested = OnEntityDeleteRequestedAsync, // Устанавливаем колбэк для удаления новой папки
+                            OnEntityRenameRequested = OnEntityRenameRequestedAsync // Устанавливаем колбэк для переименования новой папки
                         };
                         
                         // Добавляем новую ноду в дерево
@@ -960,6 +975,144 @@ namespace BusinessEntity.Components
                 }
             }
             return null;
+        }
+
+        /// <summary>
+        /// Обработчик запроса на переименование сущности
+        /// </summary>
+        private async Task<bool> OnEntityRenameRequestedAsync(TreeNodeItemViewModelBase nodeToRename, string currentName)
+        {
+            try
+            {
+                if (nodeToRename?.Entity == null)
+                {
+                    WebLogger?.Warning("Cannot rename entity - node or entity is null");
+                    return false;
+                }
+
+                WebLogger?.Information($"Starting inline rename for entity '{currentName}' (ID: {nodeToRename.Entity.Id})");
+
+                // Переключаем узел в режим редактирования
+                EditingNode = nodeToRename;
+                EditingText = currentName;
+
+                // Обновляем UI для показа поля ввода
+                await InvokeAsync(StateHasChanged);
+
+                // Даем время браузеру отрендерить input, затем фокусируемся
+                await Task.Delay(50);
+                await editingInput.FocusAsync();
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error(ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Завершает inline-редактирование с сохранением
+        /// </summary>
+        private async Task FinishEditingAsync(bool save = true)
+        {
+            try
+            {
+                if (EditingNode == null)
+                    return;
+
+                // Сбрасываем ошибки валидации
+                HasValidationError = false;
+                ValidationErrorMessage = string.Empty;
+
+                if (save && !string.IsNullOrWhiteSpace(EditingText))
+                {
+                    var newName = EntityNameValidator.NormalizeName(EditingText);
+                    
+                    // Валидация через EntityNameValidator
+                    if (EntityNameValidator.IsValidEntityName(newName))
+                    {
+                        if (newName != EditingNode.Title)
+                        {
+                            WebLogger?.Information($"Saving renamed entity from '{EditingNode.Title}' to '{newName}'");
+
+                            // Переименовываем сущность через BusinessEntityHelper
+                            try
+                            {
+                                if (EditingNode.Entity != null)
+                                {
+                                    var renamedEntity = await BusinessEntityHelper.RenameEntity(EditingNode.Entity.Id, newName);
+
+                                    if (renamedEntity != null)
+                                    {
+                                        // Обновляем имя в узле дерева
+                                        EditingNode.Title = newName;
+                                        EditingNode.Entity.Name = newName;
+                                        WebLogger?.Information($"Successfully renamed entity to '{newName}'");
+                                    }
+                                    else
+                                    {
+                                        WebLogger?.Error($"Failed to rename entity to '{newName}'");
+                                        HasValidationError = true;
+                                        ValidationErrorMessage = "Не удалось сохранить изменения";
+                                        await InvokeAsync(StateHasChanged);
+                                        return; // Не выходим из режима редактирования при ошибке
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                WebLogger?.Error($"Error renaming entity: {ex.Message}");
+                                HasValidationError = true;
+                                ValidationErrorMessage = "Ошибка при сохранении";
+                                await InvokeAsync(StateHasChanged);
+                                return; // Не выходим из режима редактирования при ошибке
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Показываем ошибку валидации
+                        HasValidationError = true;
+                        ValidationErrorMessage = "Имя должно содержать только буквы, цифры, пробелы, _ и -, и включать хотя бы одну букву";
+                        WebLogger?.Warning($"Invalid entity name: '{EditingText}'. {ValidationErrorMessage}");
+                        await InvokeAsync(StateHasChanged);
+                        return; // Не выходим из режима редактирования при ошибке валидации
+                    }
+                }
+
+                // Выходим из режима редактирования только если нет ошибок
+                EditingNode = null;
+                EditingText = string.Empty;
+                HasValidationError = false;
+                ValidationErrorMessage = string.Empty;
+
+                // Обновляем UI
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error($"Error in FinishEditingAsync: {ex.Message}");
+                HasValidationError = true;
+                ValidationErrorMessage = "Произошла ошибка";
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+
+        /// <summary>
+        /// Обработчик нажатия клавиш в поле редактирования
+        /// </summary>
+        private async Task OnEditKeyDownAsync(KeyboardEventArgs e)
+        {
+            if (e.Key == "Enter")
+            {
+                await FinishEditingAsync(true);
+            }
+            else if (e.Key == "Escape")
+            {
+                await FinishEditingAsync(false);
+            }
         }
 
         #endregion

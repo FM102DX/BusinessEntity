@@ -405,5 +405,40 @@ namespace BusinessEntity.Core.Services
                 await _relationRepository.DeleteAsync(relation.Id, ct);
             }
         }
+
+        /// <summary>
+        /// Переименовывает бизнес-энтити
+        /// </summary>
+        /// <param name="entityId">ID сущности для переименования</param>
+        /// <param name="newName">Новое имя сущности</param>
+        /// <param name="ct">CancellationToken</param>
+        /// <returns>Обновленная сущность или null, если сущность не найдена</returns>
+        public async Task<Classes.BusinessEntity?> RenameEntity(Guid entityId, string newName, CancellationToken ct = default)
+        {
+            _webLogger?.Information($"RenameEntity: entityId={entityId}, newName='{newName}'");
+            
+            if (string.IsNullOrWhiteSpace(newName))
+            {
+                _webLogger?.Warning($"RenameEntity: новое имя не может быть пустым");
+                return null;
+            }
+            
+            // Получаем сущность
+            var entity = await _businessEntityRepository.GetByIdAsync(entityId, ct);
+            if (entity == null)
+            {
+                _webLogger?.Warning($"RenameEntity: сущность с ID {entityId} не найдена");
+                return null;
+            }
+            
+            // Обновляем имя
+            entity.Name = newName.Trim();
+            
+            // Сохраняем изменения
+            await _businessEntityRepository.UpdateAsync(entity, ct);
+            _webLogger?.Information($"RenameEntity: сущность успешно переименована в '{newName}'");
+            
+            return entity;
+        }
     }
 }

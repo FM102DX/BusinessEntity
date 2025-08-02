@@ -92,6 +92,24 @@
         padding: 2px 6px;
         border-radius: 3px;
     }
+
+    /* Стили для режима редактирования */
+    .tree-editing-input {
+        border: 2px solid #007bff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+        background-color: #fff !important;
+    }
+    
+    .tree-editing-input:focus {
+        border-color: #007bff !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+        outline: none !important;
+    }
+    
+    .tree-editing-error {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+    }
 </style>
 
 @if (Visible)
@@ -134,21 +152,42 @@
                                     cssClasses.Add("tree-node-dragging");
                                 }
                                 var cssClass = string.Join(" ", cssClasses);
+                                bool isEditing = EditingNode == node;
                             }
-                            <span class="@cssClass"
-                                  draggable="true"
-                                  @onclick="async () => await OnNodeClicked(node)"
-                                  @onclick:stopPropagation="true"
-                                  @onclick:preventDefault="true"
-                                  @ondragstart="async (e) => await OnDragStart(e, node)"
-                                  @ondragend="async (e) => await OnDragEnd(e, node)"
-                                  @ondragover="async (e) => await OnDragOver(e)"
-                                  @ondragover:preventDefault="true"
-                                  @ondrop="async (e) => await OnDrop(e, node)"
-                                  @ondragenter="(e) => OnDragEnter(e, node)"
-                                  @ondragleave="(e) => OnDragLeave(e, node)">
-                                @item.Text
-                            </span>
+                            @if (isEditing)
+                            {
+                                <input type="text" 
+                                       class="form-control form-control-sm tree-editing-input @(HasValidationError ? "tree-editing-error" : "")"
+                                       @bind="EditingText" 
+                                       @onkeydown="OnEditKeyDownAsync"
+                                       @onblur="async () => await FinishEditingAsync(true)"
+                                       @ref="editingInput"
+                                       placeholder="Введите имя папки"
+                                       style="display: inline-block; width: auto; min-width: 120px; max-width: 200px;" />
+                                @if (HasValidationError)
+                                {
+                                    <div class="invalid-feedback d-block" style="font-size: 0.75rem; margin-top: 2px;">
+                                        @ValidationErrorMessage
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <span class="@cssClass"
+                                      draggable="true"
+                                      @onclick="async () => await OnNodeClicked(node)"
+                                      @onclick:stopPropagation="true"
+                                      @onclick:preventDefault="true"
+                                      @ondragstart="async (e) => await OnDragStart(e, node)"
+                                      @ondragend="async (e) => await OnDragEnd(e, node)"
+                                      @ondragover="async (e) => await OnDragOver(e)"
+                                      @ondragover:preventDefault="true"
+                                      @ondrop="async (e) => await OnDrop(e, node)"
+                                      @ondragenter="(e) => OnDragEnter(e, node)"
+                                      @ondragleave="(e) => OnDragLeave(e, node)">
+                                    @item.Text
+                                </span>
+                            }
                         </Template>
                     </RadzenTreeLevel>
                 </RadzenTree>
