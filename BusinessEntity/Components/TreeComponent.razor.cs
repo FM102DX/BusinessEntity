@@ -785,6 +785,16 @@ namespace BusinessEntity.Components
                             
                             WebLogger?.Information($"Successfully moved '{draggedNode.Title}' to '{targetNode.Title}'");
                         }
+                        catch (InvalidOperationException cyclicEx)
+                        {
+                            // Специальная обработка циклических зависимостей
+                            WebLogger?.Warning($"Cyclic dependency prevented: {cyclicEx.Message}");
+                            // Не перезагружаем дерево при ошибке циклической зависимости
+                            await RemoveDragTooltip();
+                            ClearDraggingFlags();
+                            await InvokeAsync(StateHasChanged);
+                            return;
+                        }
                         catch (Exception moveEx)
                         {
                             WebLogger?.Error($"Failed to move '{draggedNode.Title}' to '{targetNode.Title}': {moveEx.Message}");

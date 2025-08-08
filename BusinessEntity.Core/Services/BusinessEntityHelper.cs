@@ -247,6 +247,14 @@ namespace BusinessEntity.Core.Services
             if (child == null) throw new ArgumentNullException(nameof(child));
             if (newVisualParent == null) throw new ArgumentNullException(nameof(newVisualParent));
 
+            // Проверяем, не создаст ли перемещение циклическую зависимость
+            if (await WouldCreateCyclicDependency(child.Id, newVisualParent.Id))
+            {
+                var errorMessage = $"Cannot move '{child.Name}' to '{newVisualParent.Name}': this would create a cyclic dependency";
+                _webLogger?.Warning(errorMessage);
+                throw new InvalidOperationException(errorMessage);
+            }
+
             // Находим текущего визуального родителя данного элемента
             var currentVisualParentRelations = await _relationRepository.GetAllAsync(r => 
                 r.ObjectBId == child.Id && 
@@ -439,6 +447,51 @@ namespace BusinessEntity.Core.Services
             _webLogger?.Information($"RenameEntity: сущность успешно переименована в '{newName}'");
             
             return entity;
+        }
+
+        /// <summary>
+        /// Проверяет, создаст ли перемещение элемента циклическую зависимость
+        /// </summary>
+        /// <param name="childId">ID элемента, который планируется переместить</param>
+        /// <param name="newParentId">ID нового родителя</param>
+        /// <returns>true, если создаст циклическую зависимость</returns>
+        public async Task<bool> WouldCreateCyclicDependency(Guid childId, Guid newParentId)
+        {
+            // Если пытаемся переместить элемент в самого себя
+            if (childId == newParentId)
+                return true;
+
+            // Проверяем, является ли newParent потомком child
+            return await IsDescendantInDatabase(newParentId, childId);
+        }
+
+        /// <summary>
+        /// Проверяет, является ли потенциальный потомок (descendantId) потомком предка (ancestorId) в базе данных
+        /// </summary>
+        /// <param name="descendantId">ID потенциального потомка</param>
+        /// <param name="ancestorId">ID предка</param>
+        /// <returns>true, если descendant является потомком ancestor</returns>
+        private async Task<bool> IsDescendantInDatabase(Guid descendantId, Guid ancestorId)
+        {
+            // Получаем родителя descendantId
+            var parentRelations = await _relationRepository.GetAllAsync(r => 
+                r.ObjectBId == descendantId && 
+                r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
+
+            foreach (var relation in parentRelations)
+            {
+                var parentId = relation.ObjectAId;
+                
+                // Если родитель - это ancestor, то descendant является потомком ancestor
+                if (parentId == ancestorId)
+                    return true;
+
+                // Рекурсивно проверяем выше по иерархии
+                if (await IsDescendantInDatabase(parentId, ancestorId))
+                    return true;
+            }
+
+            return false;
         }
     }
 }

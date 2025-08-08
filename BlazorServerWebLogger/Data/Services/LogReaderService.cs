@@ -31,19 +31,44 @@ namespace BlazorServerWebLogger.Data.Services
         // Метод для чтения новых записей, появившихся после указанного времени
         public async Task<List<LogEntryDbStorable>> ReadNewEntriesAsync(DateTime lastTimestamp)
         {
-            var result = await _repo.GetAllAsync(
-                filter: entry => entry.Timestamp > lastTimestamp, null // Фильтруем по времени
-            );
+            try
+            {
+                var result = await _repo.GetAllAsync(
+                    filter: entry => entry.Timestamp > lastTimestamp, null // Фильтруем по времени
+                );
 
-            return result.Items
-                .OrderByDescending(entry => entry.Timestamp)
-                .ToList();
+                return result.Items
+                    .OrderByDescending(entry => entry.Timestamp)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[LOGREADER-ERROR] Ошибка чтения новых записей: {ex.Message}");
+                if (ex.Message.Contains("Failed to connect") || ex.Message.Contains("timeout") || ex.Message.Contains("172.22.0."))
+                {
+                    Console.WriteLine($"[LOGREADER-ERROR] 🔥 СЕТЕВАЯ ОШИБКА при чтении логов!");
+                    Console.WriteLine($"[LOGREADER-ERROR] LastTimestamp: {lastTimestamp:yyyy-MM-dd HH:mm:ss}");
+                }
+                throw; // пробрасываем для обработки выше
+            }
         }
 
         // Метод для получения общего количества логов
         public async Task<int> GetTotalLogCount()
         {
-            return await _repo.GetCountAsync();
+            try
+            {
+                return await _repo.GetCountAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[LOGREADER-ERROR] Ошибка получения количества логов: {ex.Message}");
+                if (ex.Message.Contains("Failed to connect") || ex.Message.Contains("timeout") || ex.Message.Contains("172.22.0."))
+                {
+                    Console.WriteLine($"[LOGREADER-ERROR] 🔥 СЕТЕВАЯ ОШИБКА при подсчете логов!");
+                }
+                throw;
+            }
         }
 
         // Новый метод для удаления всех записей

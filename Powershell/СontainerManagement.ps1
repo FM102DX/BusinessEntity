@@ -1,7 +1,226 @@
 # Управление Docker-контейнерами
+# 
+# ВАЖНО: Пункт 30 и специализированные функции (31, 32, 33) используют БЕЗОПАСНУЮ пересборку
+# которая НЕ нарушает сети других контейнеров. Это решает проблему с отвалом логгера
+# при пересборке business-entity контейнера.
+#
+# Безопасная пересборка:
+# 1. Запоминает все сети контейнера перед удалением
+# 2. Пересобирает только выбранный контейнер
+# 3. Подключает его обратно к тем же сетям
+# 4. НЕ затрагивает другие контейнеры и их сетевые подключения
+#
+# Массовое переподключение (AjustNetworks) вызывается только через пункт 03
 
 . "$PSScriptRoot\DockerNetworkInfo.ps1"
 # . "$PSScriptRoot\AutoConnectContainers.ps1"  # Удалено, больше не требуется
+
+# Функция для создания сети только если она не существует
+function Ensure-Network {
+    param([Parameter(Mandatory=$true)][string]$NetworkName)
+    $exists = docker network ls --format '{{.Name}}' | Where-Object { $_ -eq $NetworkName }
+    if (-not $exists) {
+        Write-Host "Создаю сеть '$NetworkName'..." -ForegroundColor Yellow
+        docker network create $NetworkName | Out-Null
+        Write-Host "✓ Сеть '$NetworkName' создана." -ForegroundColor Green
+    } else {
+        Write-Host "Сеть '$NetworkName' уже существует." -ForegroundColor DarkGray
+    }
+}
+
+# Функция для получения списка сетей контейнера
+function Get-ContainerNetworks {
+    param([Parameter(Mandatory=$true)][string]$ContainerName)
+
+    try {
+        $networksJson = docker inspect --format "{{json .NetworkSettings.Networks}}" $ContainerName 2>$null | ConvertFrom-Json
+        if (-not $networksJson) { return @() }
+
+        $result = @()
+        foreach ($p in $networksJson.PSObject.Properties) {
+            $netName = $p.Name
+            $aliases = @()
+            if ($p.Value -and $p.Value.Aliases) { $aliases = @($p.Value.Aliases) }
+            $result += [pscustomobject]@{ Name = $netName; Aliases = $aliases }
+        }
+        return $result
+    } catch {
+        Write-Host "Контейнер '$ContainerName' не найден, будет использована fallback сеть." -ForegroundColor DarkGray
+        return @()
+    }
+}
+
+# Основная функция для безопасной пересборки контейнера с сохранением сетей
+function Rebuild-And-Restart-ContainerKeepNetworks {
+    param(
+        [Parameter(Mandatory=$true)][string]$ContainerName,
+        [Parameter(Mandatory=$true)][string]$ImageName,
+        [Parameter(Mandatory=$true)][string]$DockerfilePath,
+        [Parameter(Mandatory=$true)][string]$BuildContext,
+        [string[]]$Ports = @(),              # пример: @("5000:80")
+        [hashtable]$Env = @{},               # пример: @{ "ASPNETCORE_ENVIRONMENT"="Development" }
+        [string]$FallbackNetwork = "docker-business-entity-common-bridge"
+    )
+
+    Write-Host "=== Безопасная пересборка контейнера '$ContainerName' ===" -ForegroundColor Cyan
+
+    # 1) Запоминаем сети контейнера (если он существует)
+    Write-Host "Запоминаю сети контейнера..." -ForegroundColor Yellow
+    $nets = Get-ContainerNetworks -ContainerName $ContainerName
+    if ($nets.Count -gt 0) {
+        Write-Host "Найдены сети:" -ForegroundColor Green
+        foreach ($n in $nets) {
+            $aliasesStr = if ($n.Aliases) { "aliases: $($n.Aliases -join ',')" } else { "без aliases" }
+            Write-Host "  - $($n.Name) ($aliasesStr)" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "Контейнер не найден или не подключен к сетям." -ForegroundColor DarkGray
+    }
+
+    # 2) Останавливаем/удаляем контейнер
+    Write-Host "Останавливаю и удаляю контейнер..." -ForegroundColor Yellow
+    docker rm -f $ContainerName 2>$null | Out-Null
+
+    # 3) Собираем образ
+    Write-Host "Собираю образ '$ImageName'..." -ForegroundColor Yellow
+    docker build -t $ImageName -f $DockerfilePath $BuildContext
+    if ($LASTEXITCODE -ne 0) {
+        throw "Ошибка сборки Docker образа"
+    }
+
+    # 4) Определяем первичную сеть
+    $primaryNet = if ($nets.Count -gt 0) { $nets[0].Name } else { $FallbackNetwork }
+    Write-Host "Первичная сеть: $primaryNet" -ForegroundColor Green
+    Ensure-Network -NetworkName $primaryNet
+
+    # 5) Формируем параметры docker run
+    $runArgs = @("run", "-d", "--name", $ContainerName, "--network", $primaryNet)
+
+    foreach ($p in $Ports) { $runArgs += @("-p", $p) }
+    foreach ($k in $Env.Keys) { $runArgs += @("-e", "$k=$($Env[$k])") }
+
+    $runArgs += $ImageName
+
+    # 6) Запускаем контейнер в первичной сети
+    Write-Host "Запускаю контейнер в сети '$primaryNet'..." -ForegroundColor Yellow
+    docker @runArgs | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Ошибка запуска контейнера"
+    }
+
+    # 7) Возвращаем контейнер в остальные сети (только этот контейнер, не массово)
+    if ($nets.Count -gt 1) {
+        Write-Host "Подключаю к дополнительным сетям..." -ForegroundColor Yellow
+        foreach ($n in $nets | Where-Object { $_.Name -ne $primaryNet }) {
+            Write-Host "  Подключаю к сети '$($n.Name)'" -ForegroundColor DarkGray
+            $connectArgs = @("network", "connect")
+            # если были алиасы — восстановим
+            if ($n.Aliases -and $n.Aliases.Count -gt 0) {
+                foreach ($a in $n.Aliases) { 
+                    if ($a -ne $ContainerName) { # не дублируем имя контейнера
+                        $connectArgs += @("--alias", $a) 
+                    }
+                }
+            }
+            $connectArgs += @($n.Name, $ContainerName)
+            docker @connectArgs | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "    ✓ Подключен к '$($n.Name)'" -ForegroundColor Green
+            } else {
+                Write-Host "    ⚠ Ошибка подключения к '$($n.Name)'" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    # 8) Получаем финальный IP
+    $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $ContainerName
+    Write-Host "✓ Контейнер '$ContainerName' пересобран и запущен. IP: $containerIP" -ForegroundColor Green
+    Write-Host "✓ Сети других контейнеров НЕ затронуты." -ForegroundColor Green
+}
+
+# Специализированная функция для Business Entity
+function Rebuild-BusinessEntity-Safe {
+    $container = "business-entity-container"
+    $image = "business-entity-container_image:latest"
+    $dockerfile = Join-Path (Split-Path $PSScriptRoot -Parent) "BusinessEntity\Dockerfile"
+    $context = Split-Path $PSScriptRoot -Parent
+
+    # Порты и переменные окружения
+    $ports = @("7000:80")
+    $env = @{ 
+        "ASPNETCORE_URLS" = "http://*:80"
+        "ASPNETCORE_ENVIRONMENT" = "Development"
+        "IS_DOCKER" = "true"
+    }
+
+    Rebuild-And-Restart-ContainerKeepNetworks `
+        -ContainerName $container `
+        -ImageName $image `
+        -DockerfilePath $dockerfile `
+        -BuildContext $context `
+        -Ports $ports `
+        -Env $env `
+        -FallbackNetwork "docker-business-entity-common-bridge"
+        
+    # ВАЖНО: Перезапускаем логгер для обновления пула соединений с БД
+    Write-Host "Перезапускаю web-logger для обновления соединений с БД..." -ForegroundColor Yellow
+    docker restart web_logger-container 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✓ Web-logger перезапущен для обновления соединений." -ForegroundColor Green
+    } else {
+        Write-Host "⚠ Не удалось перезапустить web-logger. Сделайте это вручную через пункт 32." -ForegroundColor Yellow
+    }
+}
+
+# Специализированная функция для Web Logger
+function Rebuild-WebLogger-Safe {
+    $container = "web_logger-container"
+    $image = "web_logger-container_image:latest"
+    $dockerfile = Join-Path (Split-Path $PSScriptRoot -Parent) "BlazorServerWebLogger\Dockerfile"
+    $context = Split-Path $PSScriptRoot -Parent
+
+    # Порты и переменные окружения
+    $ports = @("5080:80")
+    $env = @{ 
+        "ASPNETCORE_URLS" = "http://*:80"
+        "ASPNETCORE_ENVIRONMENT" = "Development"
+        "IS_DOCKER" = "true"
+    }
+
+    Rebuild-And-Restart-ContainerKeepNetworks `
+        -ContainerName $container `
+        -ImageName $image `
+        -DockerfilePath $dockerfile `
+        -BuildContext $context `
+        -Ports $ports `
+        -Env $env `
+        -FallbackNetwork "docker-business-entity-common-bridge"
+}
+
+# Специализированная функция для Admin Node
+function Rebuild-AdminNode-Safe {
+    $container = "admin-node"
+    $image = "admin-node_image:latest"
+    $dockerfile = Join-Path (Split-Path $PSScriptRoot -Parent) "ControlNode\Dockerfile"
+    $context = Split-Path $PSScriptRoot -Parent
+
+    # Порты и переменные окружения
+    $ports = @("5020:80")
+    $env = @{ 
+        "ASPNETCORE_URLS" = "http://*:80"
+        "ASPNETCORE_ENVIRONMENT" = "Development"
+        "IS_DOCKER" = "true"
+    }
+
+    Rebuild-And-Restart-ContainerKeepNetworks `
+        -ContainerName $container `
+        -ImageName $image `
+        -DockerfilePath $dockerfile `
+        -BuildContext $context `
+        -Ports $ports `
+        -Env $env `
+        -FallbackNetwork "docker-business-entity-common-bridge"
+}
 
 # Список контейнеров
 $containers = @(
@@ -88,11 +307,26 @@ function Action20 {
 }
 
 function BuildAndRunBusinessLogicContainers {
+    Write-Host "=== Безопасная пересборка всех бизнес-контейнеров ===" -ForegroundColor Cyan
     
-    BuildAndRunContainer -container (GetContainerByName -containerName 'postgres-production-db')
-    BuildAndRunContainer -container (GetContainerByName -containerName 'admin-node')
-    BuildAndRunContainer -container (GetContainerByName -containerName 'assort-api-container')
-    BuildAndRunContainer -container (GetContainerByName -containerName 'web_logger-container')
+    # Сначала убеждаемся что база данных запущена
+    Write-Host "Проверяю и запускаю production_db..." -ForegroundColor Yellow
+    BuildAndRunPostgresContainer
+    Start-Sleep -Seconds 3
+    
+    # Пересобираем контейнеры безопасно
+    Write-Host "Пересобираю admin-node..." -ForegroundColor Yellow
+    Rebuild-AdminNode-Safe
+    Start-Sleep -Seconds 2
+    
+    Write-Host "Пересобираю business-entity..." -ForegroundColor Yellow  
+    Rebuild-BusinessEntity-Safe
+    Start-Sleep -Seconds 2
+    
+    Write-Host "Пересобираю web-logger..." -ForegroundColor Yellow
+    Rebuild-WebLogger-Safe
+    
+    Write-Host "✓ Все бизнес-контейнеры пересобраны безопасно!" -ForegroundColor Green
 }
 
 function SelectContainerAndRun {
@@ -101,8 +335,106 @@ function SelectContainerAndRun {
         Write-Host "Неверный выбор контейнера" -ForegroundColor Red
         return $null
     }
-    BuildAndRunContainer -container $container
-    # Убрано автоматическое переподключение всех контейнеров к сети
+    
+    # Используем безопасную пересборку для всех контейнеров
+    Write-Host "Использую безопасную пересборку для '$($container.Name)'..." -ForegroundColor Cyan
+    
+    # Определяем параметры для каждого типа контейнера
+    $dockerfile = ""
+    $context = ""
+    $ports = @()
+    $env = @{}
+    $imageName = ""
+    
+    switch ($container.Name) {
+        "business-entity-container" {
+            $dockerfile = Join-Path (Split-Path $PSScriptRoot -Parent) "BusinessEntity\Dockerfile"
+            $context = Split-Path $PSScriptRoot -Parent
+            $ports = @("$($container.PortExt):$($container.PortInt)")
+            $env = @{ 
+                "ASPNETCORE_URLS" = "http://*:80"
+                "ASPNETCORE_ENVIRONMENT" = "Development"
+                "IS_DOCKER" = "true"
+            }
+            $imageName = "business-entity-container_image:latest"
+            
+            # Пересобираем business-entity
+            Rebuild-And-Restart-ContainerKeepNetworks `
+                -ContainerName $container.Name `
+                -ImageName $imageName `
+                -DockerfilePath $dockerfile `
+                -BuildContext $context `
+                -Ports $ports `
+                -Env $env `
+                -FallbackNetwork "docker-business-entity-common-bridge"
+                
+            # Перезапускаем логгер для обновления соединений с БД
+            Write-Host "Перезапускаю web-logger для обновления соединений с БД..." -ForegroundColor Yellow
+            docker restart web_logger-container 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "✓ Web-logger перезапущен для обновления соединений." -ForegroundColor Green
+            } else {
+                Write-Host "⚠ Не удалось перезапустить web-logger. Сделайте это вручно через пункт 32." -ForegroundColor Yellow
+            }
+            return
+        }
+        "web_logger-container" {
+            $dockerfile = Join-Path (Split-Path $PSScriptRoot -Parent) "BlazorServerWebLogger\Dockerfile"
+            $context = Split-Path $PSScriptRoot -Parent
+            $ports = @("$($container.PortExt):$($container.PortInt)")
+            $env = @{ 
+                "ASPNETCORE_URLS" = "http://*:80"
+                "ASPNETCORE_ENVIRONMENT" = "Development"
+                "IS_DOCKER" = "true"
+            }
+            $imageName = "web_logger-container_image:latest"
+            
+            # Пересобираем web-logger
+            Rebuild-And-Restart-ContainerKeepNetworks `
+                -ContainerName $container.Name `
+                -ImageName $imageName `
+                -DockerfilePath $dockerfile `
+                -BuildContext $context `
+                -Ports $ports `
+                -Env $env `
+                -FallbackNetwork "docker-business-entity-common-bridge"
+            return
+        }
+        "admin-node" {
+            $dockerfile = Join-Path (Split-Path $PSScriptRoot -Parent) "ControlNode\Dockerfile"
+            $context = Split-Path $PSScriptRoot -Parent
+            $ports = @("$($container.PortExt):$($container.PortInt)")
+            $env = @{ 
+                "ASPNETCORE_URLS" = "http://*:80"
+                "ASPNETCORE_ENVIRONMENT" = "Development"
+                "IS_DOCKER" = "true"
+            }
+            $imageName = "admin-node_image:latest"
+            
+            # Пересобираем admin-node
+            Rebuild-And-Restart-ContainerKeepNetworks `
+                -ContainerName $container.Name `
+                -ImageName $imageName `
+                -DockerfilePath $dockerfile `
+                -BuildContext $context `
+                -Ports $ports `
+                -Env $env `
+                -FallbackNetwork "docker-business-entity-common-bridge"
+            return
+        }
+        "postgres-production-db" {
+            # Для Postgres используем специальную функцию
+            BuildAndRunPostgresContainer
+            return
+        }
+        default {
+            Write-Host "❌ Неизвестный контейнер '$($container.Name)'!" -ForegroundColor Red
+            Write-Host "Поддерживаются только: business-entity-container, web_logger-container, admin-node, postgres-production-db" -ForegroundColor Yellow
+            Write-Host "Используйте пункты меню 31, 32, 33 для конкретных контейнеров." -ForegroundColor Yellow
+            return
+        }
+    }
+    
     # AjustNetworks вызывается только вручную через пункт меню 03
 }
 function BuildAndRunPostgresContainer {
@@ -142,10 +474,11 @@ function BuildAndRunPostgresContainer {
         New-Item -ItemType Directory -Path $c.LogPath -Force | Out-Null
     }
 
-    # запускаем контейнер
+    # запускаем контейнер с network alias
     docker run -d `
         --name      $c.Name `
         --network   $Network `
+        --network-alias postgres-production-db `
         -p          "$($c.PortExt):$($c.PortInt)" `
         -e          "POSTGRES_DB=$($c.EnvDbName)" `
         -e          "POSTGRES_USER=$($c.EnvDbUser)" `
@@ -153,82 +486,12 @@ function BuildAndRunPostgresContainer {
         -v          "$($DataVolume):/var/lib/postgresql/data" `
         -v          "$($c.LogPath):/var/log/postgresql" `
         "$($c.Name):$ImageTag"
-}
-function BuildAndRunContainer {
-    param (
-        [PSCustomObject]$container
-    )
-
-    # Подготовка основных путей и переменных
-    $projectPath    = $container.ProjectPath
-    $contextPath    = $container.ContextPath
-    $imageName      = ("{0}_image" -f $container.Name).ToLower()
-    $dockerfilePath = Join-Path $projectPath 'Dockerfile'
-    $portExt        = $container.PortExt
-    $portInt        = $container.PortInt
-
-    if (-not (Test-Path $contextPath)) {
-        Write-Error "Контекст сборки не найден: $contextPath"
-        return
-    }
-
-    # Проверка и удаление существующего контейнера, если он есть
-    Write-Host "Проверка запущенного контейнера с именем $($container.Name)..."
-    $existingContainer = docker ps -a -q --filter "name=$($container.Name)"
-
-    if ($existingContainer) {
-        Write-Host "Остановка существующего контейнера $($container.Name)..."
-        docker stop $existingContainer
-
-        Write-Host "Удаление существующего контейнера $($container.Name)..."
-        docker rm $existingContainer
-
-        # Проверка, что контейнер действительно удалён
-        $checkContainer = docker ps -a -q --filter "name=$($container.Name)"
-        if ($checkContainer) {
-            Write-Host "Ошибка: не удалось удалить контейнер с именем $($container.Name)!" -ForegroundColor Red
-            throw "Не удалось удалить контейнер. Скрипт завершён."
-        } else {
-            Write-Host "Контейнер $($container.Name) успешно удалён." -ForegroundColor Green
-        }
+        
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✓ PostgreSQL контейнер запущен с alias 'postgres-production-db'" -ForegroundColor Green
     } else {
-        Write-Host "Контейнер с именем $($container.Name) не найден."
+        Write-Host "❌ Ошибка запуска PostgreSQL контейнера" -ForegroundColor Red
     }
-
-    Write-Host "Переход в каталог проекта..."
-    Set-Location -Path $projectPath
-
-    Write-Host "Сборка проекта..."
-    dotnet build
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Ошибка сборки проекта. Проверьте код и повторите попытку."
-        return
-    }
-
-    Write-Host "Создание Docker-образа..."
-    docker build -t $imageName -f $dockerfilePath $contextPath
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Ошибка создания Docker-образа. Проверьте Dockerfile и повторите попытку."
-        return
-    }
-
-    Write-Host "Запуск нового контейнера..."
-    docker run -e 'ASPNETCORE_URLS=http://*:80' --network docker-business-entity-common-bridge -e 'ASPNETCORE_ENVIRONMENT=Development' -e 'IS_DOCKER=true' -d --name $container.Name -p "$(($portExt)):$(($portInt))" $imageName
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Ошибка запуска контейнера. Проверьте параметры и повторите попытку."
-        return
-    }
-
-    # Подключаем только новый контейнер к общей сети (без переподключения остальных)
-    Connect-ContainerToSharedNetwork -containerName $container.Name
-
-    Write-Host "Получение IP-адреса контейнера..."
-    $containerIP = docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container.Name
-    Write-Host "Контейнер запущен. IP-адрес контейнера: $containerIP" -ForegroundColor Green
-    Write-Host "✓ Контейнер '$($container.Name)' успешно пересобран и запущен." -ForegroundColor Green
 }
 
 # Функция для автоматического подключения контейнера к общей сети
@@ -312,24 +575,7 @@ function AjustNetworks {
     Write-Host "Настройка сети завершена." -ForegroundColor Cyan
 }
 
-# Новая функция для объединения сетей
-function Action01 {
-    Write-Host "Объединение Docker сетей..." -ForegroundColor Cyan
-    $scriptPath = Join-Path $PSScriptRoot "ConnectDockerNetworks.ps1"
-    if (Test-Path $scriptPath) {
-        & $scriptPath
-    } else {
-        Write-Host "Скрипт ConnectDockerNetworks.ps1 не найден." -ForegroundColor Red
-    }
-}
-
-# Новая функция для автоподключения контейнеров
-function Action02 {
-    Write-Host "Автоподключение контейнеров к общей сети..." -ForegroundColor Cyan
-    Auto-ConnectNewContainers
-}
-
-# Новая функция для очистки кеша Docker
+# Функция для очистки кеша Docker
 function Action378 {
     Write-Host "Очистка кеша Docker..." -ForegroundColor Cyan
     Write-Host "Эта операция удалит все неиспользуемые образы, контейнеры, сети и кеш сборки." -ForegroundColor Yellow
@@ -365,7 +611,10 @@ function Show-Menu {
     Write-Host "03   -- Настроить общую сеть и переподключить ВСЕ контейнеры (только при проблемах с сетью)"
     Write-Host "10   -- Подключиться к выбранному контейнеру"
     Write-Host "20   -- Вывести диагностическую информацию для выбранного контейнера"
-    Write-Host "30   -- Пересобрать и запустить отдельный контейнер (безопасно)"
+    Write-Host "30   -- Пересобрать и запустить отдельный контейнер (БЕЗОПАСНО + авто-перезапуск логгера)"
+    Write-Host "31   -- Безопасная пересборка ТОЛЬКО business-entity (+ перезапуск логгера)"
+    Write-Host "32   -- Безопасная пересборка ТОЛЬКО web-logger"
+    Write-Host "33   -- Безопасная пересборка ТОЛЬКО admin-node"
     Write-Host "35   -- Сбилдить и запустить production_db контейнер"
     Write-Host "37   -- Запустить сервис Authentik"
     Write-Host "371  -- Сгенерировать .env для Authentik"
@@ -387,6 +636,9 @@ do {
         "10"  { Action10 }
         "20"  { Action20 }
         "30"  { SelectContainerAndRun }
+        "31"  { Rebuild-BusinessEntity-Safe }
+        "32"  { Rebuild-WebLogger-Safe }
+        "33"  { Rebuild-AdminNode-Safe }
         "35"  { BuildAndRunPostgresContainer }
         "37"  { Action37 }
         "371" { Action371 }

@@ -57,22 +57,40 @@ namespace BlazorServerWebLogger.Pages
 
         private async Task UpdateDataAsync()
         {
-            var newEntries = await LogReaderService.ReadNewEntriesAsync(LogEntries.FirstOrDefault()?.Timestamp ?? DateTime.MinValue);
-            var totalCount = await LogReaderService.GetTotalLogCount();
-
-            await InvokeAsync(() =>
+            try
             {
-                if (newEntries.Any())
+                var newEntries = await LogReaderService.ReadNewEntriesAsync(LogEntries.FirstOrDefault()?.Timestamp ?? DateTime.MinValue);
+                var totalCount = await LogReaderService.GetTotalLogCount();
+
+                await InvokeAsync(() =>
                 {
-                    foreach (var entry in newEntries)
+                    if (newEntries.Any())
                     {
-                        LogEntries.Insert(0, entry);
+                        foreach (var entry in newEntries)
+                        {
+                            LogEntries.Insert(0, entry);
+                        }
+                        TotalLogsCount = totalCount;
+                        UpdateFilters();
                     }
-                    TotalLogsCount = totalCount;
-                    UpdateFilters();
+                    StateHasChanged();
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[INDEX-ERROR] Ошибка обновления данных UI: {ex.Message}");
+                if (ex.Message.Contains("Failed to connect") || ex.Message.Contains("timeout") || 
+                    ex.Message.Contains("Timeout") || ex.Message.Contains("172.22.0."))
+                {
+                    Console.WriteLine($"[INDEX-ERROR] 🚨 КРИТИЧЕСКАЯ ОШИБКА ПОДКЛЮЧЕНИЯ К БД!");
+                    Console.WriteLine($"[INDEX-ERROR] UI не может получить данные из БД");
+                    Console.WriteLine($"[INDEX-ERROR] Время: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+                    Console.WriteLine($"[INDEX-ERROR] Количество записей в UI: {LogEntries.Count}");
                 }
-                StateHasChanged();
-            });
+                
+                // Не пробрасываем исключение, чтобы таймер продолжал работать
+                // Следующая попытка будет через 500ms
+            }
         }
 
         private async Task UpdateFilters()

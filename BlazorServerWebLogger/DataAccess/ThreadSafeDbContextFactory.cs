@@ -41,7 +41,19 @@ public class ThreadSafeDbContextFactory
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Ошибка при получении DbContextWrap {ex.Message} {ex.InnerException}");
+            Console.WriteLine($"[DBFACTORY-ERROR] Ошибка при получении DbContextWrap: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"[DBFACTORY-ERROR] Inner exception: {ex.InnerException.Message}");
+            }
+            
+            // Если это сетевая ошибка, логируем дополнительную информацию
+            if (ex.Message.Contains("Failed to connect") || ex.Message.Contains("timeout") || ex.Message.Contains("Timeout"))
+            {
+                Console.WriteLine($"[DBFACTORY-ERROR] ⚠ NETWORK/TIMEOUT ERROR DETECTED - это может быть связано с изменением IP БД");
+                Console.WriteLine($"[DBFACTORY-ERROR] Время ошибки: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+            }
+            
             throw;
         }
     }
@@ -159,6 +171,7 @@ public class DbContextPool
             var id = Guid.NewGuid();
             try
             {
+                Console.WriteLine($"[DBPOOL] Создаю новый DbContext, ID: {id}");
                 var newRecord = new DbContextPoolRecord(_dbContextLifeTimeMs, id)
                 {
                     TimeStamp = DateTime.UtcNow,
@@ -167,12 +180,28 @@ public class DbContextPool
                 };
                 PoolRecords.TryAdd(id, newRecord);
                 //_logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
-                Console.WriteLine($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
+                Console.WriteLine($"[CREATED] ✓ New DbContext created successfully: id={newRecord.Id}, busy={newRecord.Busy}");
                 return new DbContextWrap(newRecord.Context, _freeUpFunc, newRecord);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error occurred: msg={ex.Message} inn={ex.InnerException}");
+                Console.WriteLine($"[DBPOOL-ERROR] ✗ Ошибка создания DbContext: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"[DBPOOL-ERROR] Inner: {ex.InnerException.Message}");
+                }
+                
+                // Специальная обработка сетевых ошибок
+                if (ex.Message.Contains("Failed to connect") || ex.Message.Contains("timeout") || 
+                    ex.Message.Contains("Timeout") || ex.Message.Contains("172.22.0."))
+                {
+                    Console.WriteLine($"[DBPOOL-ERROR] 🔥 КРИТИЧЕСКАЯ СЕТЕВАЯ ОШИБКА!");
+                    Console.WriteLine($"[DBPOOL-ERROR] Это указывает на проблемы с подключением к БД");
+                    Console.WriteLine($"[DBPOOL-ERROR] Возможно, IP БД изменился или БД недоступна");
+                    Console.WriteLine($"[DBPOOL-ERROR] Время: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+                }
+                
+                throw; // пробрасываем исключение дальше
             }
 
 
