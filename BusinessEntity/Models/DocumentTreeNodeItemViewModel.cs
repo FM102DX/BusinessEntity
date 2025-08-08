@@ -17,12 +17,6 @@ namespace BusinessEntity.Models
             {
                 new ContextMenuItem() 
                 { 
-                    Text = "Переименовать", 
-                    Value = "Rename", 
-                    Icon = "edit"
-                },
-                new ContextMenuItem() 
-                { 
                     Text = "Удалить", 
                     Value = "Delete", 
                     Icon = "delete"
@@ -33,9 +27,6 @@ namespace BusinessEntity.Models
         {
             switch (action)
             {
-                case "Rename":
-                    await OnRenameAsync();
-                    break;
                 case "Delete":
                     await OnDeleteAsync();
                     break;
@@ -48,17 +39,7 @@ namespace BusinessEntity.Models
         }
 
         // Заглушки-обработчики для действий с документами
-        private async Task OnRenameAsync()
-        {
-            if (_webLogger != null)
-                await _webLogger.Information($"Переименование документа: {Title}");
-        }
 
-        private async Task OnDeleteToTrashAsync()
-        {
-            if (_webLogger != null)
-                await _webLogger.Information($"Удаление документа в корзину: {Title}");
-        }
 
         private async Task OnDeleteAsync()
         {

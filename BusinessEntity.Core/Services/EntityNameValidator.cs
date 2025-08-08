@@ -39,15 +39,5 @@ namespace BusinessEntity.Core.Services
 
             return true;
         }
-
-        /// <summary>
-        /// Нормализует имя сущности, обрезая пробелы по краям
-        /// </summary>
-        /// <param name="name">Исходное имя</param>
-        /// <returns>Нормализованное имя</returns>
-        public string NormalizeEntityName(string name)
-        {
-            return string.IsNullOrWhiteSpace(name) ? string.Empty : name.Trim();
-        }
     }
 }

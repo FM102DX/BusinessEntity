@@ -25,19 +25,18 @@ public class ThreadSafeDbContextFactory
     {
         try
         {
-            
             // Обработка ключа
             var processedKey = ProcessPoolKey(rawKey);
-            Console.WriteLine($"P1");
+            //Console.WriteLine($"P1");
             // Получаем или создаем пул
             var pool = _pools.GetOrAdd(processedKey, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext, _logger, maxPoolSize));
-            Console.WriteLine($"P2");
+            //Console.WriteLine($"P2");
             // Получаем контекст из пула
             var contextWrap = pool.GetDbContext();
-            Console.WriteLine($"P3");
+            //Console.WriteLine($"P3");
             // Логируем состояние пулов
             LogPoolsState();
-            Console.WriteLine($"P4");
+            //Console.WriteLine($"P4");
             return contextWrap;
         }
         catch (Exception ex)
@@ -88,22 +87,22 @@ public class ThreadSafeDbContextFactory
 
     private void LogPoolsState()
     {
-        _logger.Write("");
-        _logger.Write($"[POOLS DUMP] Pools total={_pools.Count}");
+        // _logger.Write("");
+        // _logger.Write($"[POOLS DUMP] Pools total={_pools.Count}");
         foreach (var pool in _pools)
         {
             var poolName = pool.Key; // Ключ текущего пула
             var poolValue = pool.Value; // Значение текущего пула
 
             var freeCount = poolValue.PoolRecords.Values.Count(r => !r.Busy);
-            _logger.Write($"[POOL STATE] Pool name={poolName} DbContexts {freeCount}/{poolValue.PoolRecords.Count} free ");
+            //  _logger.Write($"[POOL STATE] Pool name={poolName} DbContexts {freeCount}/{poolValue.PoolRecords.Count} free ");
 
             foreach (var record in poolValue.PoolRecords.Values)
             {
-                _logger.Write($"[Record] id={record.Id,30} busy={record.Busy,7} disposed={record.Disposed} issued={record.IssuedCount}");
+                //    _logger.Write($"[Record] id={record.Id,30} busy={record.Busy,7} disposed={record.Disposed} issued={record.IssuedCount}");
             }
         }
-        _logger.Write("");
+        // _logger.Write("");
     }
 }
 
@@ -131,24 +130,20 @@ public class DbContextPool
     public DbContextWrap GetDbContext()
     {
         _semaphore.Wait(); // Ждем доступного слота в пуле
-        Console.WriteLine($"P21");
         try
         {
             foreach (var record in PoolRecords.Values)
             {
-                Console.WriteLine($"P22");
                 if (Monitor.TryEnter(record.SyncLock))
                 {
                     try
                     {
-                        Console.WriteLine($"P3");
                         if (!record.Busy && !record.Expired && !record.Disposed)
                         {
-                            Console.WriteLine($"P4");
                             record.Busy = true;
                             record.TimeStamp = DateTime.UtcNow;
                             record.IssuedCount++;
-                            _logger.Write($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
+                            //_logger.Write($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
                             Console.WriteLine($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
                             return new DbContextWrap(record.Context, _freeUpFunc, record);
                         }
@@ -162,7 +157,6 @@ public class DbContextPool
 
             // Если нет доступных записей, создаём новую
             var id = Guid.NewGuid();
-            Console.WriteLine("P211");
             try
             {
                 var newRecord = new DbContextPoolRecord(_dbContextLifeTimeMs, id)
@@ -171,9 +165,8 @@ public class DbContextPool
                     Busy = true,
                     Context = new WebLoggerDbContext(_options)
                 };
-                Console.WriteLine($"P212");
                 PoolRecords.TryAdd(id, newRecord);
-                _logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
+                //_logger.Write($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
                 Console.WriteLine($"[CREATED] New DbContext created: id={newRecord.Id}, busy={newRecord.Busy}");
                 return new DbContextWrap(newRecord.Context, _freeUpFunc, newRecord);
             }
@@ -215,7 +208,7 @@ public class DbContextPool
                 {
                     record.Context.Dispose();
                     record.Disposed = true;
-                    _logger.Write($"[DISPOSED] DbContext disposed: id={record.Id}");
+                    //_logger.Write($"[DISPOSED] DbContext disposed: id={record.Id}");
                     Console.WriteLine($"[DISPOSED] DbContext disposed: id={record.Id}");
                     PoolRecords.TryRemove(record.Id, out _);
                 }

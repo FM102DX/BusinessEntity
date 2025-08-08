@@ -183,9 +183,7 @@ namespace BusinessEntity
 			
 			app.UseSwagger();
 			app.UseSwaggerUI();
-
 			app.UseStaticFiles();
-
 			app.UseRouting();
 
 			// Добавляем наш JWT middleware перед аутентификацией
@@ -197,12 +195,10 @@ namespace BusinessEntity
 
 			// Middleware, перенаправляющее на страницу выбора пространства при его отсутствии
 			app.UseMiddleware<BusinessEntity.Middleware.SpaceSelectionMiddleware>();
-
 			app.MapControllers();
 			app.MapRazorPages();
 			app.MapBlazorHub();
 			app.MapFallbackToPage("/_Host");
-
 			app.Run();
 		}
 	}
