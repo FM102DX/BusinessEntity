@@ -55,6 +55,24 @@
 
         </LoggerWidget>
 
+        <LoggerWidget Title="Теги">
+            @if (TagFilter?.Count > 0)
+            {
+                @foreach (var item in TagFilter)
+                {
+                    <label style="display: block; margin-bottom: 5px;">
+                        <RadzenCheckBox @bind-Value="item.Selected" TValue="bool"
+                                        Change="(bool newValue) => SaveTagsFilterAsync(item, newValue)" />
+                        [@item.Code]
+                    </label>
+                }
+            }
+            else
+            {
+                <div class="text-muted">Тегов не найдено</div>
+            }
+        </LoggerWidget>
+
         <LoggerWidget Title="Статистика">
             <p>Общее количество записей: @TotalLogsCount</p>
         </LoggerWidget>

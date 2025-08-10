@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
 using SampleOnlineMall.WebLogger.Models;
+using System.Text.RegularExpressions;
 
 namespace BlazorServerWebLogger.Pages
 {
@@ -17,10 +18,15 @@ namespace BlazorServerWebLogger.Pages
         public ObservableCollection<LogEntryDbStorable> LogEntries { get; set; } = new();
         public List<FilterItem> ServiceCodeFilter { get; set; } = new();
         public List<FilterItem> MessageTypeFilter { get; set; } = new();
+        // New: Tags filter
+        public List<FilterItem> TagFilter { get; set; } = new();
+
         public IEnumerable<LogEntryDbStorable> FilteredLogEntries => LogEntries
             .Where(entry =>
                 ServiceCodeFilter.Any(filter => filter.Selected && filter.Code == entry.ServiceCode) &&
-                MessageTypeFilter.Any(filter => filter.Selected && filter.Code == entry.MessageType));
+                MessageTypeFilter.Any(filter => filter.Selected && filter.Code == entry.MessageType) &&
+                PassesTagFilter(entry)
+            );
         public LoggerMainViewSettings LoggerMainViewSettings { get; set; }
 
         [Inject]
@@ -106,6 +112,12 @@ namespace BlazorServerWebLogger.Pages
                 s => s.MessageType,
                 s => new FilterItem() { Code = s, Selected = GetIsServiceCodeSelected(MessageTypeFilter, s, LoggerMainViewSettings.NonDisplayedMessageTypes) });
 
+            // Обновление Tags (получаем из текущих сообщений LINQ'ом)
+            TagFilter = UpdateFilterMany(TagFilter,
+                e => ExtractTags(e),
+                tag => new FilterItem { Code = tag, Selected = GetIsServiceCodeSelected(TagFilter, tag, LoggerMainViewSettings.NonDisplayedTags) }
+            );
+
             // Обновляем настройки на основе выбранных фильтров
             StateHasChanged();
         }
@@ -121,6 +133,28 @@ namespace BlazorServerWebLogger.Pages
             .OrderBy(filter => filter.Code)
             .ToList();
         }
+
+        // New: Update filter for many values per entry (tags)
+        private List<FilterItem> UpdateFilterMany(List<FilterItem>? currentFilter, Func<LogEntryDbStorable, IEnumerable<string>> selectorMany, Func<string, FilterItem> selector2)
+        {
+            var comparer = StringComparer.OrdinalIgnoreCase;
+            // Собираем все теги по всем сообщениям
+            var distinct = LogEntries
+                .SelectMany(selectorMany)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(comparer)
+                .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Сохраняем выбор там, где это применимо
+            var result = new List<FilterItem>(distinct.Count);
+            foreach (var tag in distinct)
+            {
+                result.Add(selector2(tag));
+            }
+            return result;
+        }
+
         private bool GetIsServiceCodeSelected(List<FilterItem>? currentFilter, string code, string nonDisplayedStr)
         {
             //эта функция возвращает, выделен конктетный пункт меню или нет
@@ -145,6 +179,35 @@ namespace BlazorServerWebLogger.Pages
                 //для совсем новых элементов true, т.к. их никто не выключал
                 return true;
             }
+        }
+
+        // New: Regex for tags [text]
+        private static readonly Regex TagRegex = new Regex(@"\[(?<t>[^\]\[]+)\]", RegexOptions.Compiled);
+        private static IEnumerable<string> ExtractTags(LogEntryDbStorable e)
+        {
+            if (e == null || string.IsNullOrEmpty(e.Message))
+                return Enumerable.Empty<string>();
+
+            var matches = TagRegex.Matches(e.Message);
+            if (matches.Count == 0) return Enumerable.Empty<string>();
+
+            return matches.Select(m => m.Groups["t"].Value.Trim()).Where(s => !string.IsNullOrEmpty(s));
+        }
+
+        private bool PassesTagFilter(LogEntryDbStorable entry)
+        {
+            // Если тегов нет в системе — не ограничиваем выборку
+            if (TagFilter == null || TagFilter.Count == 0) return true;
+
+            var selectedTags = TagFilter.Where(f => f.Selected).Select(f => f.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Если есть теги, но ни один не выбран — ничего не показываем
+            if (selectedTags.Count == 0) return false;
+
+            var entryTags = ExtractTags(entry).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Внутри группы — OR: сообщение проходит, если содержит хотя бы один из выбранных тегов
+            return entryTags.Overlaps(selectedTags);
         }
 
         private async Task OnLogGenerationToggle(bool newState)
@@ -191,6 +254,18 @@ namespace BlazorServerWebLogger.Pages
                 value => LoggerMainViewSettings.DisplayedMessageTypes = value,
                 () => LoggerMainViewSettings.NonDisplayedMessageTypes,
                 value => LoggerMainViewSettings.NonDisplayedMessageTypes = value);
+        }
+
+        // New: Метод для сохранения Tags фильтров
+        private async Task SaveTagsFilterAsync(FilterItem tagFilterItem, bool newValue)
+        {
+            await SaveFilterAsync(
+                tagFilterItem,
+                newValue,
+                () => LoggerMainViewSettings.DisplayedTags,
+                value => LoggerMainViewSettings.DisplayedTags = value,
+                () => LoggerMainViewSettings.NonDisplayedTags,
+                value => LoggerMainViewSettings.NonDisplayedTags = value);
         }
 
         // Универсальный метод для сохранения фильтров
