@@ -118,15 +118,7 @@
          class="card h-100 d-flex flex-column @(IsMultiSelectMode ? "tree-multiselect-mode" : "")"
          style="height: 100%;">
         
-        <!-- Заголовок с кнопкой сброса выделения -->
-        <div class="card-header d-flex justify-content-between align-items-center py-2">
-            <small class="text-muted mb-0">Элементы пространства</small>
-            <button class="btn btn-outline-secondary btn-sm" 
-                    @onclick="async () => await ClearAllSelections()" 
-                    title="Сбросить выделение всех элементов в дереве">
-                🔄 Сбросить выделение
-            </button>
-        </div>
+        <!-- Панель заголовка скрыта по требованию -->
         
         <div class="card-body flex-grow-1">
 
