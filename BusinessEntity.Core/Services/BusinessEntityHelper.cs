@@ -236,6 +236,50 @@ namespace BusinessEntity.Core.Services
         }
 
         /// <summary>
+        /// Создает новый документ внутри родительской папки или пространства
+        /// </summary>
+        public async Task<Classes.BusinessEntity> CreateDocumentAsync(
+            Classes.BusinessEntity parent,
+            CancellationToken ct = default)
+        {
+            if (parent.EntityType != BusinessEntityTypeEnum.Folder && parent.EntityType != BusinessEntityTypeEnum.Space)
+            {
+                throw new ArgumentException("Parent must be a Folder or Space", nameof(parent));
+            }
+
+            // Генерируем уникальное имя документа
+            var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Document, ct);
+
+            // Создаем документ как BusinessEntity с типом Document
+            var entity = new Classes.BusinessEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                EntityType = BusinessEntityTypeEnum.Document,
+                BusinessEntityType = BusinessEntityTypeEnum.Document
+            };
+
+            // Сохраняем сущность
+            await _businessEntityRepository.AddAsync(entity, ct);
+
+            // Создаем визуальную связь с родителем
+            var relation = new Relation
+            {
+                Id = Guid.NewGuid(),
+                ObjectAId = parent.Id,
+                ObjectBId = entity.Id,
+                RelationType = BusinessEntityRelationTypeEnum.VisuallyContains.ToString(),
+                RelationParams = string.Empty
+            };
+
+            await _relationRepository.AddAsync(relation, ct);
+
+            _webLogger?.Information($"Created new document '{name}' (ID: {entity.Id}) under parent '{parent.Name}' (ID: {parent.Id})");
+
+            return entity;
+        }
+
+        /// <summary>
         /// Изменяет визуального родителя для элемента в визуальном дереве
         /// </summary>
         /// <param name="child">Дочерняя сущность, для которой меняется родитель</param>

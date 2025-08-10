@@ -465,6 +465,30 @@ namespace BusinessEntity.Components
                         WebLogger?.Information($"Successfully created folder '{newEntity.Name}' under '{parentNode.Entity.Name}'");
                         break;
                         
+                    case "Document":
+                        {
+                            // Создаем документ через BusinessEntityHelper
+                            var newDoc = await BusinessEntityHelper.CreateDocumentAsync(parentNode.Entity);
+
+                            // Создаем view model для документа
+                            var docNode = new DocumentTreeNodeItemViewModel(WebLogger)
+                            {
+                                Title = newDoc.Name,
+                                Icon = GetEntityIcon(newDoc.EntityType),
+                                Entity = newDoc,
+                                EntityType = newDoc.EntityType.ToString(),
+                                Parent = parentNode,
+                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync
+                            };
+
+                            // Добавляем в дерево и разворачиваем родителя
+                            parentNode.Children.Add(docNode);
+                            parentNode.Expanded = true;
+
+                            WebLogger?.Information($"Successfully created document '{newDoc.Name}' under '{parentNode.Entity.Name}'");
+                        }
+                        break;
+                        
                     default:
                         WebLogger?.Information($"TODO: Create {entityType} entity under {parentNode.Entity.Name}");
                         break;
