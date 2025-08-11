@@ -15,15 +15,19 @@ namespace BusinessEntity.Core.Services
         private readonly IAsyncRepository<Classes.BusinessEntity> _businessEntityRepository;
         private readonly IAsyncRepository<Relation> _relationRepository;
         private readonly IWebLoggerService? _webLogger;
+        // Добавлено: репозиторий для данных сущностей
+        private readonly IAsyncRepository<BusinessEntityDataChunk> _dataRepository;
 
         public BusinessEntityHelper(
             IAsyncRepository<Classes.BusinessEntity> businessEntityRepository, 
             IAsyncRepository<Relation> relationRepository,
-            IWebLoggerService? webLogger)
+            IWebLoggerService? webLogger,
+            IAsyncRepository<BusinessEntityDataChunk> dataRepository)
         {
             _businessEntityRepository = businessEntityRepository ?? throw new ArgumentNullException(nameof(businessEntityRepository));
             _relationRepository = relationRepository ?? throw new ArgumentNullException(nameof(relationRepository));
             _webLogger = webLogger; // Логгер может быть не настроен, поэтому допускаем null
+            _dataRepository = dataRepository ?? throw new ArgumentNullException(nameof(dataRepository));
         }
 
         public async Task<Classes.BusinessEntity> CreateBusinessEntity(BusinessEntityTypeEnum type, string name)
@@ -536,6 +540,37 @@ namespace BusinessEntity.Core.Services
             }
 
             return false;
+        }
+
+        public async Task<IReadOnlyList<BusinessEntityDataChunk>> GetData(Classes.BusinessEntity entity)
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            _webLogger?.Debug($"GetData: entityId={entity.Id}, type={entity.EntityType}");
+
+            // Базовая загрузка всех чанков по EntityId
+            var chunks = await _dataRepository.GetAllAsync(d => d.EntityId == entity.Id);
+
+            // Возможность различать логику по типам сущностей
+            switch (entity.EntityType)
+            {
+                case BusinessEntityTypeEnum.Space:
+                    // Специфическая обработка для Space (при необходимости)
+                    break;
+                case BusinessEntityTypeEnum.Folder:
+                    // Специфическая обработка для Folder
+                    break;
+                case BusinessEntityTypeEnum.Page:
+                    // Специфическая обработка для Page
+                    break;
+                case BusinessEntityTypeEnum.Document:
+                    // Специфическая обработка для Document
+                    break;
+                default:
+                    // По умолчанию — без дополнительной обработки
+                    break;
+            }
+
+            return chunks;
         }
     }
 }
