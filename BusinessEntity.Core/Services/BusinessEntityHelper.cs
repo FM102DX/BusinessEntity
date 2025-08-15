@@ -559,9 +559,6 @@ namespace BusinessEntity.Core.Services
                 case BusinessEntityTypeEnum.Folder:
                     // Специфическая обработка для Folder
                     break;
-                case BusinessEntityTypeEnum.Page:
-                    // Специфическая обработка для Page
-                    break;
                 case BusinessEntityTypeEnum.Document:
                     // Специфическая обработка для Document
                     break;

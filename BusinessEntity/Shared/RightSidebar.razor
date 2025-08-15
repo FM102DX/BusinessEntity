@@ -1,0 +1,76 @@
+@* Persistent right sidebar for settings/widgets *@
+@using BusinessEntity.Services
+@using BusinessEntity.Models
+@using BusinessEntity.Core.Classes
+
+@inject ITreeSelectionService TreeSelection
+@implements IDisposable
+
+<div class="right-panel">
+    <div class="right-header">
+        <h6>Панель настроек и виджетов</h6>
+    </div>
+    <div class="right-content">
+        @if (IsMultiSelected)
+        {
+            <div class="placeholder-widget">@TreeSelection.GetSelectedNodesInfo()</div>
+        }
+        else if (Selected is null)
+        {
+            <div class="placeholder-widget">Ничего не выбрано</div>
+        }
+        else
+        {
+            @* Переключение по типу отображаемой сущности *@
+            @switch (Selected.EntityType)
+            {
+                case "Document":
+                    <div class="placeholder-widget">
+                        <div style="font-weight:600; margin-bottom:6px;">Документ: @Selected.Title</div>
+                        <div>Создан: @FormatDate(Selected.Entity?.CreatedDate)</div>
+                        <div>Изменён: @FormatDate(Selected.Entity?.LastModifiedDate)</div>
+                    </div>
+                    break;
+                case "Folder":
+                    <div class="placeholder-widget">
+                        <div style="font-weight:600; margin-bottom:6px;">Папка: @Selected.Title</div>
+                        <div>Элементов: @(Selected.Children?.Count ?? 0)</div>
+                    </div>
+                    break;
+                case "Space":
+                    <div class="placeholder-widget">
+                        <div style="font-weight:600; margin-bottom:6px;">Пространство: @Selected.Title</div>
+                    </div>
+                    break;
+                default:
+                    <div class="placeholder-widget">Элемент: @Selected.Title</div>
+                    break;
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private TreeNodeItemViewModelBase? Selected => TreeSelection.SingleSelectedNode;
+    private bool IsMultiSelected => TreeSelection.IsMultiSelectActive;
+
+    protected override void OnInitialized()
+    {
+        TreeSelection.SelectionChanged += OnSelectionChanged;
+    }
+
+    private void OnSelectionChanged(List<TreeNodeItemViewModelBase> _)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        TreeSelection.SelectionChanged -= OnSelectionChanged;
+    }
+
+    private string FormatDate(DateTime? dt)
+    {
+        return dt.HasValue ? dt.Value.ToLocalTime().ToString("g") : "—";
+    }
+}
