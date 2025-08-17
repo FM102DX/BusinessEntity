@@ -1,4 +1,4 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @inject BusinessEntity.Contracts.IUserContextService UserContext
 
 <PageTitle>Business Entity Engine</PageTitle>
@@ -8,16 +8,7 @@
         <NavMenu />
     </div>
 
-    <div class="tree-panel">
-        <div class="tree-header">
-            <h6>Главное дерево системы</h6>
-        </div>
-        <div class="tree-content">
-            <TreeComponent />
-        </div>
-    </div>
-
-    <main>
+    <div class="center-area">
         <div class="top-row px-4">
             @if (UserContext.HasSelectedSpace)
             {
@@ -26,8 +17,20 @@
             <a class="ms-3" href="/space-selection">Выбрать пространство</a>
         </div>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
+        <div class="main-row">
+            <div class="tree-panel">
+                <div class="tree-content">
+                    <TreeComponent />
+                </div>
+            </div>
+
+            <main>
+                <article class="content px-4">
+                    @Body
+                </article>
+            </main>
+
+            <RightSidebar />
+        </div>
+    </div>
 </div>

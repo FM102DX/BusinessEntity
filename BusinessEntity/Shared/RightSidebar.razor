@@ -2,6 +2,8 @@
 @using BusinessEntity.Services
 @using BusinessEntity.Models
 @using BusinessEntity.Core.Classes
+@using System.Timers
+@using System.Globalization
 
 @inject ITreeSelectionService TreeSelection
 @implements IDisposable
@@ -11,13 +13,24 @@
         <h6>Панель настроек и виджетов</h6>
     </div>
     <div class="right-content">
+        <div class="widget widget-datetime">
+            <div class="widget-title">Дата и время</div>
+            <div class="widget-body">@NowString</div>
+        </div>
+
         @if (IsMultiSelected)
         {
-            <div class="placeholder-widget">@TreeSelection.GetSelectedNodesInfo()</div>
+            <div class="widget">
+                <div class="widget-title">Выбрано несколько элементов</div>
+                <div class="widget-body">@TreeSelection.GetSelectedNodesInfo()</div>
+            </div>
         }
         else if (Selected is null)
         {
-            <div class="placeholder-widget">Ничего не выбрано</div>
+            <div class="widget">
+                <div class="widget-title">Информация</div>
+                <div class="widget-body">Ничего не выбрано</div>
+            </div>
         }
         else
         {
@@ -25,25 +38,31 @@
             @switch (Selected.EntityType)
             {
                 case "Document":
-                    <div class="placeholder-widget">
-                        <div style="font-weight:600; margin-bottom:6px;">Документ: @Selected.Title</div>
-                        <div>Создан: @FormatDate(Selected.Entity?.CreatedDate)</div>
-                        <div>Изменён: @FormatDate(Selected.Entity?.LastModifiedDate)</div>
+                    <div class="widget">
+                        <div class="widget-title">Документ: @Selected.Title</div>
+                        <div class="widget-body">
+                            <div>Создан: @FormatDate(Selected.Entity?.CreatedDate)</div>
+                            <div>Изменён: @FormatDate(Selected.Entity?.LastModifiedDate)</div>
+                        </div>
                     </div>
                     break;
                 case "Folder":
-                    <div class="placeholder-widget">
-                        <div style="font-weight:600; margin-bottom:6px;">Папка: @Selected.Title</div>
-                        <div>Элементов: @(Selected.Children?.Count ?? 0)</div>
+                    <div class="widget">
+                        <div class="widget-title">Папка: @Selected.Title</div>
+                        <div class="widget-body">
+                            <div>Элементов: @(Selected.Children?.Count ?? 0)</div>
+                        </div>
                     </div>
                     break;
                 case "Space":
-                    <div class="placeholder-widget">
-                        <div style="font-weight:600; margin-bottom:6px;">Пространство: @Selected.Title</div>
+                    <div class="widget">
+                        <div class="widget-title">Пространство: @Selected.Title</div>
                     </div>
                     break;
                 default:
-                    <div class="placeholder-widget">Элемент: @Selected.Title</div>
+                    <div class="widget">
+                        <div class="widget-title">Элемент: @Selected.Title</div>
+                    </div>
                     break;
             }
         }
@@ -53,10 +72,17 @@
 @code {
     private TreeNodeItemViewModelBase? Selected => TreeSelection.SingleSelectedNode;
     private bool IsMultiSelected => TreeSelection.IsMultiSelectActive;
+    private Timer? _timer;
+    private DateTime _now = DateTime.Now;
+    private string NowString => _now.ToString("f", CultureInfo.CurrentCulture);
 
     protected override void OnInitialized()
     {
         TreeSelection.SelectionChanged += OnSelectionChanged;
+        _timer = new Timer(1000);
+        _timer.Elapsed += OnTimerElapsed;
+        _timer.AutoReset = true;
+        _timer.Start();
     }
 
     private void OnSelectionChanged(List<TreeNodeItemViewModelBase> _)
@@ -67,10 +93,22 @@
     public void Dispose()
     {
         TreeSelection.SelectionChanged -= OnSelectionChanged;
+        if (_timer is not null)
+        {
+            _timer.Stop();
+            _timer.Elapsed -= OnTimerElapsed;
+            _timer.Dispose();
+        }
     }
 
     private string FormatDate(DateTime? dt)
     {
         return dt.HasValue ? dt.Value.ToLocalTime().ToString("g") : "—";
+    }
+
+    private void OnTimerElapsed(object? sender, ElapsedEventArgs e)
+    {
+        _now = DateTime.Now;
+        InvokeAsync(StateHasChanged);
     }
 }

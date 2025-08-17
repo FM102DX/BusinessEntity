@@ -141,7 +141,7 @@ namespace BusinessEntity
             // Регистрируем репозитории
             builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity>, InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntity>>();
             builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.Relation>, InMemoryRepository<BusinessEntity.Core.Classes.Relation>>();
-            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntityDataChunk>, InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntityDataChunk>>();
+            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntityData>, InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntityData>>();
 
             // Регистрируем BusinessEntityHelper
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();

@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using System.Threading;
+using System.Collections.Generic;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using System.Linq;
@@ -16,13 +18,13 @@ namespace BusinessEntity.Core.Services
         private readonly IAsyncRepository<Relation> _relationRepository;
         private readonly IWebLoggerService? _webLogger;
         // Добавлено: репозиторий для данных сущностей
-        private readonly IAsyncRepository<BusinessEntityDataChunk> _dataRepository;
+        private readonly IAsyncRepository<BusinessEntityData> _dataRepository;
 
         public BusinessEntityHelper(
             IAsyncRepository<Classes.BusinessEntity> businessEntityRepository, 
             IAsyncRepository<Relation> relationRepository,
             IWebLoggerService? webLogger,
-            IAsyncRepository<BusinessEntityDataChunk> dataRepository)
+            IAsyncRepository<BusinessEntityData> dataRepository)
         {
             _businessEntityRepository = businessEntityRepository ?? throw new ArgumentNullException(nameof(businessEntityRepository));
             _relationRepository = relationRepository ?? throw new ArgumentNullException(nameof(relationRepository));
@@ -239,6 +241,7 @@ namespace BusinessEntity.Core.Services
             return entity;
         }
 
+        #region Document operations
         /// <summary>
         /// Создает новый документ внутри родительской папки или пространства
         /// </summary>
@@ -282,6 +285,7 @@ namespace BusinessEntity.Core.Services
 
             return entity;
         }
+        #endregion
 
         /// <summary>
         /// Изменяет визуального родителя для элемента в визуальном дереве
@@ -542,7 +546,7 @@ namespace BusinessEntity.Core.Services
             return false;
         }
 
-        public async Task<IReadOnlyList<BusinessEntityDataChunk>> GetData(Classes.BusinessEntity entity)
+        public async Task<IReadOnlyList<BusinessEntityData>> GetData(Classes.BusinessEntity entity)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
             _webLogger?.Debug($"GetData: entityId={entity.Id}, type={entity.EntityType}");
