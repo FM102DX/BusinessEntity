@@ -17,7 +17,6 @@ namespace BusinessEntity.Pages
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
         [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
-        [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
         [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         [Inject] public BusinessEntity.Services.ITreeSelectionService TreeSelectionService { get; set; } = default!;
         
@@ -57,9 +56,6 @@ namespace BusinessEntity.Pages
                     
                     // Получаем все возможные типы отношений из enum
                     RelationTypeEnums = Enum.GetNames(typeof(BusinessEntityRelationTypeEnum));
-                    
-                    // Инициализируем демо-данные
-                    await SampleDataService.InitializeSampleDataAsync();
                     
                     // Загружаем созданные сущности
                     var entities = await BusinessEntityHelper.GetAllBusinessEntities();

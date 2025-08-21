@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections;
 using System.Net.Http;
 using System.Runtime;
 using System.Text;
@@ -7,7 +8,6 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using SampleOnlineMall.Service;
 using SampleOnlineMall.Service.WebLogging;
-
 
 namespace SampleOnlineMall.WebLogger.Services
 {
@@ -70,7 +70,8 @@ namespace SampleOnlineMall.WebLogger.Services
         }
         public Task Error(Exception ex)
         {
-            _ = Task.Run(() => SendLogAsync("Error", $"Error occured messgae={ex.Message} inner exception={ex.InnerException}"));
+            var details = FormatException(ex);
+            _ = Task.Run(() => SendLogAsync("Error", details));
             return Task.CompletedTask;
         }
         public Task SendObject(object data)
@@ -108,5 +109,37 @@ namespace SampleOnlineMall.WebLogger.Services
             }
         }
 
+        private static string FormatException(Exception ex, string? context = null)
+        {
+            var sb = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(context))
+            {
+                sb.AppendLine($"[Exception] Context: {context}");
+            }
+            int level = 0;
+            var current = ex;
+            while (current != null)
+            {
+                var prefix = level == 0 ? "EX" : $"INNER[{level}]";
+                sb.AppendLine($"{prefix}: {current.GetType().FullName} HResult=0x{current.HResult:X8}");
+                sb.AppendLine($"Message: {current.Message}");
+                if (!string.IsNullOrWhiteSpace(current.Source)) sb.AppendLine($"Source: {current.Source}");
+                if (current.TargetSite != null) sb.AppendLine($"TargetSite: {current.TargetSite}");
+                if (current.Data != null && current.Data.Count > 0)
+                {
+                    sb.AppendLine("Data:");
+                    foreach (DictionaryEntry entry in current.Data)
+                    {
+                        sb.AppendLine($"  {entry.Key} = {entry.Value}");
+                    }
+                }
+                sb.AppendLine("StackTrace:");
+                sb.AppendLine(current.StackTrace);
+                sb.AppendLine("----");
+                current = current.InnerException;
+                level++;
+            }
+            return sb.ToString();
+        }
     }
 }

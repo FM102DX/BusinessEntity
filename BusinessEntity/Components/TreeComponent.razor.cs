@@ -16,7 +16,6 @@ namespace BusinessEntity.Components
 {
     public partial class TreeComponent : ComponentBase, IDisposable
     {
-        [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
         [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
         [Inject] public SpaceHelper SpaceHelper { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
@@ -51,9 +50,6 @@ namespace BusinessEntity.Components
             try
             {
                 IsLoading = true;
-                
-                // Инициализируем демо-данные если их нет
-                await SampleDataService.InitializeSampleDataAsync();
                 
                 // Подписываемся на изменения выбранного пространства
                 UserContextService.SelectedSpaceChanged += OnSelectedSpaceChanged;

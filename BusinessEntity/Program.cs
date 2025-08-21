@@ -14,6 +14,9 @@ using BusinessEntity.Contracts;
 using SampleOnlineMall.Service;
 using SampleOnlineMall.Service.WebLogging;
 using SampleOnlineMall.WebLogger.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System;
 
 namespace BusinessEntity
 {
@@ -178,6 +181,21 @@ namespace BusinessEntity
 			builder.Services.AddSwaggerGen();
 
 			var app = builder.Build();
+
+            // Seed sample data once at startup
+            using (var scope = app.Services.CreateScope())
+            {
+                try
+                {
+                    var seeder = scope.ServiceProvider.GetRequiredService<BusinessEntity.Core.Contracts.ISampleDataService>();
+                    seeder.InitializeSampleDataAsync().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                    logger.LogError(ex, "Sample data seeding failed");
+                }
+            }
 
 			// Configure the HTTP request pipeline
 			if (!app.Environment.IsDevelopment())

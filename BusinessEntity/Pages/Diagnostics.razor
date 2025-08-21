@@ -2,7 +2,7 @@
 @using System.Linq
 @using global::BusinessEntity.Core.Classes
 @inject global::BusinessEntity.Core.Services.BusinessEntityHelper Helper
-@inject global::BusinessEntity.Core.Contracts.ISampleDataService SampleDataService
+
 
 <PageTitle>Диагностика</PageTitle>
 
@@ -159,9 +159,6 @@ else
         {
             IsLoading = true;
             Error = null;
-
-            // Ensure sample data is initialized before loading diagnostics
-            await SampleDataService.InitializeSampleDataAsync();
 
             var allEntities = await Helper.GetAllBusinessEntities();
             var allRelations = await Helper.GetAllRelations();
