@@ -249,6 +249,18 @@ namespace BusinessEntity.Core.Services
             Classes.BusinessEntity parent,
             CancellationToken ct = default)
         {
+            // Backwards-compatible wrapper: create document with default body
+            return await CreateDocumentAsync(parent, null, ct);
+        }
+
+        /// <summary>
+        /// Создает новый документ с указанным текстом внутри родительской папки или пространства
+        /// </summary>
+        public async Task<Classes.BusinessEntity> CreateDocumentAsync(
+            Classes.BusinessEntity parent,
+            string? bodyText,
+            CancellationToken ct = default)
+        {
             if (parent.EntityType != BusinessEntityTypeEnum.Folder && parent.EntityType != BusinessEntityTypeEnum.Space)
             {
                 throw new ArgumentException("Parent must be a Folder or Space", nameof(parent));
@@ -280,6 +292,20 @@ namespace BusinessEntity.Core.Services
             };
 
             await _relationRepository.AddAsync(relation, ct);
+
+            // Определяем текст для сохранения: используем переданный, иначе плейсхолдер из 100 символов
+            var dataToSave = string.IsNullOrWhiteSpace(bodyText) ? new string('x', 100) : bodyText;
+
+            // Создаем тело документа (BusinessEntityData)
+            var beData = new BusinessEntityData
+            {
+                EntityId = entity.Id,
+                Data = dataToSave!
+            };
+
+            await _dataRepository.AddAsync(beData, ct);
+
+            _webLogger?.Debug($"Created BusinessEntityData for document '{name}' (DocID: {entity.Id}), DataLength={dataToSave?.Length ?? 0}");
 
             _webLogger?.Information($"Created new document '{name}' (ID: {entity.Id}) under parent '{parent.Name}' (ID: {parent.Id})");
 

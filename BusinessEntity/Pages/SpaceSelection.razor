@@ -1,7 +1,7 @@
 @page "/space-selection"
 @attribute [Authorize]
 @inject BusinessEntity.Contracts.IUserContextService UserContext
-@inject BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity> Repository
+@inject global::BusinessEntity.Core.Contracts.IAsyncRepository<global::BusinessEntity.Core.Classes.BusinessEntity> Repository
 @inject NavigationManager NavManager
 
 <h3>Выбор пространства</h3>
@@ -28,17 +28,17 @@ else
 }
 
 @code {
-    private List<BusinessEntity.Core.Classes.BusinessEntity>? spaces;
+    private List<global::BusinessEntity.Core.Classes.BusinessEntity>? spaces;
 
     protected override async Task OnInitializedAsync()
     {
-        var list = await Repository.GetAllAsync(e => e.EntityType == BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Space);
+        var list = await Repository.GetAllAsync(e => e.EntityType == global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Space);
         spaces = list.ToList();
     }
 
-    private void SelectSpace(BusinessEntity.Core.Classes.BusinessEntity space)
+    private void SelectSpace(global::BusinessEntity.Core.Classes.BusinessEntity space)
     {
         UserContext.SetSpace(space.Id, space.Name);
         NavManager.NavigateTo("/");
     }
-} 
+}

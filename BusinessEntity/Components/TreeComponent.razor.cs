@@ -24,6 +24,7 @@ namespace BusinessEntity.Components
         [Inject] public ContextMenuService ContextMenu { get; set; } = default!;
         [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
+        [Inject] public NavigationManager NavigationManager { get; set; } = default!;
 
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
         [Parameter] public EventCallback<List<TreeNodeItemViewModelBase>> OnMultipleNodesSelected { get; set; }
@@ -196,11 +197,11 @@ namespace BusinessEntity.Components
         {
             return entityType?.ToString() switch
             {
-                "Space" => "📁",
-                "Folder" => "📂",
-                "Document" => "📄",
-                "Page" => "📄",
-                _ => "❓"
+                "Space" => "",
+                "Folder" => "",
+                "Document" => "",
+                "Page" => "",
+                _ => ""
             };
         }
 
@@ -250,6 +251,40 @@ namespace BusinessEntity.Components
             }
 
             await HandleNodeSelection(node, ctrlPressed, shiftPressed);
+        }
+
+        // Централизованный обработчик двойного клика по узлу
+        public async Task OnNodeDoubleClicked(TreeNodeItemViewModelBase? node)
+        {
+            try
+            {
+                if (node?.Entity == null)
+                {
+                    return;
+                }
+
+                var entity = node.Entity;
+                WebLogger?.Information($"DoubleClick on '{entity.Name}' ({entity.EntityType}), ID={entity.Id}");
+
+                switch (entity.EntityType)
+                {
+                    case BusinessEntityTypeEnum.Document:
+                        NavigationManager.NavigateTo($"/document/{entity.Id}");
+                        break;
+                    // В будущем можно добавить другие типы
+                    // case BusinessEntityTypeEnum.Page:
+                    //     NavigationManager.NavigateTo($"/page/{entity.Id}");
+                    //     break;
+                    default:
+                        // Для папок/пространств пока ничего не делаем
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error(ex);
+            }
+            await Task.CompletedTask;
         }
 
         // Обработка выбора узла с учетом модификаторов клавиш

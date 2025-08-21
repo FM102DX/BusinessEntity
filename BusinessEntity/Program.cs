@@ -152,6 +152,9 @@ namespace BusinessEntity
             // Регистрируем SampleDataService как Scoped (не Singleton), так как он зависит от Scoped BusinessEntityHelper
             builder.Services.AddScoped<BusinessEntity.Core.Contracts.ISampleDataService, BusinessEntity.Core.Services.SampleDataService>();
 
+            // Регистрируем поставщик строк для тестового наполнения документов (Scoped)
+            builder.Services.AddScoped<BusinessEntity.Core.Contracts.IDataFillLineProvider, BusinessEntity.Services.DataFillLineProvider>();
+
             // Регистрируем UserContextService для хранения выбранного пространства
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
 

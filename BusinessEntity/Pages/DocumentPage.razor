@@ -1,0 +1,75 @@
+@page "/document/{id:guid}"
+@using System.Linq
+@using global::BusinessEntity.Core.Classes
+@inject global::BusinessEntity.Core.Services.BusinessEntityHelper Helper
+@inject global::BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntityData> DataRepository
+
+<PageTitle>Document</PageTitle>
+
+@if (!string.IsNullOrEmpty(Error))
+{
+    <div class="alert alert-danger">@Error</div>
+}
+else if (IsLoading)
+{
+    <div class="alert alert-info">Загрузка документа...</div>
+}
+else if (Entity == null)
+{
+    <div class="alert alert-warning">Документ не найден.</div>
+}
+else
+{
+    <div class="container py-3">
+        <h4 class="mb-3">@Entity.Name</h4>
+        @if (Data == null)
+        {
+            <div class="alert alert-secondary">Нет содержимого.</div>
+        }
+        else
+        {
+            <pre style="white-space: pre-wrap; background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #e9ecef;">@Data.Data</pre>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private BusinessEntity? Entity;
+    private BusinessEntityData? Data;
+    private bool IsLoading = true;
+    private string? Error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        IsLoading = true;
+        Error = null;
+        try
+        {
+            Entity = await Helper.GetBusinessEntityById(Id);
+            if (Entity == null)
+            {
+                Error = "Документ не найден.";
+                return;
+            }
+            if (Entity.EntityType != BusinessEntityTypeEnum.Document)
+            {
+                Error = "Сущность не является документом.";
+                return;
+            }
+
+            var list = await DataRepository.GetAllAsync(d => d.EntityId == Id);
+            Data = list.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+}
