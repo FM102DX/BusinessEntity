@@ -11,6 +11,7 @@ using Radzen;
 using Radzen.Blazor;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
+using ReactiveUI;
 
 namespace BusinessEntity.Components
 {
@@ -24,6 +25,7 @@ namespace BusinessEntity.Components
         [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] public NavigationManager NavigationManager { get; set; } = default!;
+        [Inject] public IMessageBus MessageBus { get; set; } = default!;
 
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
         [Parameter] public EventCallback<List<TreeNodeItemViewModelBase>> OnMultipleNodesSelected { get; set; }
@@ -31,6 +33,10 @@ namespace BusinessEntity.Components
         private IEnumerable<TreeNodeItemViewModelBase> TreeData { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsLoading { get; set; } = true;
         private bool Visible { get; set; } = false;
+        // Быстрый индекс узлов по Id сущности для O(1) обновления
+        private readonly Dictionary<Guid, TreeNodeItemViewModelBase> _nodeById = new();
+        // Подписка на сообщения об обновлении сущностей
+        private IDisposable? _entityUpdatedSub;
         
         // Состояние мульти-селекта
         private List<TreeNodeItemViewModelBase> SelectedNodes { get; set; } = new List<TreeNodeItemViewModelBase>();
@@ -54,6 +60,64 @@ namespace BusinessEntity.Components
                 // Подписываемся на изменения выбранного пространства
                 UserContextService.SelectedSpaceChanged += OnSelectedSpaceChanged;
                 
+                // Подписка на сообщения об изменении сущностей через ReactiveUI MessageBus (до построения дерева)
+                try
+                {
+                    var busHash = MessageBus?.GetHashCode();
+                    var compHash = this.GetHashCode();
+                    WebLogger?.Information($"[Tree] Subscribing to MessageBus.Listen<EntityUpdatedMessage>(), busHash={busHash}, compHash={compHash}");
+
+                    _entityUpdatedSub = MessageBus
+                        .Listen<BusinessEntity.Services.EntityUpdatedMessage>()
+                        .Subscribe(msg =>
+                        {
+                            try
+                            {
+                                var updatedEntity = msg?.Entity;
+                                WebLogger?.Information($"[Tree] EntityUpdatedMessage received: entity is {(updatedEntity == null ? "null" : updatedEntity.Id.ToString())}, name='{updatedEntity?.Name}'");
+                                if (updatedEntity == null)
+                                {
+                                    WebLogger?.Warning("[Tree] Received EntityUpdatedMessage with null Entity");
+                                    return;
+                                }
+
+                                var indexContains = _nodeById.ContainsKey(updatedEntity.Id);
+                                WebLogger?.Information($"[Tree] Index contains entityId={updatedEntity.Id}: {indexContains}; indexCount={_nodeById.Count}");
+
+                                if (_nodeById.TryGetValue(updatedEntity.Id, out var node))
+                                {
+                                    var beforeTitle = node.Title;
+                                    WebLogger?.Information($"[Tree] Before update: node.Title='{beforeTitle}' for entityId={updatedEntity.Id}");
+
+                                    node.Title = updatedEntity.Name;
+                                    node.Entity = updatedEntity;
+
+                                    WebLogger?.Information($"[Tree] After update: node.Title='{node.Title}' for entityId={updatedEntity.Id}");
+
+                                    _ = InvokeAsync(async () =>
+                                    {
+                                        WebLogger?.Information("[Tree] Invoking StateHasChanged() after EntityUpdatedMessage");
+                                        StateHasChanged();
+                                        await Task.CompletedTask;
+                                    });
+                                }
+                                else
+                                {
+                                    WebLogger?.Warning($"[Tree] Node not found in index for entityId={updatedEntity.Id}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                WebLogger?.Error(ex);
+                            }
+                        });
+                    WebLogger?.Information("[Tree] Subscribed to MessageBus.Listen<EntityUpdatedMessage>()");
+                }
+                catch (Exception ex)
+                {
+                    WebLogger?.Error(ex);
+                }
+
                 // Проверяем текущее состояние пространства
                 await DrawTreeForCurrentSpace();
                 
@@ -101,6 +165,8 @@ namespace BusinessEntity.Components
             
             // Очищаем выбранные узлы при смене пространства
             await ClearAllSelections();
+            // Очищаем индекс перед построением дерева
+            _nodeById.Clear();
 
 
             var rootSpaceNode = await BuildSpaceRootAsync(space);
@@ -137,6 +203,8 @@ namespace BusinessEntity.Components
             }
 
             rootVm.Children = childNodes;
+            // Индексируем корневой элемент пространства
+            _nodeById[space.Id] = rootVm;
             return rootVm;
         }
 
@@ -162,6 +230,8 @@ namespace BusinessEntity.Components
             }
             treeNodeVm.Icon = icon;
             treeNodeVm.Expanded = true;
+            // Индексируем узел
+            _nodeById[entity.Id] = treeNodeVm;
 
             // Устанавливаем обратный вызов для создания сущностей у папок
             if (entity.EntityType.ToString() == "Folder")
@@ -448,13 +518,14 @@ namespace BusinessEntity.Components
             });
         }        
        public void Dispose()
-        {
+       {
             // Отписываемся от события при уничтожении компонента
             if (UserContextService != null)
             {
                 UserContextService.SelectedSpaceChanged -= OnSelectedSpaceChanged;
             }
-        }
+            _entityUpdatedSub?.Dispose();
+       }
 
         /// <summary>
         /// Обработчик запроса на создание новой сущности
@@ -491,6 +562,8 @@ namespace BusinessEntity.Components
                         // Добавляем новую ноду в дерево
                         parentNode.Children.Add(childNode);
                         parentNode.Expanded = true; // Разворачиваем родительскую ноду
+                        // Индексируем новую ноду
+                        _nodeById[newEntity.Id] = childNode;
                         
                         WebLogger?.Information($"Successfully created folder '{newEntity.Name}' under '{parentNode.Entity.Name}'");
                         break;
@@ -514,6 +587,8 @@ namespace BusinessEntity.Components
                             // Добавляем в дерево и разворачиваем родителя
                             parentNode.Children.Add(docNode);
                             parentNode.Expanded = true;
+                            // Индексируем новую ноду
+                            _nodeById[newDoc.Id] = docNode;
 
                             WebLogger?.Information($"Successfully created document '{newDoc.Name}' under '{parentNode.Entity.Name}'");
                         }
@@ -637,9 +712,29 @@ namespace BusinessEntity.Components
             // Удаляем из списка выделенных узлов, если он там есть
             SelectedNodes.Remove(nodeToRemove);
             
+            // Удаляем из индекса рекурсивно
+            RemoveFromIndexRecursive(nodeToRemove);
+
             // Очищаем ссылки узла для предотвращения утечек памяти
             nodeToRemove.Parent = null;
             nodeToRemove.Children.Clear();
+        }
+
+        // Рекурсивное удаление узла и его детей из индекса
+        private void RemoveFromIndexRecursive(TreeNodeItemViewModelBase node)
+        {
+            if (node == null) return;
+            if (node.Entity != null)
+            {
+                _nodeById.Remove(node.Entity.Id);
+            }
+            if (node.Children != null)
+            {
+                foreach (var child in node.Children)
+                {
+                    RemoveFromIndexRecursive(child);
+                }
+            }
         }
 
         /// <summary>

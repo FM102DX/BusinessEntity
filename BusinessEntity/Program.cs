@@ -161,6 +161,9 @@ namespace BusinessEntity
             // Регистрируем UserContextService для хранения выбранного пространства
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
 
+            // ReactiveUI MessageBus как событийная шина (per-circuit)
+            builder.Services.AddScoped<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
+
             // Регистрируем TreeSelectionService для управления выбором узлов дерева
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
 
