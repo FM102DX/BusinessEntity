@@ -269,9 +269,7 @@ namespace BusinessEntity.Components
                         NavigationManager.NavigateTo($"/document/{entity.Id}");
                         break;
                     // В будущем можно добавить другие типы
-                    // case BusinessEntityTypeEnum.Page:
-                    //     NavigationManager.NavigateTo($"/page/{entity.Id}");
-                    //     break;
+
                     default:
                         // Для папок/пространств пока ничего не делаем
                         break;
