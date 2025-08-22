@@ -599,5 +599,43 @@ namespace BusinessEntity.Core.Services
 
             return chunks;
         }
+
+        /// <summary>
+        /// Сохраняет бизнес-энтити и связанный с ней блок данных
+        /// </summary>
+        /// <param name="entity">Сущность (например, документ)</param>
+        /// <param name="data">Данные сущности</param>
+        public async Task SaveEntity(Classes.BusinessEntity entity, BusinessEntityData data)
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            if (data == null) throw new ArgumentNullException(nameof(data));
+
+            // Всегда удостоверяемся, что данные привязаны к текущей сущности
+            data.EntityId = entity.Id;
+
+            _webLogger?.Information($"SaveEntity: entityId={entity.Id}, name='{entity.Name}', dataLen={data?.Data?.Length ?? 0}");
+
+            // Сохраняем (добавляем или обновляем) саму сущность
+            if (await _businessEntityRepository.ExistsAsync(entity.Id))
+            {
+                await _businessEntityRepository.UpdateAsync(entity);
+            }
+            else
+            {
+                await _businessEntityRepository.AddAsync(entity);
+            }
+
+            // Сохраняем (добавляем или обновляем) данные сущности
+            if (await _dataRepository.ExistsAsync(data.Id))
+            {
+                await _dataRepository.UpdateAsync(data);
+            }
+            else
+            {
+                await _dataRepository.AddAsync(data);
+            }
+
+            _webLogger?.Debug($"SaveEntity: saved entity {entity.Id} and data {data.Id}");
+        }
     }
 }

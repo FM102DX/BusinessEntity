@@ -1,6 +1,4 @@
 @page "/document/{id:guid}"
-@using System.Linq
-@using global::BusinessEntity.Core.Classes
 
 <PageTitle>Document</PageTitle>
 
@@ -19,16 +17,6 @@ else if (Entity == null)
 else
 {
     <div class="container py-3">
-        <h4 class="mb-3">@Entity.Name</h4>
-        @if (string.IsNullOrWhiteSpace(DataText))
-        {
-            <div class="alert alert-secondary">Нет содержимого.</div>
-        }
-        else
-        {
-            <pre style="white-space: pre-wrap; background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #e9ecef;">@DataText</pre>
-        }
+        <Document Entity="Entity" DataList="DataList" />
     </div>
 }
-
-

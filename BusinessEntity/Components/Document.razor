@@ -1,0 +1,132 @@
+@using System
+@using System.Linq
+@using System.Collections.Generic
+@using BusinessEntity.Core.Services
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="position-relative" style="min-height: 120px;">
+    @if (!IsEditing)
+    {
+        <button class="btn btn-sm" title="Edit"
+                style="position:absolute; top:8px; right:8px; background:#9c27b0; color:white; border-color:#9c27b0;"
+                @onclick="EnterEditMode">
+            Edit
+        </button>
+
+        <div class="py-2" @onclick="EnterEditMode">
+            <h4 class="mb-3">@Entity?.Name</h4>
+            @if (string.IsNullOrWhiteSpace(ViewText))
+            {
+                <div class="alert alert-secondary mb-0">Нет содержимого.</div>
+            }
+            else
+            {
+                <pre style="white-space: pre-wrap; background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #e9ecef;">@ViewText</pre>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="py-2">
+            <input class="form-control mb-2" placeholder="Заголовок"
+                   style="font-size: 1.5rem; font-weight: 500;"
+                   @bind="EditTitle" @bind:event="oninput" />
+
+            <textarea class="form-control" rows="16" placeholder="Текст документа"
+                      @bind="EditBody" @bind:event="oninput"></textarea>
+
+            <div class="mt-2 d-flex gap-2">
+                <button class="btn btn-primary" disabled="@IsSaving" @onclick="SaveAsync">
+                    @(IsSaving ? "Сохранение..." : "Сохранить")
+                </button>
+                <button class="btn btn-outline-secondary" disabled="@IsSaving" @onclick="CancelEdit">Отмена</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public global::BusinessEntity.Core.Classes.BusinessEntity? Entity { get; set; }
+    [Parameter] public IReadOnlyList<global::BusinessEntity.Core.Classes.BusinessEntityData>? DataList { get; set; }
+
+    [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
+
+    private bool IsEditing;
+    private bool IsSaving;
+    private string EditTitle = string.Empty;
+    private string EditBody = string.Empty;
+    private List<global::BusinessEntity.Core.Classes.BusinessEntityData> LocalData = new();
+
+    private string ViewText => LocalData != null && LocalData.Any() ? string.Join("\n\n", LocalData.Select(d => d.Data)) : string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        if (Entity != null)
+        {
+            EditTitle = Entity.Name;
+        }
+        LocalData = DataList?.ToList() ?? new List<global::BusinessEntity.Core.Classes.BusinessEntityData>();
+        EditBody = ViewText;
+    }
+
+    private void EnterEditMode()
+    {
+        IsEditing = true;
+    }
+
+    private void CancelEdit()
+    {
+        // Revert edits
+        if (Entity != null)
+        {
+            EditTitle = Entity.Name;
+        }
+        EditBody = ViewText;
+        IsEditing = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Entity == null) return;
+        IsSaving = true;
+        try
+        {
+            // Update entity title
+            Entity.Name = (EditTitle ?? string.Empty).Trim();
+
+            // Take first chunk or create new
+            var data = (LocalData != null && LocalData.Count > 0)
+                ? new global::BusinessEntity.Core.Classes.BusinessEntityData
+                {
+                    Id = LocalData[0].Id,
+                    CreatedDate = LocalData[0].CreatedDate,
+                    LastModifiedDate = DateTime.UtcNow,
+                    EntityId = Entity.Id,
+                    Data = EditBody ?? string.Empty
+                }
+                : new global::BusinessEntity.Core.Classes.BusinessEntityData
+                {
+                    EntityId = Entity.Id,
+                    Data = EditBody ?? string.Empty
+                };
+
+            await Helper.SaveEntity(Entity, data);
+
+            // Update current view
+            EditBody = data.Data;
+            if (LocalData.Count > 0)
+            {
+                LocalData[0] = data;
+            }
+            else
+            {
+                LocalData.Add(data);
+            }
+            IsEditing = false;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+}

@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
-using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Services;
 
 namespace BusinessEntity.Pages
@@ -12,7 +12,8 @@ namespace BusinessEntity.Pages
         [Parameter]
         public Guid Id { get; set; }
 
-        private Core.Classes.BusinessEntity? Entity;
+        private global::BusinessEntity.Core.Classes.BusinessEntity? Entity;
+        private IReadOnlyList<global::BusinessEntity.Core.Classes.BusinessEntityData>? DataList;
         private string? DataText;
         private bool IsLoading = true;
         private string? Error;
@@ -31,13 +32,14 @@ namespace BusinessEntity.Pages
                     Error = "Документ не найден.";
                     return;
                 }
-                if (Entity.EntityType != BusinessEntityTypeEnum.Document && Entity.EntityType != BusinessEntityTypeEnum.Document)
+                if (Entity.EntityType != global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Document && Entity.EntityType != global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Document)
                 {
                     Error = "Сущность не является документом или страницей.";
                     return;
                 }
 
                 var list = await Helper.GetData(Entity);
+                DataList = list;
                 if (list != null && list.Any())
                 {
                     DataText = string.Join("\n\n", list.Select(d => d.Data));
