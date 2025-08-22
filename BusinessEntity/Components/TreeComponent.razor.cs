@@ -191,13 +191,14 @@ namespace BusinessEntity.Components
 
         private string GetEntityIcon(object entityType)
         {
+            // Map to Material icon names used by RadzenIcon
             return entityType?.ToString() switch
             {
-                "Space" => "",
-                "Folder" => "",
-                "Document" => "",
-                "Page" => "",
-                _ => ""
+                "Space" => "dashboard",            // or "account_tree" / "layers"
+                "Folder" => "folder",
+                "Document" => "description",       // alternatively: "insert_drive_file" / "article"
+                "Page" => "insert_drive_file",
+                _ => "insert_drive_file"
             };
         }
 

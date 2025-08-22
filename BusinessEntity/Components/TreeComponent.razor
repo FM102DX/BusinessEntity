@@ -182,7 +182,11 @@
                                       @ondrop="async (e) => await OnDrop(e, node)"
                                       @ondragenter="(e) => OnDragEnter(e, node)"
                                       @ondragleave="(e) => OnDragLeave(e, node)">
-                                    @item.Text
+                                    @if (!string.IsNullOrEmpty(node?.Icon))
+                                    {
+                                        <RadzenIcon Icon="@node.Icon" Style="font-size:16px; margin-right:4px;" />
+                                    }
+                                    @node?.Title
                                 </span>
                             }
                         </Template>
