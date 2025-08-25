@@ -3,6 +3,7 @@
 @inject BusinessEntity.Contracts.IUserContextService UserContext
 @inject global::BusinessEntity.Core.Contracts.IAsyncRepository<global::BusinessEntity.Core.Classes.BusinessEntity> Repository
 @inject NavigationManager NavManager
+@inject Microsoft.JSInterop.IJSRuntime JS
 
 <h3>Выбор пространства</h3>
 
@@ -36,9 +37,10 @@ else
         spaces = list.ToList();
     }
 
-    private void SelectSpace(global::BusinessEntity.Core.Classes.BusinessEntity space)
+    private async Task SelectSpace(global::BusinessEntity.Core.Classes.BusinessEntity space)
     {
         UserContext.SetSpace(space.Id, space.Name);
+        try { await JS.InvokeVoidAsync("beSpace.setSelected", space.Id.ToString(), space.Name); } catch { }
         NavManager.NavigateTo("/");
     }
 }
