@@ -28,6 +28,62 @@ function Ensure-Network {
     }
 }
 
+# Простой импорт переменных из .env в переменные окружения текущего процесса (PS 5.1 совместимо)
+function Import-DotEnv {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    if (-not (Test-Path -Path $Path)) { return }
+    $lines = Get-Content -Path $Path
+    foreach ($line in $lines) {
+        if (-not $line) { continue }
+        $trim = $line.Trim()
+        if ($trim -eq '' -or $trim.StartsWith('#')) { continue }
+        $idx = $trim.IndexOf('=')
+        if ($idx -lt 1) { continue }
+        $key = $trim.Substring(0, $idx).Trim()
+        $val = $trim.Substring($idx + 1).Trim()
+        if ($val.StartsWith('"') -and $val.EndsWith('"') -and $val.Length -ge 2) { $val = $val.Substring(1, $val.Length - 2) }
+        if ($val.StartsWith("'") -and $val.EndsWith("'") -and $val.Length -ge 2) { $val = $val.Substring(1, $val.Length - 2) }
+        Set-Item -Path "Env:$key" -Value $val
+    }
+}
+
+# Прочитать .env в Hashtable (PS 5.1 совместимо)
+function Read-DotEnvAsHashtable {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    $map = @{}
+    if (-not (Test-Path -Path $Path)) { return $map }
+    $lines = Get-Content -Path $Path
+    foreach ($line in $lines) {
+        if (-not $line) { continue }
+        $trim = $line.Trim()
+        if ($trim -eq '' -or $trim.StartsWith('#')) { continue }
+        $idx = $trim.IndexOf('=')
+        if ($idx -lt 1) { continue }
+        $key = $trim.Substring(0, $idx).Trim()
+        $val = $trim.Substring($idx + 1).Trim()
+        if ($val.StartsWith('"') -and $val.EndsWith('"') -and $val.Length -ge 2) { $val = $val.Substring(1, $val.Length - 2) }
+        if ($val.StartsWith("'") -and $val.EndsWith("'") -and $val.Length -ge 2) { $val = $val.Substring(1, $val.Length - 2) }
+        $map[$key] = $val
+    }
+    return $map
+}
+
+# Записать Hashtable в .env файл (без кавычек)
+function Write-DotEnvFromHashtable {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][hashtable]$Data
+    )
+    $dir = Split-Path -Parent $Path
+    if (-not (Test-Path -Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $lines = New-Object System.Collections.Generic.List[string]
+    foreach ($k in ($Data.Keys | Sort-Object)) {
+        $v = [string]$Data[$k]
+        $lines.Add("$k=$v") | Out-Null
+    }
+    $lines | Set-Content -Path $Path -Encoding ASCII -Force
+}
+
 # Функция для получения списка сетей контейнера
 function Get-ContainerNetworks {
     param([Parameter(Mandatory=$true)][string]$ContainerName)
@@ -103,8 +159,8 @@ function Rebuild-And-Restart-ContainerKeepNetworks {
 
     # 6) Запускаем контейнер в первичной сети
     Write-Host "Запускаю контейнер в сети '$primaryNet'..." -ForegroundColor Yellow
-    docker @runArgs | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    $proc = Start-Process -FilePath 'docker' -ArgumentList $runArgs -NoNewWindow -PassThru -Wait
+    if ($proc.ExitCode -ne 0) {
         throw "Ошибка запуска контейнера"
     }
 
@@ -123,8 +179,8 @@ function Rebuild-And-Restart-ContainerKeepNetworks {
                 }
             }
             $connectArgs += @($n.Name, $ContainerName)
-            docker @connectArgs | Out-Null
-            if ($LASTEXITCODE -eq 0) {
+            $proc2 = Start-Process -FilePath 'docker' -ArgumentList $connectArgs -NoNewWindow -PassThru -Wait
+            if ($proc2.ExitCode -eq 0) {
                 Write-Host "    ✓ Подключен к '$($n.Name)'" -ForegroundColor Green
             } else {
                 Write-Host "    ⚠ Ошибка подключения к '$($n.Name)'" -ForegroundColor Yellow
@@ -602,7 +658,156 @@ function Action37 {
 
 # Функция для генерации .env файла для Authentik
 function Action371 {
-  
+  Write-Host "=== Генерация Authentic\\.env для Authentik ===" -ForegroundColor Cyan
+  $root = Split-Path $PSScriptRoot -Parent
+  $envPath = Join-Path -Path $root -ChildPath "Authentic\.env"
+
+  if (Test-Path -Path $envPath) {
+    $ans = Read-Host "Файл уже существует. Перезаписать? (y/N)"
+    if ($ans -notin @('y','Y')) { Write-Host "Отмена." -ForegroundColor Yellow; return }
+  }
+
+  # Генерация безопасных значений (PowerShell 5.1 совместимо)
+  $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+  try {
+    $bytes = New-Object byte[] 32
+    $rng.GetBytes($bytes)
+    $authSecret = [Convert]::ToBase64String($bytes)
+
+    $bytes2 = New-Object byte[] 16
+    $rng.GetBytes($bytes2)
+    $pgPass = ([Convert]::ToBase64String($bytes2)).TrimEnd('=')
+  } finally {
+    if ($rng) { $rng.Dispose() }
+  }
+
+  $content = @(
+    "# Generated at $(Get-Date -Format s)",
+    "# Authentik core",
+    "AUTHENTIK_SECRET_KEY=$authSecret",
+    "",
+    "# Internal Postgres used by Authentik",
+    "PG_USER=authentik",
+    "PG_DB=authentik",
+    "PG_PASS=$pgPass",
+    "",
+    "# Host ports for Authentik UI",
+    "COMPOSE_PORT_HTTP=9000",
+    "COMPOSE_PORT_HTTPS=9443"
+  )
+
+  $dir = Split-Path -Parent $envPath
+  if (-not (Test-Path -Path $dir)) {
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  }
+  $content | Set-Content -Path $envPath -Encoding ASCII -Force
+  Write-Host "✓ Файл создан: $envPath" -ForegroundColor Green
+
+  # Дополнительно: создадим/обновим корневой .env для интерполяции compose
+  $rootEnvPath = Join-Path -Path $root -ChildPath ".env"
+  $rootVars = Read-DotEnvAsHashtable -Path $rootEnvPath
+  $rootVars["AUTHENTIK_SECRET_KEY"] = $authSecret
+  $rootVars["PG_PASS"] = $pgPass
+  if (-not $rootVars.ContainsKey("PG_USER")) { $rootVars["PG_USER"] = "authentik" }
+  if (-not $rootVars.ContainsKey("PG_DB"))   { $rootVars["PG_DB"]   = "authentik" }
+  if (-not $rootVars.ContainsKey("COMPOSE_PORT_HTTP"))  { $rootVars["COMPOSE_PORT_HTTP"]  = "9000" }
+  if (-not $rootVars.ContainsKey("COMPOSE_PORT_HTTPS")) { $rootVars["COMPOSE_PORT_HTTPS"] = "9443" }
+  Write-DotEnvFromHashtable -Path $rootEnvPath -Data $rootVars
+  Write-Host "✓ Обновлён корневой .env для compose: $rootEnvPath" -ForegroundColor Green
+}
+
+function Action50 {
+  Write-Host "=== Запуск root docker-compose (весь стек) ===" -ForegroundColor Cyan
+  $root = Split-Path $PSScriptRoot -Parent
+  $composePath = Join-Path $root "docker-compose.yml"
+
+  if (-not (Test-Path $composePath)) {
+    Write-Host "❌ Файл docker-compose.yml не найден: $composePath" -ForegroundColor Red
+    return
+  }
+
+  # Предупреждение если отсутствует .env для Authentik
+  $authEnv = Join-Path -Path $root -ChildPath "Authentic\.env"
+  $hasAuthEnv = Test-Path -Path $authEnv
+  if (-not $hasAuthEnv) {
+    Write-Host "⚠ Внимание: отсутствует файл 'Authentic\\.env'. Authentik может не стартовать корректно." -ForegroundColor Yellow
+  }
+
+  # Убедимся, что общая сеть существует (при необходимости создадим)
+  Ensure-Network -NetworkName "docker-business-entity-common-bridge"
+
+  # Загружаем переменные из Authentic/.env в окружение процесса (требуется для подстановки ${VAR} на этапе парсинга compose)
+  if ($hasAuthEnv) {
+    Write-Host "Импортирую переменные из Authentic\\.env в окружение процесса..." -ForegroundColor DarkCyan
+    Import-DotEnv -Path $authEnv
+  }
+
+  # Гарантируем наличие значений для интерполяции в корне проекта (compose читает .env из корня)
+  $rootEnvPath = Join-Path -Path $root -ChildPath ".env"
+  if ($hasAuthEnv) {
+    $hasHelpers = ($null -ne (Get-Command Read-DotEnvAsHashtable -ErrorAction SilentlyContinue)) -and `
+                  ($null -ne (Get-Command Write-DotEnvFromHashtable -ErrorAction SilentlyContinue))
+    if ($hasHelpers) {
+      $rootVars = Read-DotEnvAsHashtable -Path $rootEnvPath
+      $authVars = Read-DotEnvAsHashtable -Path $authEnv
+      foreach ($k in @("AUTHENTIK_SECRET_KEY", "PG_PASS", "PG_USER", "PG_DB", "COMPOSE_PORT_HTTP", "COMPOSE_PORT_HTTPS")) {
+        if ($authVars.ContainsKey($k)) { $rootVars[$k] = $authVars[$k] }
+      }
+      Write-DotEnvFromHashtable -Path $rootEnvPath -Data $rootVars
+      Write-Host "Обновлён корневой .env для compose интерполяции." -ForegroundColor DarkCyan
+    } else {
+      if (-not (Test-Path -Path $rootEnvPath)) {
+        try {
+          Write-Host "Хелперы .env недоступны. Fallback: копирую Authentic\\.env в корень проекта как .env" -ForegroundColor DarkYellow
+          Copy-Item -Path $authEnv -Destination $rootEnvPath -Force
+        } catch {
+          Write-Host "⚠ Не удалось скопировать Authentic\\.env в .env: $_" -ForegroundColor Yellow
+        }
+      } else {
+        Write-Host "Хелперы .env недоступны. Корневой .env уже существует — пропускаю merge." -ForegroundColor DarkYellow
+      }
+    }
+  }
+
+  if ($hasAuthEnv) {
+    Write-Host "Проверяю конфигурацию: docker compose config" -ForegroundColor Yellow
+    docker compose -f $composePath config | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "❌ Ошибка проверки конфигурации docker compose." -ForegroundColor Red
+      return
+    }
+  } else {
+    Write-Host "Пропускаю 'docker compose config' (нет Authentic\\.env)." -ForegroundColor DarkYellow
+  }
+
+  Write-Host "Запускаю стек: docker compose up -d --build" -ForegroundColor Yellow
+  docker compose -f $composePath up -d --build
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "✓ Стек запущен." -ForegroundColor Green
+    Write-Host "Краткий статус контейнеров:" -ForegroundColor Cyan
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  } else {
+    Write-Host "❌ Ошибка запуска стека." -ForegroundColor Red
+  }
+}
+
+function Action51 {
+  Write-Host "=== Остановка root docker-compose (весь стек) ===" -ForegroundColor Cyan
+  $root = Split-Path $PSScriptRoot -Parent
+  $composePath = Join-Path $root "docker-compose.yml"
+
+  if (-not (Test-Path $composePath)) {
+    Write-Host "❌ Файл docker-compose.yml не найден: $composePath" -ForegroundColor Red
+    return
+  }
+
+  Write-Host "Выполняю: docker compose down --remove-orphans" -ForegroundColor Yellow
+  docker compose -f $composePath down --remove-orphans
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "✓ Стек остановлен." -ForegroundColor Green
+  } else {
+    Write-Host "⚠ Ошибка при остановке стека." -ForegroundColor Yellow
+  }
 }
 
 function Show-Menu {
@@ -621,6 +826,8 @@ function Show-Menu {
     Write-Host "378  -- Очистить кеш докера"
     Write-Host "38   -- Запушить ветку basic_add_elements_and_tree_mechanism как есть"
     Write-Host "40   -- Сбилдить и запустить бизнес-логику"
+    Write-Host "50   -- Запустить root docker-compose (весь стек)"
+    Write-Host "51   -- Остановить root docker-compose (весь стек)"
     Write-Host "80   -- Очистить экран (CLS)"
     Write-Host "99   -- Выход"
 }
@@ -645,6 +852,8 @@ do {
         "378" { Action378 }
         "38"  { git push --force-with-lease origin basic_add_elements_and_tree_mechanism }
         "40"  { BuildAndRunBusinessLogicContainers }
+        "50"  { Action50 }
+        "51"  { Action51 }
         "80"  { Clear-Host }
         "99"  { break }
         default {

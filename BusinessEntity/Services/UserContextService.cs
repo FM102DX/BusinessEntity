@@ -9,10 +9,8 @@ namespace BusinessEntity.Services
     {
         public const string CookieSpaceId = "be_selected_space_id";
         public const string CookieSpaceName = "be_selected_space_name";
-
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<UserContextService>? _logger;
-
         public UserContextService(IHttpContextAccessor httpContextAccessor, ILogger<UserContextService>? logger = null)
         {
             _httpContextAccessor = httpContextAccessor;
