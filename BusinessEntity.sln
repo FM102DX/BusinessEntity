@@ -38,9 +38,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docker-compose-authentic", 
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docker-compose-main", "docker-compose-main", "{196E7BB8-708C-446A-8E95-240206BAE38A}"
-	ProjectSection(SolutionItems) = preProject
-		docker-compose.yml = docker-compose.yml
-	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
