@@ -165,7 +165,7 @@ namespace BusinessEntity.Services
         public string GetLoginUrl(string? returnUrl = null)
         {
             var cfg = _configuration.GetSection("AuthentIC2");
-            var baseUrlForBrowser = cfg["BaseUrlForBrowser"]!.TrimEnd('/'); ;
+            var baseUrlForBrowser = cfg["BaseUrlForBrowser"]!.TrimEnd('/');
             var clientId = cfg["ClientId"]!;
             var redirect = cfg["RedirectUri"]!;
             var scope = cfg["Scope"] ?? "openid profile email";
@@ -184,7 +184,14 @@ namespace BusinessEntity.Services
                 ["max_age"] = "0",
                 ["include_granted_scopes"] = "false"
             };
-            return QueryHelpers.AddQueryString($"{baseUrlForBrowser}/application/o/authorize/", qs);
+
+            // Prefer provider-specific endpoint when configured (issuer_mode: per_provider)
+            var providerSlug = cfg["ProviderSlug"];
+            var path = string.IsNullOrWhiteSpace(providerSlug)
+                ? "/application/o/authorize/"
+                : $"/application/o/{providerSlug.Trim()}/authorize/";
+
+            return baseUrlForBrowser + QueryHelpers.AddQueryString(path, qs);
         }
 
         public async Task<OAuthCallbackResult> ProcessOAuthCallbackAsync(string code)

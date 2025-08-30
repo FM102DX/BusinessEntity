@@ -810,6 +810,112 @@ function Action51 {
   }
 }
 
+function Action53 {
+  Write-Host "=== ПОЛНЫЙ СНОС стека businessentity-stack (контейнеры, локальные образы, тома, сеть) ===" -ForegroundColor Red
+  $root = Split-Path $PSScriptRoot -Parent
+  $composePath = Join-Path $root "docker-compose.yml"
+  $projectName = "businessentity-stack"
+  $bridgeNetwork = "docker-business-entity-common-bridge"
+
+  $confirm = Read-Host "ВНИМАНИЕ: Будут УДАЛЕНЫ контейнеры, ЛОКАЛЬНЫЕ образы, ТОМA и СЕТЬ проекта. Для подтверждения введите: DELETE"
+  if ($confirm -ne "DELETE") { Write-Host "Отмена." -ForegroundColor Yellow; return }
+
+  if (Test-Path $composePath) {
+    Write-Host "Выполняю: docker compose down --remove-orphans --volumes --rmi local" -ForegroundColor Yellow
+    docker compose -f $composePath down --remove-orphans --volumes --rmi local
+  } else {
+    Write-Host "⚠ Файл docker-compose.yml не найден: $composePath (пропускаю compose down)" -ForegroundColor DarkYellow
+  }
+
+  # Удаляем возможную default-сеть проекта
+  docker network rm "$projectName`_default" 2>$null | Out-Null
+
+  # Удаляем оставшиеся контейнеры проекта
+  Write-Host "Удаляю оставшиеся контейнеры проекта..." -ForegroundColor Yellow
+  $allContainers = docker ps -a --format "{{.Names}}"
+  foreach ($c in $allContainers) {
+    if ($c -like "$projectName*") {
+      docker rm -f $c 2>$null | Out-Null
+    }
+  }
+  foreach ($cx in @('business-entity-container','web_logger-container','postgres-production-db','businessentity-stack-postgresql-1','businessentity-stack-redis-1','businessentity-stack-server-1','businessentity-stack-worker-1')) {
+    $exists = docker ps -a --format "{{.Names}}" | Where-Object { $_ -eq $cx }
+    if ($exists) {
+      docker rm -f $cx 2>$null | Out-Null
+    }
+  }
+
+  # Удаляем тома проекта (как с префиксом проекта, так и без)
+  Write-Host "Удаляю тома..." -ForegroundColor Yellow
+  $candidateVolumes = @(
+    "$projectName`_pgdata","pgdata",
+    "$projectName`_database","database",
+    "$projectName`_redis","redis"
+  )
+  foreach ($v in $candidateVolumes) {
+    $exists = docker volume ls --format "{{.Name}}" | Where-Object { $_ -eq $v }
+    if ($exists) {
+      docker volume rm -f $v 2>$null | Out-Null
+    }
+  }
+  $allVolumes = docker volume ls --format "{{.Name}}"
+  foreach ($v in $allVolumes) {
+    if ($v -like "$projectName`_*") {
+      docker volume rm -f $v 2>$null | Out-Null
+    }
+  }
+
+  # Удаляем локальные образы compose-проекта
+  Write-Host "Удаляю локальные образы compose-проекта..." -ForegroundColor Yellow
+  $images = docker images --format "{{.Repository}}:{{.Tag}}|{{.ID}}"
+  foreach ($rec in $images) {
+    $parts = $rec -split '\|'
+    if ($parts.Count -lt 2) { continue }
+    $repoTag = $parts[0]
+    $imgId = $parts[1]
+    $repo = $repoTag.Split(':')[0]
+    if ($repo -like "$projectName-*") {
+      docker rmi -f $imgId 2>$null | Out-Null
+    }
+  }
+
+  # Удаляем общую внешнюю сеть, только если не осталось чужих контейнеров
+  Write-Host "Проверяю и удаляю общую сеть '$bridgeNetwork'..." -ForegroundColor Yellow
+  $netExists = docker network ls --format "{{.Name}}" | Where-Object { $_ -eq $bridgeNetwork }
+  if ($netExists) {
+    $known = @('business-entity-container','web_logger-container','postgres-production-db')
+    $canRemoveNet = $true
+    try {
+      $netInfo = docker network inspect $bridgeNetwork | ConvertFrom-Json
+      if ($netInfo[0].Containers) {
+        $attached = @()
+        foreach ($p in $netInfo[0].Containers.PSObject.Properties) { $attached += $p.Value.Name }
+        $foreign = $attached | Where-Object { ($_ -notlike "$projectName*") -and ($_ -notin $known) }
+        if ($foreign -and $foreign.Count -gt 0) { $canRemoveNet = $false }
+      }
+    } catch {}
+
+    if ($canRemoveNet) {
+      try { docker network rm $bridgeNetwork 2>$null | Out-Null } catch {}
+    } else {
+      Write-Host "⚠ Сеть '$bridgeNetwork' используется чужими контейнерами — удаление пропущено." -ForegroundColor DarkYellow
+    }
+  }
+
+  # Очищаем папку media в Authentic (bind-mount данные)
+  $mediaDir = Join-Path $root "Authentic\media"
+  if (Test-Path -Path $mediaDir) {
+    try {
+      Get-ChildItem -Path $mediaDir -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+      Write-Host "✓ Папка Authentic\\media очищена." -ForegroundColor DarkGray
+    } catch {
+      Write-Host "⚠ Не удалось очистить Authentic\\media: $_" -ForegroundColor DarkYellow
+    }
+  }
+
+  Write-Host "✓ Полный снос завершён. Следующий запуск '50' создаст пустую систему." -ForegroundColor Green
+}
+
 function Show-Menu {
     Write-Host "Меню:" -ForegroundColor Green
     Write-Host "00   -- Вывести статус докер-сетей"
@@ -828,6 +934,7 @@ function Show-Menu {
     Write-Host "40   -- Сбилдить и запустить бизнес-логику"
     Write-Host "50   -- Запустить root docker-compose (весь стек)"
     Write-Host "51   -- Остановить root docker-compose (весь стек)"
+    Write-Host "53   -- ПОЛНЫЙ СНОС стека (контейнеры, локальные образы, тома, сеть)"
     Write-Host "80   -- Очистить экран (CLS)"
     Write-Host "99   -- Выход"
 }
@@ -854,6 +961,7 @@ do {
         "40"  { BuildAndRunBusinessLogicContainers }
         "50"  { Action50 }
         "51"  { Action51 }
+        "53"  { Action53 }
         "80"  { Clear-Host }
         "99"  { break }
         default {
