@@ -1,0 +1,70 @@
+name: businessentity-stack
+
+# Root compose that bundles BusinessEntity app, its Postgres DB, Web Logger,
+# and includes the Authentic (goauthentik) stack from Authentic/docker-compose.yml
+# Requires Docker Compose V2 with `include` support.
+
+include:
+  - ./Authentic/docker-compose.yml
+
+services:
+  postgres-production-db:
+    container_name: postgres-production-db
+    build:
+      context: ./postgres_db
+      dockerfile: Dockerfile
+    ports:
+      - "5470:5432"
+    environment:
+      POSTGRES_DB: main
+      POSTGRES_USER: adm01
+      POSTGRES_PASSWORD: adm01pwd
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - common
+
+  business-entity:
+    container_name: business-entity-container
+    build:
+      context: .
+      dockerfile: ./BusinessEntity/Dockerfile
+    ports:
+      - "7000:80"
+    environment:
+      ASPNETCORE_URLS: http://*:80
+      ASPNETCORE_ENVIRONMENT: Development
+      IS_DOCKER: "true"
+    depends_on:
+      postgres-production-db:
+        condition: service_started
+    networks:
+      - common
+
+  web_logger:
+    container_name: web_logger-container
+    build:
+      context: .
+      dockerfile: ./BlazorServerWebLogger/Dockerfile
+    ports:
+      - "5080:80"
+    environment:
+      ASPNETCORE_URLS: http://*:80
+      ASPNETCORE_ENVIRONMENT: Development
+      IS_DOCKER: "true"
+    depends_on:
+      postgres-production-db:
+        condition: service_started
+    networks:
+      - common
+
+# External shared network used across scripts and containers
+networks:
+  common:
+    external: true
+    name: docker-business-entity-common-bridge
+
+# Local data volume for the production Postgres
+volumes:
+  pgdata:
+    driver: local
