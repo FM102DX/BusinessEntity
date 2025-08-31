@@ -21,6 +21,11 @@ services:
       POSTGRES_PASSWORD: adm01pwd
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adm01 -d main"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - common
 
@@ -46,7 +51,7 @@ services:
       AUTHENTIK_REDIRECT_URIS: http://localhost:7000/auth/callback
     depends_on:
       postgres-production-db:
-        condition: service_started
+        condition: service_healthy
     networks:
       - common
 
@@ -63,7 +68,7 @@ services:
       IS_DOCKER: "true"
     depends_on:
       postgres-production-db:
-        condition: service_started
+        condition: service_healthy
     networks:
       - common
 

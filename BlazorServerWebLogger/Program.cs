@@ -51,54 +51,13 @@ namespace BlazorServerWebLogger
             Console.WriteLine($"[DB-DIAG] Environment IS_DOCKER = {Environment.GetEnvironmentVariable("IS_DOCKER")}");
             Console.WriteLine($"[DB-DIAG] Selected ConnectionString = {connectionString}");
 
-            // Диагностика: парсим строку подключения и резолвим хост
+            // Диагностика: только парсим строку подключения (без DNS/TCP проб)
             if (!string.IsNullOrEmpty(connectionString))
             {
                 try
                 {
-                    var connectionStringBuilder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
-                    var host = connectionStringBuilder.Host;
-                    var port = connectionStringBuilder.Port;
-                    var database = connectionStringBuilder.Database;
-                    var username = connectionStringBuilder.Username;
-
-                    Console.WriteLine($"[DB-DIAG] Parsed - Host: {host}, Port: {port}, Database: {database}, User: {username}");
-
-                    // Пытаемся резолвить хост в IP
-                    try
-                    {
-                        var hostEntry = System.Net.Dns.GetHostEntry(host);
-                        var resolvedIPs = hostEntry.AddressList.Select(ip => ip.ToString()).ToArray();
-                        Console.WriteLine($"[DB-DIAG] Host '{host}' resolved to IPs: [{string.Join(", ", resolvedIPs)}]");
-                        
-                        // Проверяем доступность порта
-                        foreach (var ip in resolvedIPs.Take(3)) // проверяем максимум 3 IP
-                        {
-                            try
-                            {
-                                using (var tcpClient = new System.Net.Sockets.TcpClient())
-                                {
-                                    var connectTask = tcpClient.ConnectAsync(ip, port);
-                                    if (connectTask.Wait(TimeSpan.FromSeconds(3)))
-                                    {
-                                        Console.WriteLine($"[DB-DIAG] ✓ Connection to {ip}:{port} - SUCCESS");
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine($"[DB-DIAG] ✗ Connection to {ip}:{port} - TIMEOUT");
-                                    }
-                                }
-                            }
-                            catch (Exception tcpEx)
-                            {
-                                Console.WriteLine($"[DB-DIAG] ✗ Connection to {ip}:{port} - ERROR: {tcpEx.Message}");
-                            }
-                        }
-                    }
-                    catch (Exception dnsEx)
-                    {
-                        Console.WriteLine($"[DB-DIAG] ✗ Failed to resolve host '{host}': {dnsEx.Message}");
-                    }
+                    var csb = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+                    Console.WriteLine($"[DB-DIAG] Parsed - Host: {csb.Host}, Port: {csb.Port}, Database: {csb.Database}, User: {csb.Username}");
                 }
                 catch (Exception parseEx)
                 {
@@ -124,10 +83,9 @@ namespace BlazorServerWebLogger
             // ������������ DbContextOptions<WebLoggerDbContext> � DI
             builder.Services.AddSingleton(provider => optionsBuilder.Options);
 
-            // ���������, ��� ���� ������ � ������� �������
+            // Ensure database schema exists (non-destructive). Do NOT drop or clear.
             using (var context = new WebLoggerDbContext(optionsBuilder.Options))
             {
-                //context.Database.EnsureDeleted();
                 context.Database.EnsureCreated();
             }
             builder.Services.AddAutoMapper(typeof(Program));
@@ -140,7 +98,11 @@ namespace BlazorServerWebLogger
             builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>(); // ����������� ������� ������������
             builder.Services.AddScoped<LogReaderService>();
             builder.Services.AddHostedService<SampleLogGeneratorService>();
-            builder.Services.AddHostedService<LogEraserService>();
+            var logEraserEnabled = builder.Configuration.GetSection("LogEraserSettings").GetValue<bool>("Enabled");
+            if (logEraserEnabled)
+            {
+                builder.Services.AddHostedService<LogEraserService>();
+            }
             builder.Services.AddHostedService<BlazorServerWebLogger.Services.DatabaseConnectionMonitorService>(); // Мониторинг подключения к БД
 
             // ���������� Swagger

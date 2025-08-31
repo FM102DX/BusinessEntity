@@ -1,4 +1,6 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
+using System.Reflection;
+using System.Linq;
 using BlazorServerWebLogger.Contracts;
 using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.Messages;
@@ -14,6 +16,8 @@ namespace BlazorServerWebLogger.Pages
 {
     public partial class Index : ComponentBase, IDisposable
     {
+        public string AppVersion { get; set; } = "1.0.0";
+        public string ReleaseDate { get; set; } = "2025-08-31";
         public int TotalLogsCount { get; set; } = 0;
         public ObservableCollection<LogEntryDbStorable> LogEntries { get; set; } = new();
         public List<FilterItem> ServiceCodeFilter { get; set; } = new();
@@ -45,6 +49,12 @@ namespace BlazorServerWebLogger.Pages
 
         protected override async Task OnInitializedAsync()
         {
+            // Версия и дата релиза из атрибутов сборки
+            var asm = typeof(Index).Assembly;
+            AppVersion = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? AppVersion;
+            var meta = asm.GetCustomAttributes<AssemblyMetadataAttribute>();
+            ReleaseDate = meta.FirstOrDefault(m => m.Key == "ReleaseDate")?.Value ?? ReleaseDate;
+
             // Загружаем начальные данные логов
             var data = await LogReaderService.ReadInitialAsync(n: 50);
             TotalLogsCount = data.Count;
