@@ -207,6 +207,11 @@ function Rebuild-BusinessEntity-Safe {
         "ASPNETCORE_URLS" = "http://*:80"
         "ASPNETCORE_ENVIRONMENT" = "Development"
         "IS_DOCKER" = "true"
+        # Authentik bootstrap settings (match docker-compose.yml)
+        "AUTHENTIK_BASE_URL" = "http://host.docker.internal:9000"
+        "AUTHENTIK_BASE_URL_FOR_BROWSER" = "http://localhost:9000"
+        "AUTHENTIK_API_TOKEN" = "5f81e1c4b8c0417c9f7b01a6d83a44dbdf18a27c29b93c4c9b71a9e2e06d1d3c"
+        "AUTHENTIK_REDIRECT_URIS" = "http://localhost:7000/auth/callback"
     }
 
     Rebuild-And-Restart-ContainerKeepNetworks `
@@ -227,6 +232,34 @@ function Rebuild-BusinessEntity-Safe {
         Write-Host "⚠ Не удалось перезапустить web-logger. Сделайте это вручную через пункт 32." -ForegroundColor Yellow
     }
 }
+
+function Rebuild-BusinessEntity-Safe-2 {
+    $service    = "business-entity"                             # имя сервиса в docker-compose.yml
+    $composeDir = (Split-Path $PSScriptRoot -Parent)            # корень стека (где docker-compose.yml)
+
+    Write-Host "=== Rebuild one service via Docker Compose ===" -ForegroundColor Cyan
+    Write-Host "Service: $service" -ForegroundColor Cyan
+    Write-Host "Compose dir: $composeDir" -ForegroundColor Cyan
+
+    if (-not (Test-Path $composeDir)) {
+        throw "Папка с compose-файлом не найдена: $composeDir"
+    }
+
+    Push-Location $composeDir
+    try {
+        # Пересобрать образ и пересоздать ТОЛЬКО этот сервис, не трогая зависимости
+        $args = @('compose','up','-d','--build','--no-deps', $service)
+        Write-Host "-> docker $($args -join ' ')" -ForegroundColor Yellow
+        & docker @args
+        if ($LASTEXITCODE -ne 0) { throw "Запуск сервиса завершился с ошибкой ($LASTEXITCODE)." }
+
+        Write-Host "✓ Сервис '$service' пересобран и перезапущен без перезапуска зависимостей." -ForegroundColor Green
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 
 # Специализированная функция для Web Logger
 function Rebuild-WebLogger-Safe {
@@ -251,6 +284,33 @@ function Rebuild-WebLogger-Safe {
         -Ports $ports `
         -Env $env `
         -FallbackNetwork "docker-business-entity-common-bridge"
+}
+
+function Rebuild-WebLogger-Safe-2 {
+    $service    = "web_logger"                                  # имя сервиса в docker-compose.yml
+    $composeDir = (Split-Path $PSScriptRoot -Parent)            # корень стека (где docker-compose.yml)
+
+    Write-Host "=== Rebuild one service via Docker Compose ===" -ForegroundColor Cyan
+    Write-Host "Service: $service" -ForegroundColor Cyan
+    Write-Host "Compose dir: $composeDir" -ForegroundColor Cyan
+
+    if (-not (Test-Path $composeDir)) {
+        throw "Папка с compose-файлом не найдена: $composeDir"
+    }
+
+    Push-Location $composeDir
+    try {
+        # Пересобрать образ и пересоздать ТОЛЬКО этот сервис, не трогая зависимости
+        $args = @('compose','up','-d','--build','--no-deps', $service)
+        Write-Host "-> docker $($args -join ' ')" -ForegroundColor Yellow
+        & docker @args
+        if ($LASTEXITCODE -ne 0) { throw "Запуск сервиса завершился с ошибкой ($LASTEXITCODE)." }
+
+        Write-Host "✓ Сервис '$service' пересобран и перезапущен без перезапуска зависимостей." -ForegroundColor Green
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 # Специализированная функция для Admin Node
@@ -411,6 +471,11 @@ function SelectContainerAndRun {
                 "ASPNETCORE_URLS" = "http://*:80"
                 "ASPNETCORE_ENVIRONMENT" = "Development"
                 "IS_DOCKER" = "true"
+                # Authentik bootstrap settings (match docker-compose.yml)
+                "AUTHENTIK_BASE_URL" = "http://host.docker.internal:9000"
+                "AUTHENTIK_BASE_URL_FOR_BROWSER" = "http://localhost:9000"
+                "AUTHENTIK_API_TOKEN" = "5f81e1c4b8c0417c9f7b01a6d83a44dbdf18a27c29b93c4c9b71a9e2e06d1d3c"
+                "AUTHENTIK_REDIRECT_URIS" = "http://localhost:7000/auth/callback"
             }
             $imageName = "business-entity-container_image:latest"
             
@@ -906,7 +971,9 @@ function Show-Menu {
     Write-Host "20   -- Вывести диагностическую информацию для выбранного контейнера"
     Write-Host "30   -- Пересобрать и запустить отдельный контейнер (БЕЗОПАСНО + авто-перезапуск логгера)"
     Write-Host "31   -- Безопасная пересборка ТОЛЬКО business-entity (+ перезапуск логгера)"
+    Write-Host "311  -- Безопасная пересборка ТОЛЬКО business-entity (+ перезапуск логгера)-NEW"
     Write-Host "32   -- Безопасная пересборка ТОЛЬКО web-logger"
+    Write-Host "321  -- Безопасная пересборка ТОЛЬКО web-logger-NEW"
     Write-Host "33   -- Безопасная пересборка ТОЛЬКО admin-node"
     Write-Host "35   -- Сбилдить и запустить production_db контейнер"
     Write-Host "37   -- Запустить сервис Authentik"
@@ -934,7 +1001,9 @@ do {
         "20"  { Action20 }
         "30"  { SelectContainerAndRun }
         "31"  { Rebuild-BusinessEntity-Safe }
+        "311" { Rebuild-BusinessEntity-Safe-2 }
         "32"  { Rebuild-WebLogger-Safe }
+        "321" { Rebuild-WebLogger-Safe-2 }
         "33"  { Rebuild-AdminNode-Safe }
         "35"  { BuildAndRunPostgresContainer }
         "37"  { Action37 }

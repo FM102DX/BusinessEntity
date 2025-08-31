@@ -35,6 +35,15 @@ services:
       ASPNETCORE_URLS: http://*:80
       ASPNETCORE_ENVIRONMENT: Development
       IS_DOCKER: "true"
+      # Authentik bootstrap settings
+      # Inside container, use host.docker.internal:9000 to reach the Authentik port published on the host
+      AUTHENTIK_BASE_URL: http://host.docker.internal:9000
+      # What browsers should use to reach Authentik
+      AUTHENTIK_BASE_URL_FOR_BROWSER: http://localhost:9000
+      # API token must match AUTHENTIK_BOOTSTRAP_TOKEN from Authentic/docker-compose.yml
+      AUTHENTIK_API_TOKEN: 5f81e1c4b8c0417c9f7b01a6d83a44dbdf18a27c29b93c4c9b71a9e2e06d1d3c
+      # Redirect URIs for our app (signin-oidc will be auto-added per host)
+      AUTHENTIK_REDIRECT_URIS: http://localhost:7000/auth/callback
     depends_on:
       postgres-production-db:
         condition: service_started
