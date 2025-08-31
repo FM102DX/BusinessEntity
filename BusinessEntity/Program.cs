@@ -58,7 +58,15 @@ namespace BusinessEntity
             // 2) OIDC: AddAuthentikOpenIdConnect() registers OpenID Connect handler with these settings.
             //    Authority uses /application/o/{slug}/; built-in middleware handles /signin-oidc callback.
             var appName = builder.Environment.ApplicationName ?? "BusinessEntity";
-            var oidcSettings = AuthentikBootstrapService.Ensure(appName, builder.Configuration, NullLogger.Instance);
+            BusinessEntity.Authentik.CreatedOidcSettings oidcSettings;
+            using (var temp = builder.Services.BuildServiceProvider())
+            using (var scope = temp.CreateScope())
+            {
+                var webLogger = scope.ServiceProvider.GetService<IWebLoggerService>();
+                _ = webLogger?.Information("[AK] Program: starting bootstrap");
+                oidcSettings = AuthentikBootstrapService.Ensure(appName, builder.Configuration, NullLogger.Instance, webLogger);
+                _ = webLogger?.Information("[AK] Program: bootstrap completed");
+            }
             builder.Services.AddAuthentikOpenIdConnect(oidcSettings);
 
 			// Настройка JWT аутентификации
