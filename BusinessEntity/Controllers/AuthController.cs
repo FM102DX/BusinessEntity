@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BusinessEntity.Services;
@@ -7,6 +8,10 @@ using BusinessEntity.Contracts;
 
 namespace BusinessEntity.Controllers
 {
+    /// <summary>
+    /// Контроллер точек входа аутентификации.
+    /// Login/Logout используют OpenID Connect; Callback оставлен для legacy OAuth.
+    /// </summary>
     [Route("auth")]
     public class AuthController : Controller
     {
@@ -24,6 +29,10 @@ namespace BusinessEntity.Controllers
             _configuration = configuration;
         }
 
+        /// <summary>
+        /// Инициирует OIDC-челлендж к провайдеру (Authentik). Если пользователь уже
+        /// аутентифицирован, выполняет безопасный редирект на returnUrl или на '/'.
+        /// </summary>
         [HttpGet("login")]
         public IActionResult Login(string? returnUrl = null)
         {
@@ -36,13 +45,20 @@ namespace BusinessEntity.Controllers
                 return LocalRedirect(returnUrl ?? "/");
             }
 
-            // Перенаправляем на страницу авторизации Authentic
-            var loginUrl = _authService.GetLoginUrl(returnUrl);
-            _logger.LogInformation("[AuthController.Login] Redirecting to Authentic login: {LoginUrl}", loginUrl);
-
-            return Redirect(loginUrl);
+            // Запускаем OIDC-челлендж (Authentik)
+            var props = new AuthenticationProperties
+            {
+                RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl
+            };
+            _logger.LogInformation("[AuthController.Login] Challenging OIDC scheme with RedirectUri: {RedirectUri}", props.RedirectUri);
+            return Challenge(props, OpenIdConnectDefaults.AuthenticationScheme);
         }
 
+        /// <summary>
+        /// Legacy OAuth callback. В текущей схеме OIDC он не используется —
+        /// обработку завершает middleware на /signin-oidc. Оставлен для обратной
+        /// совместимости со старым ApplicationSideAuthService.
+        /// </summary>
         [HttpGet("callback")]
         public async Task<IActionResult> Callback(string? code, string? state, string? error)
         {
@@ -114,47 +130,23 @@ namespace BusinessEntity.Controllers
             }
         }
 
+        /// <summary>
+        /// Завершает сессию: локальный cookie и удалённую OIDC-сессию (front-channel).
+        /// </summary>
         [HttpGet("logout")]
         [Authorize]
-        public async Task<IActionResult> Logout()
+        public IActionResult Logout(string? returnUrl = null)
         {
-            _logger.LogInformation("[AuthController.Logout] Processing logout request");
-            _logger.LogInformation("[AuthController.Logout] User: {User}, Authenticated: {IsAuth}", 
-                User.Identity?.Name, User.Identity?.IsAuthenticated);
-            
-            try
+            _logger.LogInformation("[AuthController.Logout] Initiating OIDC sign-out. User: {User}", User.Identity?.Name);
+            var props = new AuthenticationProperties
             {
-                var success = await _authService.SignOutAsync();
-                if (success)
-                {
-                    _logger.LogInformation("[AuthController.Logout] Logout completed successfully");
-                    
-                    // Проверяем, есть ли URL для фронт-ченнел logout
-                    var frontChannelUrl = _authService.GetFrontChannelLogoutUrl();
-                    if (!string.IsNullOrEmpty(frontChannelUrl))
-                    {
-                        _logger.LogInformation("[AuthController.Logout] Redirecting to front-channel logout: {Url}", frontChannelUrl);
-                        return Redirect(frontChannelUrl); // Отправляем браузер в Authentik для очистки сессии
-                    }
-                    
-                    return Redirect("/auth/logged-out"); // fallback
-                }
-                else
-                {
-                    _logger.LogError("[AuthController.Logout] Logout returned false");
-                    return StatusCode(500, "Logout failed");
-                }
-            }
-            catch (AuthSignOutFromAuthenticException ex)
-            {
-                _logger.LogError(ex, "[AuthController.Logout] Authentik logout failed");
-                return StatusCode(500, "Failed to logout from authentication server. The logout process has been stopped.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[AuthController.Logout] Unexpected error during logout");
-                return StatusCode(500, "Logout failed due to unexpected error");
-            }
+                RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl
+            };
+            // Sign out both local cookie and remote OIDC session (front-channel)
+            return SignOut(
+                props,
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                OpenIdConnectDefaults.AuthenticationScheme);
         }
     }
 }

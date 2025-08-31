@@ -1,0 +1,249 @@
+ТЗ для ЛЛМ, которая пишет Blazor Server-приложение «К». Цель — при старте «К» сходить в Authentik под админ-учёткой (API-токен), убедиться, что есть OIDC-провайдер и Application со слагом по имени приложения, при отсутствии — создать, затем сконфигурировать OIDC в самом «К».
+
+ТЗ: Автоподготовка Authentik на старте «К»
+1) Входные данные
+
+ApplicationName (string) — имя приложения, задаётся при запуске «К».
+
+Сформировать slug из ApplicationName: строчные, a–z0–9-, пробелы → -, сжать подряд и обрезать до 50 символов. Пример: BusinessEntity → businessentity.
+
+Переменные окружения (не хранить в репозитории):
+
+AUTHENTIK_BASE_URL (обяз.) — базовый URL Authentik, напр. http://localhost:9000.
+
+AUTHENTIK_API_TOKEN (обяз.) — API-токен пользователя akadmin.
+
+AUTHENTIK_REDIRECT_URIS (опц.) — список через ;, по умолчанию:
+http://localhost:7000/signin-oidc.
+
+AUTHENTIK_CLIENT_ID (опц.) — если нужно жёстко задать client_id, по умолчанию = slug.
+
+AUTHENTIK_CLIENT_SECRET (опц.) — если задан, использовать; иначе сгенерировать GUID-based.
+
+Флаг EnsureAuthentikOnStartup (bool, по умолчанию true).
+
+2) Выход/результат
+
+Гарантировано существует:
+
+OAuth2/OIDC-провайдер с указанными Redirect URIs.
+
+Application со slug == slug(ApplicationName), привязанный к провайдеру.
+
+«К» получает:
+
+Authority = ${AUTHENTIK_BASE_URL}/application/o/{slug}/
+
+ClientId / ClientSecret — для настройки OpenID Connect в «К».
+
+Лог в консоль: что найдено/создано; перечень Redirect URIs.
+
+3) Ограничения/предпосылки
+
+Работать через публичный REST API Authentik v3.
+
+Минимум «магии»: простая идемпотентность (поиск → создать/обновить).
+
+Без интерактивных диалогов; падать с понятной ошибкой, если нет токена/базы URL.
+
+HTTP-клиент с таймаутом 30 с; до 5 ретраев с экспоненциальной задержкой на 502/503/504.
+
+4) NuGet и структура проекта
+
+Packages: Microsoft.AspNetCore.Authentication.OpenIdConnect, System.Net.Http.Json, Polly.Extensions.Http (+ Polly) для ретраев.
+
+Слои:
+
+AuthentikClient — тонкий клиент REST.
+
+AuthentikBootstrapService — оркестрация «ensure or create».
+
+OidcConfigurator — настройка OIDC в Program.cs/Startup.
+
+Slugifier — утилита для слага.
+
+5) REST-эндпоинты Authentik (использовать)
+
+Базовый заголовок: Authorization: Bearer {AUTHENTIK_API_TOKEN}; Content-Type: application/json.
+
+Проверка доступности:
+
+GET /api/v3/core/version
+
+Поиск flow’ов (нужен authorization flow):
+
+GET /api/v3/flows/?slug=default-provider-authorization-explicit-consent
+
+fallback: …implicit-consent
+
+Для аутентикации логина можно опустить (по умолчанию), либо:
+
+GET /api/v3/flows/?slug=default-authentication-flow
+
+Провайдеры (OAuth2/OIDC):
+
+Поиск: GET /api/v3/providers/oauth2/?client_id={client_id}
+
+Создание: POST /api/v3/providers/oauth2/
+
+{
+  "name": "BE OIDC",
+  "client_type": "confidential",
+  "client_id": "<slug or AUTHENTIK_CLIENT_ID>",
+  "client_secret": "<generated-or-provided>",
+  "authorization_flow": <flow.pk>,
+  "redirect_uris": ["http://localhost:7000/signin-oidc"]
+  /* опционально: "client_authentication": "client_secret_basic" */
+}
+
+
+Обновление (если найден, но URIs отличаются): PATCH /api/v3/providers/oauth2/{pk}/
+
+Applications:
+
+Поиск по слагу: GET /api/v3/core/applications/?slug={slug}
+
+Создание: POST /api/v3/core/applications/
+
+{ "name": "<ApplicationName>", "slug": "<slug>", "provider": <provider.pk> }
+
+
+Обновление привязки провайдера при необходимости: PATCH /api/v3/core/applications/{pk}/
+
+Итоговые точки для клиента:
+
+Authorize: {BASE}/application/o/{slug}/authorize/
+
+Token: {BASE}/application/o/{slug}/token/
+
+JWKS: {BASE}/application/o/{slug}/jwks/
+
+UserInfo: {BASE}/application/o/{slug}/userinfo/
+
+6) Алгоритм «ensure or create»
+
+Прочитать конфиг/переменные окружения. Сгенерировать slug.
+
+GET /core/version — убедиться, что Authentik жив (с ретраями).
+
+Найти authorization-flow (explicit, иначе implicit). Взять pk.
+
+Найти провайдера по client_id (=slug или из ENV).
+
+Если нет → POST /providers/oauth2/ с полями из п.5 (redirect_uris из ENV/дефолта).
+
+Если есть → сверить redirect_uris. Если отличаются → PATCH (обновить на заданный список).
+
+Найти приложение по slug.
+
+Если нет → POST /core/applications/ (name=ApplicationName, slug=slug, provider=provider.pk).
+
+Если есть, но другой provider → PATCH привязать к найденному/созданному провайдеру.
+
+Сформировать Authority/ClientId/ClientSecret и вернуть их наружу.
+
+Настроить OIDC в «К»:
+
+AddAuthentication().AddOpenIdConnect("oidc", …):
+
+Authority = $"{BASE}/application/o/{slug}/"
+
+ClientId, ClientSecret
+
+ResponseType = "code"
+
+SaveTokens = true
+
+GetClaimsFromUserInfoEndpoint = true
+
+Scope добавить "openid","profile","email"
+
+Для dev окружения разрешить HTTP-Authority (если требуется).
+
+7) Компоненты, которые нужно реализовать
+7.1 Slugifier
+
+Метод string ToSlug(string input) с правилами из п.1.
+
+7.2 AuthentikClient
+
+Конструктор: HttpClient (BaseAddress = AUTHENTIK_BASE_URL), добавляет Authorization/Content-Type.
+
+Методы:
+
+Task<VersionDto> GetVersion()
+
+Task<FlowDto?> FindAuthorizationFlow() — пробует explicit, затем implicit.
+
+Task<ProviderDto?> GetProviderByClientId(string clientId)
+
+Task<ProviderDto> CreateProvider(ProviderCreateDto dto)
+
+Task<ProviderDto> PatchProvider(int pk, ProviderPatchDto dto)
+
+Task<ApplicationDto?> GetApplicationBySlug(string slug)
+
+Task<ApplicationDto> CreateApplication(ApplicationCreateDto dto)
+
+Task<ApplicationDto> PatchApplication(int pk, ApplicationPatchDto dto)
+
+Dto достаточно минимальные: поля, используемые в запросах/ответах.
+
+7.3 AuthentikBootstrapService
+
+Метод:
+
+Task<CreatedOidcSettings> EnsureAsync(string applicationName);
+
+
+Реализует алгоритм п.6.
+
+CreatedOidcSettings { string Authority, ClientId, ClientSecret, string[] RedirectUris }
+
+7.4 OidcConfigurator
+
+Расширение для WebApplicationBuilder:
+
+public static void AddAuthentikOidc(this WebApplicationBuilder builder, CreatedOidcSettings s);
+
+
+Настраивает Authentication, Cookies, OpenIdConnect.
+
+7.5 Инициализация в Program.cs
+var appName = Environment.GetEnvironmentVariable("APPLICATION_NAME") ?? "BusinessEntity";
+if (bool.Parse(Environment.GetEnvironmentVariable("EnsureAuthentikOnStartup") ?? "true"))
+{
+    var bootstrap = app.Services.GetRequiredService<AuthentikBootstrapService>();
+    var oidc = await bootstrap.EnsureAsync(appName);
+    builder.AddAuthentikOidc(oidc);
+}
+
+8) Обработка ошибок (кратко)
+
+Нет AUTHENTIK_API_TOKEN/AUTHENTIK_BASE_URL → бросить InvalidOperationException с подсказкой переменных.
+
+401/403 → «невалидный токен или у токена нет прав».
+
+400 redirect_uris → вывести полученный список и требуемый, предложить поправить ENV.
+
+404 flow’ов → сообщить «в инстансе отсутствуют дефолтные authorization flows», предложить задать AUTHENTIK_AUTHZ_FLOW_SLUG.
+
+Сети/compose-задержка → ретраи на 502/503/504.
+
+9) Нефункциональные
+
+Логи в консоль: «нашёл/создал провайдер», «нашёл/создал application», список redirect URIs, итоговые OIDC-настройки без секрета в явном виде (секрет — печатать единожды при создании).
+
+Кодировка UTF-8, .NET 8, Blazor Server.
+
+Время выполнения подготовки — до 5 секунд при тёплом Authentik.
+
+10) Acceptance-критерии
+
+На чистом инстансе Authentik после старта «К» открывается http://localhost:9000/application/o/{slug}/authorize/ без 404.
+
+«К» успешно проходит OIDC-login-flow, получает id_token и имя пользователя.
+
+Повторные запуски «К» не создают дублей; при изменении AUTHENTIK_REDIRECT_URIS провайдер обновляется.
+
+При невалидном токене «К» завершает старт с понятным сообщением.

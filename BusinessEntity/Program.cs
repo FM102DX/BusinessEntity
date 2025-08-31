@@ -17,6 +17,10 @@ using SampleOnlineMall.WebLogger.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using BusinessEntity.Authentik;
+using BusinessEntity.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
 namespace BusinessEntity
 {
@@ -47,6 +51,15 @@ namespace BusinessEntity
 
             // Add Radzen services
             builder.Services.AddRadzenComponents();
+            
+            // Authentik OIDC bootstrap and configuration
+            // 1) Bootstrap: Ensure() idempotently creates/patches provider+application in Authentik
+            //    and returns Authority/ClientId/ClientSecret/RedirectUris for our app.
+            // 2) OIDC: AddAuthentikOpenIdConnect() registers OpenID Connect handler with these settings.
+            //    Authority uses /application/o/{slug}/; built-in middleware handles /signin-oidc callback.
+            var appName = builder.Environment.ApplicationName ?? "BusinessEntity";
+            var oidcSettings = AuthentikBootstrapService.Ensure(appName, builder.Configuration, NullLogger.Instance);
+            builder.Services.AddAuthentikOpenIdConnect(oidcSettings);
 
 			// Настройка JWT аутентификации
 			var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -54,12 +67,14 @@ namespace BusinessEntity
 			var issuer = jwtSettings["Issuer"] ?? "http://localhost:9000";
 			var audience = jwtSettings["Audience"] ?? "business-entity";
 
-			// Настройка аутентификации с приоритетом Cookie
+			// Authentication defaults
+			// - DefaultScheme/Authenticate: Cookies (local session)
+			// - DefaultChallenge: OpenID Connect (redirects unauthenticated users to Authentik)
 			builder.Services.AddAuthentication(options =>
 			{
-				options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-				options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 				options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+				options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+				options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
 			})
 			.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
 			{
@@ -214,7 +229,8 @@ namespace BusinessEntity
 			// Добавляем наш JWT middleware перед аутентификацией
 			app.UseMiddleware<JwtAuthenticationMiddleware>();
 
-			// Добавляем middleware для аутентификации и авторизации
+			// ASP.NET Core auth pipeline: UseAuthentication() must come before UseAuthorization().
+			// OIDC and cookies are configured above; unauthenticated requests will be challenged to Authentik.
 			app.UseAuthentication();
 			app.UseAuthorization();
 
