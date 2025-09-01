@@ -30,6 +30,9 @@ namespace BusinessEntity
 		{
 			var builder = WebApplication.CreateBuilder(args);
 
+			// Ensure console logging is enabled early so bootstrap logs appear in console
+			builder.Logging.AddConsole();
+
 			// Add services to the container.
 			builder.Services.AddControllers();
 			builder.Services.AddRazorPages();
@@ -63,8 +66,9 @@ namespace BusinessEntity
             using (var scope = temp.CreateScope())
             {
                 var webLogger = scope.ServiceProvider.GetService<IWebLoggerService>();
+                var consoleLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
                 _ = webLogger?.Information("[AK] Program: starting bootstrap");
-                oidcSettings = AuthentikBootstrapService.Ensure(appName, builder.Configuration, NullLogger.Instance, webLogger);
+                oidcSettings = AuthentikBootstrapService.Ensure(appName, builder.Configuration, consoleLogger, webLogger);
                 _ = webLogger?.Information("[AK] Program: bootstrap completed");
             }
             builder.Services.AddAuthentikOpenIdConnect(oidcSettings);
@@ -147,17 +151,23 @@ namespace BusinessEntity
 			// Добавляем HttpClient для сервиса авторизации
 			builder.Services.AddHttpClient();
 
-			// Настройка HttpClient для Authentic
-			builder.Services.AddHttpClient("AuthentIC", client =>
-			{
-				client.BaseAddress = new Uri("http://localhost:9000/");
-				client.Timeout = TimeSpan.FromSeconds(30);
-			});
+			            // Настройка HttpClient для Authentic/Authentik (base URL из ENV или конфигурации)
+            var akBaseUrl = Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL")
+                             ?? builder.Configuration["AuthentIC2:BaseUrl"]
+                             ?? "http://localhost:9000";
+            akBaseUrl = akBaseUrl.TrimEnd('/') + "/";
+
+            builder.Services.AddHttpClient("AuthentIC", client =>
+            {
+                client.BaseAddress = new Uri(akBaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
             builder.Services.AddHttpClient("AuthentIC2", client =>
             {
-                client.BaseAddress = new Uri("http://authentic-server-1:9000");
+                client.BaseAddress = new Uri(akBaseUrl);
                 client.Timeout = TimeSpan.FromSeconds(30);
-            });            // Регистрируем наш сервис авторизации
+            });
+            // Регистрируем наш сервис авторизации
             builder.Services.AddScoped<IApplicationSideAuthService, ApplicationSideAuthService>();
             
            
