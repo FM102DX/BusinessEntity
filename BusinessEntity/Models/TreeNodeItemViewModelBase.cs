@@ -1,6 +1,6 @@
 using BusinessEntity.Core.Classes;
 using Radzen;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Models
 {

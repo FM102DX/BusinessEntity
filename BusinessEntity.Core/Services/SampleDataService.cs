@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Core.Services
 {

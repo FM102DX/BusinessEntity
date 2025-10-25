@@ -1,5 +1,5 @@
 using Radzen;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 using BusinessEntity.Core.Services;
 using BusinessEntity.Core.Classes;
 

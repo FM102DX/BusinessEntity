@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 /*
  DTOs used by Authentik REST API v3.
- - VersionDto: /api/v3/core/version
+ - VersionDto: /api/v3/core/system/version/
  - PagedResult<T>: generic paged response wrapper
  - FlowDto: minimal flow info (pk, slug) to locate default authorization flow
  - ProviderDto/CreateDto/PatchDto: OAuth2 provider data and mutations
@@ -13,7 +13,7 @@ using System.Text.Json.Serialization;
 namespace BusinessEntity.Authentik
 {
     /// <summary>
-    /// Version info returned by /api/v3/core/version
+    /// Version info returned by /api/v3/core/system/version/
     /// </summary>
     internal class VersionDto
     {

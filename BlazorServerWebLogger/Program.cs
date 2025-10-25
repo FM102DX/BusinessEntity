@@ -10,13 +10,10 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
-using SampleOnlineMall.Core;
-using SampleOnlineMall.Core.Models;
-using SampleOnlineMall.DataAccess;
-using SampleOnlineMall.DataAccess.Abstract;
+using BusinessEntity.Core;
+using AutoMapper;
 using SampleOnlineMall.WebLogger.DataAccess;
 using SampleOnlineMall.WebLogger.Models;
-using AutoMapper;
 
 namespace BlazorServerWebLogger
 {

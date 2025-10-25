@@ -1,5 +1,4 @@
-﻿using SampleOnlineMall.DataAccess.Abstract;
-using SampleOnlineMall.Service;
+﻿using BusinessEntity.Service;
 using System;
 using System.Collections.Generic;
 using System.Linq;

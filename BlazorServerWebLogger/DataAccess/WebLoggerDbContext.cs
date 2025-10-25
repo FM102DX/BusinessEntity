@@ -2,11 +2,6 @@
 using BlazorServerWebLogger.Data.App;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
-using Microsoft.EntityFrameworkCore;
-using SampleOnlineMall.Core;
-using SampleOnlineMall.Core.Models;
-using SampleOnlineMall.DataAccess;
-using SampleOnlineMall.DataAccess.Abstract;
 using SampleOnlineMall.WebLogger.Models;
 
 using Microsoft.EntityFrameworkCore;

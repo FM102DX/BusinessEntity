@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using System.Linq;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Core.Services
 {

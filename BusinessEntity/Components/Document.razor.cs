@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using BusinessEntity.Core.Services;
 using ReactiveUI;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Components
 {

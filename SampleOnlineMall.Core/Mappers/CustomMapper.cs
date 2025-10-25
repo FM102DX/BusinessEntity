@@ -74,7 +74,7 @@ namespace SampleOnlineMall.Core.Mappers
             targetResp.UsedSearch = sourceResp.UsedSearch;
             targetResp.Page = sourceResp.Page;
             targetResp.TotalCount = sourceResp.TotalCount;
-            targetResp.Result = new Service.CommonOperationResult();
+            targetResp.Result = new BusinessEntity.Service.CommonOperationResult();
             targetResp.Result.Success = sourceResp.Result.Success;
             targetResp.Result.Message = sourceResp.Result.Message;
             var itemList = new List<CommodityItemFrontend>();
@@ -96,7 +96,7 @@ namespace SampleOnlineMall.Core.Mappers
             targetResp.UsedPagination = sourceResp.UsedPagination;
             targetResp.Page = sourceResp.Page;
             targetResp.TotalCount = sourceResp.TotalCount;
-            targetResp.Result = new Service.CommonOperationResult();
+            targetResp.Result = new BusinessEntity.Service.CommonOperationResult();
             targetResp.Result.Success = sourceResp.Result.Success;
             targetResp.Result.Message = sourceResp.Result.Message;
 

@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 using System.Linq;
 using System.Net.Http;
 using System.Collections.Generic;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Authentik
 {
@@ -31,12 +31,24 @@ namespace BusinessEntity.Authentik
                          !string.Equals(ensureFlag, "0", StringComparison.OrdinalIgnoreCase);
 
             // Base URLs
-            var baseUrlStr = Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL")
-                              ?? configuration["AuthentIC2:BaseUrl"]
-                              ?? string.Empty;
+            var isDocker = string.Equals(Environment.GetEnvironmentVariable("IS_DOCKER"), "true", StringComparison.OrdinalIgnoreCase);
+            string baseUrlStr = isDocker
+                ? (Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL")
+                   ?? configuration["AuthentIC2:BaseUrl"]
+                   ?? string.Empty)
+                : (Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL_FOR_BROWSER")
+                   ?? configuration["AuthentIC2:BaseUrlForBrowser"]
+                   ?? configuration["AuthentIC2:BaseUrl"]
+                   ?? "http://localhost:9000");
             var browserBaseUrlStr = Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL_FOR_BROWSER")
                                    ?? configuration["AuthentIC2:BaseUrlForBrowser"]
                                    ?? baseUrlStr;
+
+            // Safety: if not in Docker and baseUrl points to Docker-only DNS, rewrite to localhost
+            if (!isDocker && baseUrlStr.Contains("authentic_server", StringComparison.OrdinalIgnoreCase))
+            {
+                baseUrlStr = "http://localhost:9000";
+            }
 
             var token = Environment.GetEnvironmentVariable("AUTHENTIK_API_TOKEN")
                         ?? configuration["AuthentIC2:ApiToken"]
@@ -63,7 +75,8 @@ namespace BusinessEntity.Authentik
 
             var result = new CreatedOidcSettings
             {
-                Authority = browserBaseUrlStr.TrimEnd('/') + $"/application/o/{slug}/",
+                // Use internal base URL for Authority (server-to-server communication)
+                Authority = baseUrlStr.TrimEnd('/') + $"/application/o/{slug}/",
                 ClientId = clientId,
                 ClientSecret = clientSecret,
                 RedirectUris = redirectUris,
@@ -72,9 +85,9 @@ namespace BusinessEntity.Authentik
 
             var tokenMasked = Mask(token);
             var secretMasked = string.IsNullOrWhiteSpace(clientSecret) ? "<empty>" : Mask(clientSecret);
-            _ = webLogger?.Information($"[AK] Bootstrap start: ensure={ensure}, slug={slug}, authority={result.Authority}, clientId={clientId}, redirects=[{string.Join(",", redirectUris)}], baseUrl={baseUrlStr}, browserBaseUrl={browserBaseUrlStr}, token={tokenMasked}");
-            logger.LogInformation("[AK] Bootstrap start: ensure={Ensure}, slug={Slug}, authority={Authority}, clientId={ClientId}, redirects={Redirects}, baseUrl={BaseUrl}, browserBaseUrl={BrowserBaseUrl}, apiToken={TokenMasked}, clientSecret={SecretMasked}",
-                ensure, slug, result.Authority, clientId, string.Join(";", redirectUris), baseUrlStr, browserBaseUrlStr, tokenMasked, secretMasked);
+            _ = webLogger?.Information($"[AK] Bootstrap start: ensure={ensure}, isDocker={isDocker}, slug={slug}, authority={result.Authority}, clientId={clientId}, redirects=[{string.Join(",", redirectUris)}], baseUrl={baseUrlStr}, browserBaseUrl={browserBaseUrlStr}, token={tokenMasked}");
+            logger.LogInformation("[AK] Bootstrap start: ensure={Ensure}, isDocker={IsDocker}, slug={Slug}, authority={Authority}, clientId={ClientId}, redirects={Redirects}, baseUrl={BaseUrl}, browserBaseUrl={BrowserBaseUrl}, apiToken={TokenMasked}, clientSecret={SecretMasked}",
+                ensure, isDocker, slug, result.Authority, clientId, string.Join(";", redirectUris), baseUrlStr, browserBaseUrlStr, tokenMasked, secretMasked);
 
             if (!ensure)
             {
@@ -108,7 +121,7 @@ namespace BusinessEntity.Authentik
                     attempt++;
                     try
                     {
-                        var versionUri = new Uri(baseUrl, "/api/v3/core/version");
+                        var versionUri = new Uri(baseUrl, "/api/v3/core/system/version/");
                         logger.LogInformation("[AK] Version check attempt {Attempt} to {Uri}", attempt, versionUri);
                         version = client.GetVersion(baseUrl, token).GetAwaiter().GetResult();
                         break;
@@ -117,7 +130,7 @@ namespace BusinessEntity.Authentik
                     {
                         lastEx = ex;
                         var delayMs = Math.Min(8000, 250 * (int)Math.Pow(2, Math.Min(6, attempt - 1)));
-                        logger.LogWarning(ex, "[AK] core/version failed (attempt {Attempt}), retrying in {Delay}ms", attempt, delayMs);
+                        logger.LogWarning(ex, "[AK] core/system/version failed (attempt {Attempt}), retrying in {Delay}ms", attempt, delayMs);
                         _ = webLogger?.Warning($"[AK] version check failed (attempt {attempt}), retry in {delayMs}ms: {ex.Message}");
                         Thread.Sleep(delayMs);
                     }
@@ -125,8 +138,8 @@ namespace BusinessEntity.Authentik
 
                 if (version == null)
                 {
-                    logger.LogError(lastEx, "[AK] Unable to contact Authentik API (core/version) after retries");
-                    throw new InvalidOperationException("Authentik API is unavailable (core/version) after retries", lastEx);
+                    logger.LogError(lastEx, "[AK] Unable to contact Authentik API (core/system/version) after retries");
+                    throw new InvalidOperationException("Authentik API is unavailable (core/system/version) after retries", lastEx);
                 }
 
                 logger.LogInformation("Authentik version: {Version}", version.Version ?? "unknown");

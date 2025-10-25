@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BusinessEntity.Core.Contracts;
 using Microsoft.Extensions.Hosting;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Services
 {

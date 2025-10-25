@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using BusinessEntity.Contracts;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 
 namespace BusinessEntity.Pages

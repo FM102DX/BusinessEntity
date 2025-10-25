@@ -3,19 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.2.32616.157
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleOnlineMall.DataAccess", "SampleOnlineMall.DataAccess\SampleOnlineMall.DataAccess.csproj", "{294949CE-7807-4332-A572-D1BBD3491442}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleOnlineMall.Core", "SampleOnlineMall.Core\SampleOnlineMall.Core.csproj", "{153482A9-11EA-4BC4-965E-6E8F8042160A}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "WebLogger", "WebLogger", "{73E58599-8E32-4A18-88AF-DA652E84AF6B}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Frontend", "Frontend", "{D9D7416B-0506-454D-8CF5-53BB9A16E1A3}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ControlNode", "ControlNode", "{E5BC70C6-4830-4558-9551-2392590E4BF0}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ControlNode", "ControlNode\ControlNode.csproj", "{C28543E9-C736-4B78-843F-A86DF9BDC9F9}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleOnlineMall.Service", "SampleOnlineMall.Service\SampleOnlineMall.Service.csproj", "{123AE89A-036C-4A92-BBF8-B106CC74FF00}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BusinessEntity.Service", "BusinessEntity.Service\BusinessEntity.Service.csproj", "{9AF1B2E3-1B9D-4A0B-9D3F-DC9A0B3C9F01}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorServerWebLogger", "BlazorServerWebLogger\BlazorServerWebLogger.csproj", "{0BB14D07-9F88-4C98-AB08-40726AC01EFE}"
 EndProject
@@ -45,22 +37,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{294949CE-7807-4332-A572-D1BBD3491442}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{294949CE-7807-4332-A572-D1BBD3491442}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{294949CE-7807-4332-A572-D1BBD3491442}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{294949CE-7807-4332-A572-D1BBD3491442}.Release|Any CPU.Build.0 = Release|Any CPU
-		{153482A9-11EA-4BC4-965E-6E8F8042160A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{153482A9-11EA-4BC4-965E-6E8F8042160A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{153482A9-11EA-4BC4-965E-6E8F8042160A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{153482A9-11EA-4BC4-965E-6E8F8042160A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C28543E9-C736-4B78-843F-A86DF9BDC9F9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C28543E9-C736-4B78-843F-A86DF9BDC9F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C28543E9-C736-4B78-843F-A86DF9BDC9F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C28543E9-C736-4B78-843F-A86DF9BDC9F9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{123AE89A-036C-4A92-BBF8-B106CC74FF00}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{123AE89A-036C-4A92-BBF8-B106CC74FF00}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{123AE89A-036C-4A92-BBF8-B106CC74FF00}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{123AE89A-036C-4A92-BBF8-B106CC74FF00}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9AF1B2E3-1B9D-4A0B-9D3F-DC9A0B3C9F01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9AF1B2E3-1B9D-4A0B-9D3F-DC9A0B3C9F01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9AF1B2E3-1B9D-4A0B-9D3F-DC9A0B3C9F01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9AF1B2E3-1B9D-4A0B-9D3F-DC9A0B3C9F01}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -82,7 +62,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{C28543E9-C736-4B78-843F-A86DF9BDC9F9} = {E5BC70C6-4830-4558-9551-2392590E4BF0}
+		{9AF1B2E3-1B9D-4A0B-9D3F-DC9A0B3C9F01} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{0BB14D07-9F88-4C98-AB08-40726AC01EFE} = {73E58599-8E32-4A18-88AF-DA652E84AF6B}
 		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{014E6624-AEA5-4F47-B485-E4A762341EA8} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}

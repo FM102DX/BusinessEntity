@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BusinessEntity.DataAccess\BusinessEntity.DataAccess.csproj" />
-    <ProjectReference Include="..\SampleOnlineMall.Service\SampleOnlineMall.Service.csproj" />
+    <ProjectReference Include="..\BusinessEntity.Service\BusinessEntity.Service.csproj" />
   </ItemGroup>
 
 </Project>

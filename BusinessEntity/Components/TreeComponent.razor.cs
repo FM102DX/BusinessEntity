@@ -3,7 +3,7 @@ using BusinessEntity.Models;
 using BusinessEntity.Core.Services;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 using System.Linq;
 using BusinessEntity.Contracts;
 using BusinessEntity.Services;

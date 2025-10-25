@@ -90,13 +90,13 @@ namespace BusinessEntity.Authentik
         }
 
         /// <summary>
-        /// Returns Authentik version via /api/v3/core/version.
+        /// Returns Authentik version via /api/v3/core/system/version/.
         /// </summary>
         public async Task<VersionDto> GetVersion(Uri baseUrl, string token, CancellationToken ct = default)
         {
-            var uri = Combine(baseUrl, "/api/v3/core/version");
+            var uri = Combine(baseUrl, "/api/v3/core/system/version/");
             using var resp = await SendAsyncWithRetry(() => CreateJsonRequest(HttpMethod.Get, uri, token), ct);
-            return await ReadJsonOrThrow<VersionDto>(resp, "core/version");
+            return await ReadJsonOrThrow<VersionDto>(resp, "core/system/version");
         }
 
         /// <summary>

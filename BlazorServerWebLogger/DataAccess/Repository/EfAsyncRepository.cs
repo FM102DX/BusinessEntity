@@ -6,8 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SampleOnlineMall.WebLogger.DataAccess;
 using BlazorServerWebLogger.Contracts;
-using SampleOnlineMall.DataAccess.Models;
-using SampleOnlineMall.Service;
+using BusinessEntity.Service;
 using Radzen;
 
 namespace BlazorServerWebLogger.DataAccess.Repository

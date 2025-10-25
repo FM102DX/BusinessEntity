@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using SampleOnlineMall.WebLogger.Models;
 using BlazorServerWebLogger.Contracts;
 using AutoMapper;
-using SampleOnlineMall.Service.WebLogging;
+using BusinessEntity.Service.WebLogging;
 
 namespace BlazorServerWebLogger.Controllers
 {

@@ -23,7 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BusinessEntity.Core\BusinessEntity.Core.csproj" />
     <ProjectReference Include="..\BusinessEntity.DataAccess\BusinessEntity.DataAccess.csproj" />
-    <ProjectReference Include="..\SampleOnlineMall.Core\SampleOnlineMall.Core.csproj" />
+    <ProjectReference Include="..\BusinessEntity.Service\BusinessEntity.Service.csproj" />
   </ItemGroup>
   <PropertyGroup>
     <DockerDisableTLS>true</DockerDisableTLS>

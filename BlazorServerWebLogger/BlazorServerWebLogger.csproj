@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SampleOnlineMall.Core\SampleOnlineMall.Core.csproj" />
+    <ProjectReference Include="..\BusinessEntity.DataAccess\BusinessEntity.DataAccess.csproj" />
   </ItemGroup>
 
 </Project>

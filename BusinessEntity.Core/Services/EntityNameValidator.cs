@@ -1,4 +1,4 @@
-using SampleOnlineMall.WebLogger.Services;
+using BusinessEntity.WebLogger.Services;
 using System.Text.RegularExpressions;
 
 namespace BusinessEntity.Core.Services
