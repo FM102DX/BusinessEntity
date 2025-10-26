@@ -18,6 +18,8 @@
     <PackageReference Include="Radzen.Blazor" Version="5.7.2" />
     <PackageReference Include="ReactiveUI" Version="20.3.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="6.0.22" />
+    <PackageReference Include="Npgsql" Version="6.0.10" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,10 +30,4 @@
   <PropertyGroup>
     <DockerDisableTLS>true</DockerDisableTLS>
   </PropertyGroup>
-  <ItemGroup>
-    <Content Include="..\BusinessEntity.Resources\DataFill_01.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>Resources\DataFill_01.txt</Link>
-    </Content>
-  </ItemGroup>
 </Project>

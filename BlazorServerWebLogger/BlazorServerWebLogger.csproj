@@ -25,6 +25,8 @@
     <PackageReference Include="Radzen.Blazor" Version="5.7.2" />
     <PackageReference Include="ReactiveUI" Version="20.1.63" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="6.0.22" />
+    <PackageReference Include="Npgsql" Version="6.0.10" />
   </ItemGroup>
 
   <ItemGroup>
