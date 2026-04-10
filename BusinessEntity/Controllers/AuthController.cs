@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BusinessEntity.Services;
@@ -10,7 +9,8 @@ namespace BusinessEntity.Controllers
 {
     /// <summary>
     /// Контроллер точек входа аутентификации.
-    /// Login/Logout используют OpenID Connect; Callback оставлен для legacy OAuth.
+    /// Login/Logout используют Authentik через ApplicationSideAuthService.
+    /// Callback завершает code-flow и создаёт локальную cookie-сессию.
     /// </summary>
     [Route("auth")]
     public class AuthController : Controller
@@ -30,8 +30,7 @@ namespace BusinessEntity.Controllers
         }
 
         /// <summary>
-        /// Инициирует OIDC-челлендж к провайдеру (Authentik). Если пользователь уже
-        /// аутентифицирован, выполняет безопасный редирект на returnUrl или на '/'.
+        /// Перенаправляет браузер на Authentik authorize endpoint.
         /// </summary>
         [HttpGet("login")]
         public IActionResult Login(string? returnUrl = null)
@@ -45,19 +44,13 @@ namespace BusinessEntity.Controllers
                 return LocalRedirect(returnUrl ?? "/");
             }
 
-            // Запускаем OIDC-челлендж (Authentik)
-            var props = new AuthenticationProperties
-            {
-                RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl
-            };
-            _logger.LogInformation("[AuthController.Login] Challenging OIDC scheme with RedirectUri: {RedirectUri}", props.RedirectUri);
-            return Challenge(props, OpenIdConnectDefaults.AuthenticationScheme);
+            var loginUrl = _authService.GetLoginUrl(returnUrl);
+            _logger.LogInformation("[AuthController.Login] Redirecting to Authentik login URL: {LoginUrl}", loginUrl);
+            return Redirect(loginUrl);
         }
 
         /// <summary>
-        /// Legacy OAuth callback. В текущей схеме OIDC он не используется —
-        /// обработку завершает middleware на /signin-oidc. Оставлен для обратной
-        /// совместимости со старым ApplicationSideAuthService.
+        /// Callback для Authentik authorization-code flow.
         /// </summary>
         [HttpGet("callback")]
         public async Task<IActionResult> Callback(string? code, string? state, string? error)
@@ -131,22 +124,23 @@ namespace BusinessEntity.Controllers
         }
 
         /// <summary>
-        /// Завершает сессию: локальный cookie и удалённую OIDC-сессию (front-channel).
+        /// Завершает локальную сессию и инициирует logout в Authentik.
         /// </summary>
         [HttpGet("logout")]
         [Authorize]
-        public IActionResult Logout(string? returnUrl = null)
+        public async Task<IActionResult> Logout(string? returnUrl = null)
         {
-            _logger.LogInformation("[AuthController.Logout] Initiating OIDC sign-out. User: {User}", User.Identity?.Name);
-            var props = new AuthenticationProperties
+            _logger.LogInformation("[AuthController.Logout] Initiating sign-out. User: {User}", User.Identity?.Name);
+            await _authService.SignOutAsync();
+
+            var frontChannelLogoutUrl = _authService.GetFrontChannelLogoutUrl();
+            if (!string.IsNullOrWhiteSpace(frontChannelLogoutUrl))
             {
-                RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl
-            };
-            // Sign out both local cookie and remote OIDC session (front-channel)
-            return SignOut(
-                props,
-                CookieAuthenticationDefaults.AuthenticationScheme,
-                OpenIdConnectDefaults.AuthenticationScheme);
+                _logger.LogInformation("[AuthController.Logout] Redirecting to Authentik logout URL: {LogoutUrl}", frontChannelLogoutUrl);
+                return Redirect(frontChannelLogoutUrl);
+            }
+
+            return LocalRedirect(string.IsNullOrWhiteSpace(returnUrl) ? "/auth/logged-out" : returnUrl);
         }
     }
 }

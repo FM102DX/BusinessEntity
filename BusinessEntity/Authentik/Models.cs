@@ -13,11 +13,11 @@ using System.Text.Json.Serialization;
 namespace BusinessEntity.Authentik
 {
     /// <summary>
-    /// Version info returned by /api/v3/core/system/version/
+    /// Version info for Authentik (simplified, just for API availability check)
     /// </summary>
     internal class VersionDto
     {
-        [JsonPropertyName("version")] public string? Version { get; set; }
+        public string? Version { get; set; }
     }
 
     /// <summary>
@@ -34,8 +34,17 @@ namespace BusinessEntity.Authentik
     /// </summary>
     internal class FlowDto
     {
-        [JsonPropertyName("pk")] public int Pk { get; set; }
+        [JsonPropertyName("pk")] public string Pk { get; set; } = string.Empty;
         [JsonPropertyName("slug")] public string? Slug { get; set; }
+    }
+
+    /// <summary>
+    /// Redirect URI entry used by Authentik 2026.x provider APIs.
+    /// </summary>
+    internal class RedirectUriDto
+    {
+        [JsonPropertyName("matching_mode")] public string MatchingMode { get; set; } = "strict";
+        [JsonPropertyName("url")] public string Url { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -47,7 +56,7 @@ namespace BusinessEntity.Authentik
         [JsonPropertyName("name")] public string? Name { get; set; }
         [JsonPropertyName("client_id")] public string? ClientId { get; set; }
         [JsonPropertyName("client_secret")] public string? ClientSecret { get; set; }
-        [JsonPropertyName("redirect_uris")] public string[] RedirectUris { get; set; } = System.Array.Empty<string>();
+        [JsonPropertyName("redirect_uris")] public RedirectUriDto[] RedirectUris { get; set; } = System.Array.Empty<RedirectUriDto>();
     }
 
     /// <summary>
@@ -59,8 +68,9 @@ namespace BusinessEntity.Authentik
         [JsonPropertyName("client_type")] public string ClientType { get; set; } = "confidential";
         [JsonPropertyName("client_id")] public string ClientId { get; set; } = string.Empty;
         [JsonPropertyName("client_secret")] public string ClientSecret { get; set; } = string.Empty;
-        [JsonPropertyName("authorization_flow")] public int AuthorizationFlow { get; set; }
-        [JsonPropertyName("redirect_uris")] public string[] RedirectUris { get; set; } = System.Array.Empty<string>();
+        [JsonPropertyName("authorization_flow")] public string AuthorizationFlow { get; set; } = string.Empty;
+        [JsonPropertyName("invalidation_flow")] public string InvalidationFlow { get; set; } = string.Empty;
+        [JsonPropertyName("redirect_uris")] public RedirectUriDto[] RedirectUris { get; set; } = System.Array.Empty<RedirectUriDto>();
         [JsonPropertyName("client_authentication")] public string? ClientAuthentication { get; set; }
     }
 
@@ -69,7 +79,7 @@ namespace BusinessEntity.Authentik
     /// </summary>
     internal class ProviderPatchDto
     {
-        [JsonPropertyName("redirect_uris")] public string[] RedirectUris { get; set; } = System.Array.Empty<string>();
+        [JsonPropertyName("redirect_uris")] public RedirectUriDto[] RedirectUris { get; set; } = System.Array.Empty<RedirectUriDto>();
         [JsonPropertyName("client_secret")] public string? ClientSecret { get; set; }
     }
 
@@ -78,7 +88,7 @@ namespace BusinessEntity.Authentik
     /// </summary>
     internal class ApplicationDto
     {
-        [JsonPropertyName("pk")] public int Pk { get; set; }
+        [JsonPropertyName("pk")] public string Pk { get; set; } = string.Empty;
         [JsonPropertyName("slug")] public string? Slug { get; set; }
         [JsonPropertyName("name")] public string? Name { get; set; }
         [JsonPropertyName("provider")] public int? Provider { get; set; }

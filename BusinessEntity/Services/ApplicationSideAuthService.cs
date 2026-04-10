@@ -185,13 +185,9 @@ namespace BusinessEntity.Services
                 ["include_granted_scopes"] = "false"
             };
 
-            // Prefer provider-specific endpoint when configured (issuer_mode: per_provider)
-            var providerSlug = cfg["ProviderSlug"];
-            var path = string.IsNullOrWhiteSpace(providerSlug)
-                ? "/application/o/authorize/"
-                : $"/application/o/{providerSlug.Trim()}/authorize/";
-
-            return baseUrlForBrowser + QueryHelpers.AddQueryString(path, qs);
+            // In Authentik 2026.x the discovery document is provider-specific, but the
+            // interactive authorization endpoint is still the generic /application/o/authorize/.
+            return baseUrlForBrowser + QueryHelpers.AddQueryString("/application/o/authorize/", qs);
         }
 
         public async Task<OAuthCallbackResult> ProcessOAuthCallbackAsync(string code)

@@ -80,13 +80,15 @@ namespace BusinessEntity
 			var audience = jwtSettings["Audience"] ?? "business-entity";
 
 			// Authentication defaults
-			// - DefaultScheme/Authenticate: Cookies (local session)
-			// - DefaultChallenge: OpenID Connect (redirects unauthenticated users to Authentik)
+			// - DefaultScheme/Authenticate/Challenge: Cookies
+			//   Unauthenticated users are redirected to /auth/login where we build the
+			//   Authentik authorize URL manually. This avoids provider discovery issues
+			//   caused by Docker-internal hostnames.
 			builder.Services.AddAuthentication(options =>
 			{
 				options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 				options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-				options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+				options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 			})
 			.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
 			{
@@ -156,16 +158,23 @@ namespace BusinessEntity
                              ?? builder.Configuration["AuthentIC2:BaseUrl"]
                              ?? "http://localhost:9000";
             akBaseUrl = akBaseUrl.TrimEnd('/') + "/";
+            var akBrowserBaseUrl = Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL_FOR_BROWSER")
+                                   ?? builder.Configuration["AuthentIC2:BaseUrlForBrowser"]
+                                   ?? builder.Configuration["AuthentIC2:BaseUrl"]
+                                   ?? "http://localhost:9000";
+            var akHostHeader = new Uri(akBrowserBaseUrl).Authority;
 
             builder.Services.AddHttpClient("AuthentIC", client =>
             {
                 client.BaseAddress = new Uri(akBaseUrl);
                 client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.Host = akHostHeader;
             });
             builder.Services.AddHttpClient("AuthentIC2", client =>
             {
                 client.BaseAddress = new Uri(akBaseUrl);
                 client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.Host = akHostHeader;
             });
             // Регистрируем наш сервис авторизации
             builder.Services.AddScoped<IApplicationSideAuthService, ApplicationSideAuthService>();

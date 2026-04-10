@@ -121,8 +121,8 @@ namespace BusinessEntity.Authentik
                     attempt++;
                     try
                     {
-                        var versionUri = new Uri(baseUrl, "/api/v3/core/system/version/");
-                        logger.LogInformation("[AK] Version check attempt {Attempt} to {Uri}", attempt, versionUri);
+                        var versionUri = new Uri(baseUrl, "/api/v3/root/config/");
+                        logger.LogInformation("[AK] API check attempt {Attempt} to {Uri}", attempt, versionUri);
                         version = client.GetVersion(baseUrl, token).GetAwaiter().GetResult();
                         break;
                     }
@@ -130,7 +130,7 @@ namespace BusinessEntity.Authentik
                     {
                         lastEx = ex;
                         var delayMs = Math.Min(8000, 250 * (int)Math.Pow(2, Math.Min(6, attempt - 1)));
-                        logger.LogWarning(ex, "[AK] core/system/version failed (attempt {Attempt}), retrying in {Delay}ms", attempt, delayMs);
+                        logger.LogWarning(ex, "[AK] API check failed (attempt {Attempt}), retrying in {Delay}ms", attempt, delayMs);
                         _ = webLogger?.Warning($"[AK] version check failed (attempt {attempt}), retry in {delayMs}ms: {ex.Message}");
                         Thread.Sleep(delayMs);
                     }
@@ -138,8 +138,8 @@ namespace BusinessEntity.Authentik
 
                 if (version == null)
                 {
-                    logger.LogError(lastEx, "[AK] Unable to contact Authentik API (core/system/version) after retries");
-                    throw new InvalidOperationException("Authentik API is unavailable (core/system/version) after retries", lastEx);
+                    logger.LogError(lastEx, "[AK] Unable to contact Authentik API after retries");
+                    throw new InvalidOperationException("Authentik API is unavailable after retries", lastEx);
                 }
 
                 logger.LogInformation("Authentik version: {Version}", version.Version ?? "unknown");
@@ -152,8 +152,20 @@ namespace BusinessEntity.Authentik
                     _ = webLogger?.Error("[AK] No default authorization flow found");
                     throw new InvalidOperationException("No default authorization flow found in Authentik.");
                 }
+                var invalidationFlow = client.FindInvalidationFlow(baseUrl, token).GetAwaiter().GetResult();
+                if (invalidationFlow == null)
+                {
+                    _ = webLogger?.Error("[AK] No default invalidation flow found");
+                    throw new InvalidOperationException("No default invalidation flow found in Authentik.");
+                }
                 _ = webLogger?.Information($"[AK] Using authorization flow: pk={flow.Pk}, slug={flow.Slug}");
+                _ = webLogger?.Information($"[AK] Using invalidation flow: pk={invalidationFlow.Pk}, slug={invalidationFlow.Slug}");
                 logger.LogInformation("[AK] Authorization flow resolved: pk={Pk}, slug={Slug}", flow.Pk, flow.Slug);
+                logger.LogInformation("[AK] Invalidation flow resolved: pk={Pk}, slug={Slug}", invalidationFlow.Pk, invalidationFlow.Slug);
+
+                var redirectUriDtos = redirectUris
+                    .Select(uri => new RedirectUriDto { MatchingMode = "strict", Url = uri })
+                    .ToArray();
 
                 // Ensure provider
                 _ = webLogger?.Information($"[AK] Checking provider by client_id: {clientId}");
@@ -169,7 +181,9 @@ namespace BusinessEntity.Authentik
                         ClientId = clientId,
                         ClientSecret = clientSecret,
                         AuthorizationFlow = flow.Pk,
-                        RedirectUris = redirectUris
+                        InvalidationFlow = invalidationFlow.Pk,
+                        RedirectUris = redirectUriDtos,
+                        ClientAuthentication = "client_secret_basic"
                     }).GetAwaiter().GetResult();
                     provider = created;
                     _ = webLogger?.Information($"[AK] Provider created: pk={provider.Pk}, name={provider.Name}");
@@ -179,7 +193,8 @@ namespace BusinessEntity.Authentik
                 {
                     // Update redirect URIs or secret if changed
                     var needSecretUpdate = !string.IsNullOrWhiteSpace(clientSecret) && clientSecret != provider.ClientSecret;
-                    var needRedirectUpdate = !provider.RedirectUris.SequenceEqual(redirectUris);
+                    var existingRedirectUrls = provider.RedirectUris.Select(x => x.Url).ToArray();
+                    var needRedirectUpdate = !existingRedirectUrls.SequenceEqual(redirectUris, StringComparer.OrdinalIgnoreCase);
                     if (needSecretUpdate || needRedirectUpdate)
                     {
                         logger.LogInformation("Patching provider {Pk}: secret? {Secret}, redirect URIs? {Redirect}", provider.Pk, needSecretUpdate, needRedirectUpdate);
@@ -187,7 +202,7 @@ namespace BusinessEntity.Authentik
                         provider = client.PatchProvider(baseUrl, token, provider.Pk, new ProviderPatchDto
                         {
                             ClientSecret = needSecretUpdate ? clientSecret : null,
-                            RedirectUris = needRedirectUpdate ? redirectUris : provider.RedirectUris
+                            RedirectUris = needRedirectUpdate ? redirectUriDtos : provider.RedirectUris
                         }).GetAwaiter().GetResult();
                         _ = webLogger?.Information($"[AK] Provider patched: pk={provider.Pk}");
                         logger.LogInformation("[AK] Provider patched: pk={Pk}, redirects={RedirectCount}", provider.Pk, provider.RedirectUris?.Length ?? 0);
@@ -238,7 +253,8 @@ namespace BusinessEntity.Authentik
                 var app2 = client.GetApplicationBySlug(baseUrl, token, slug).GetAwaiter().GetResult();
                 var providerOk = provider2 != null;
                 var appOk = app2 != null && app2.Provider == (provider2?.Pk ?? -1);
-                var redirectsOk = provider2 != null && provider2.RedirectUris.SequenceEqual(redirectUris);
+                var redirectsOk = provider2 != null &&
+                                  provider2.RedirectUris.Select(x => x.Url).SequenceEqual(redirectUris, StringComparer.OrdinalIgnoreCase);
                 logger.LogInformation("[AK] Post-verify results: providerOk={ProviderOk}, appOk={AppOk}, redirectsOk={RedirectsOk}, providerPk={ProviderPk}, appPk={AppPk}",
                     providerOk, appOk, redirectsOk, provider2?.Pk, app2?.Pk);
                 _ = webLogger?.Information($"[AK] Post-verify: providerOk={providerOk}, appOk={appOk}, redirectsOk={redirectsOk}");
