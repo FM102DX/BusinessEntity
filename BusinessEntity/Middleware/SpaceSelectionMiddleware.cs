@@ -1,4 +1,6 @@
 using BusinessEntity.Contracts;
+using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.Contracts;
 
 namespace BusinessEntity.Middleware
 {
@@ -39,9 +41,25 @@ namespace BusinessEntity.Middleware
 
             if (isAuthenticated && !shouldBypass && !userContext.HasSelectedSpace)
             {
-                _logger.LogDebug("No Space selected, redirecting to /space-selection");
-                context.Response.Redirect("/space-selection");
-                return;
+                var repository = context.RequestServices.GetRequiredService<IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity>>();
+                var spaces = await repository.GetAllAsync(e => e.EntityType == BusinessEntityTypeEnum.Space, ct: context.RequestAborted);
+
+                var defaultSpace = spaces
+                    .OrderByDescending(space => string.Equals(space.Name, "Документы", StringComparison.OrdinalIgnoreCase))
+                    .ThenBy(space => space.Name)
+                    .FirstOrDefault();
+
+                if (defaultSpace != null)
+                {
+                    userContext.SetSpace(defaultSpace.Id, defaultSpace.Name);
+                    _logger.LogInformation("Auto-selected default space {SpaceName} ({SpaceId}) for authenticated user", defaultSpace.Name, defaultSpace.Id);
+                }
+                else
+                {
+                    _logger.LogDebug("No spaces available, redirecting to /space-selection");
+                    context.Response.Redirect("/space-selection");
+                    return;
+                }
             }
 
             await _next(context);

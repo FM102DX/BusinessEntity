@@ -24,6 +24,13 @@
     <ProjectReference Include="..\BusinessEntity.DataAccess\BusinessEntity.DataAccess.csproj" />
     <ProjectReference Include="..\BusinessEntity.Service\BusinessEntity.Service.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\BusinessEntity.Resources\DataFill_01.txt" Link="Resources\DataFill_01.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
   <PropertyGroup>
     <DockerDisableTLS>true</DockerDisableTLS>
   </PropertyGroup>

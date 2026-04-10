@@ -68,11 +68,16 @@ namespace BusinessEntity.Services
                 string? path = candidates.FirstOrDefault(File.Exists);
                 if (path == null)
                 {
-                    var ex = new FileNotFoundException("Data fill source file not found via candidate paths.", candidates.First());
-                    ex.Data["Candidates"] = string.Join(" | ", candidates);
-                    ex.Data["ContentRootPath"] = _env.ContentRootPath;
-                    ex.Data["BaseDirectory"] = AppContext.BaseDirectory;
-                    throw ex;
+                    _logger?.Warning("Data fill source file not found. Falling back to built-in sample lines.");
+                    _lines = new List<string>
+                    {
+                        "Добро пожаловать в демонстрационное пространство документов.",
+                        "Этот документ был создан автоматическим сидером приложения.",
+                        "Здесь можно хранить заметки, описания процессов и рабочие материалы.",
+                        "Папки и документы созданы для демонстрации дерева пространства.",
+                        "Если нужно, наполнение можно заменить данными из внешнего файла."
+                    };
+                    return;
                 }
 
                 var lines = File.ReadAllLines(path)
