@@ -25,11 +25,6 @@ namespace BusinessEntity
             return returnUrl;
         }
 
-        protected void RedirectToUnauthorized()
-        {
-            Navigation.NavigateTo("/unauthorized", true);
-        }
-
         protected override void OnInitialized()
         {
             base.OnInitialized();

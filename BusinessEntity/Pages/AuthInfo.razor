@@ -92,18 +92,18 @@
                         </div>
                     }
 
-                    <!-- JWT Token информация (если есть) -->
-                    @if (!string.IsNullOrEmpty(JwtToken))
+                    <!-- ID Token информация (если есть) -->
+                    @if (!string.IsNullOrEmpty(IdentityToken))
                     {
                         <div class="token-section">
                             <h4>Информация о токене:</h4>
                             <div class="token-info">
-                                <p><strong>JWT токен присутствует:</strong> Да</p>
-                                <p><strong>Длина токена:</strong> @JwtToken.Length символов</p>
+                                <p><strong>ID токен присутствует:</strong> Да</p>
+                                <p><strong>Длина токена:</strong> @IdentityToken.Length символов</p>
                                 <details>
                                     <summary>Показать токен (осторожно!)</summary>
                                     <div class="token-value">
-                                        <code>@JwtToken</code>
+                                        <code>@IdentityToken</code>
                                     </div>
                                 </details>
                             </div>
@@ -126,7 +126,7 @@
         <div class="alert alert-warning">
             <h4>Требуется авторизация</h4>
             <p>Для просмотра информации об авторизации необходимо войти в систему.</p>
-            <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentic</button>
+            <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentik</button>
         </div>
     </NotAuthorized>
 </AuthorizeView>

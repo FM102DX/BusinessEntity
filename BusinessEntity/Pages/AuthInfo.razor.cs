@@ -4,20 +4,20 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
 using System.Security.Claims;
-using BusinessEntity.Contracts;
+using BusinessEntity.Services;
 
 namespace BusinessEntity.Pages
 {
     public partial class AuthInfo : ComponentBase
     {
-        [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
+        [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<AuthInfo> Logger { get; set; } = default!;
 
         private string? CurrentUserName { get; set; }
         private string? CurrentUserEmail { get; set; }
         private string? CurrentUserId { get; set; }
-        private string? JwtToken { get; set; }
+        private string? IdentityToken { get; set; }
         private ClaimsPrincipal? CurrentUser { get; set; }
         private List<Claim> AllClaims { get; set; } = new();
         private Dictionary<string, List<Claim>> ClaimsByType { get; set; } = new();
@@ -36,7 +36,7 @@ namespace BusinessEntity.Pages
                     // Получаем базовую информацию о пользователе
                     CurrentUserName = await AuthService.GetUserNameAsync();
                     CurrentUserEmail = await AuthService.GetUserEmailAsync();
-                    JwtToken = await AuthService.GetJwtTokenAsync();
+                    IdentityToken = await AuthService.GetIdentityTokenAsync();
                     
                     // Получаем полный объект пользователя с клеймами
                     CurrentUser = await AuthService.GetCurrentUserAsync();
@@ -75,7 +75,7 @@ namespace BusinessEntity.Pages
             try
             {
                 var loginUrl = AuthService.GetLoginUrl("/authinfo");
-                Logger.LogInformation($"Redirecting user to Authentic login url={loginUrl}");
+                Logger.LogInformation($"Redirecting user to Authentik login url={loginUrl}");
                 Navigation.NavigateTo(loginUrl, forceLoad: true);
             }
             catch (Exception ex)
@@ -133,7 +133,6 @@ namespace BusinessEntity.Pages
                 "preferred_username" => "Предпочитаемое имя пользователя",
                 "given_name" => "Имя",
                 "family_name" => "Фамилия",
-                "jwt_token" => "JWT Токен",
                 _ => claimType
             };
         }

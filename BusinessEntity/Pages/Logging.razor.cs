@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Components;
-using BusinessEntity.Contracts;
+using BusinessEntity.Services;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 
@@ -7,7 +7,7 @@ namespace BusinessEntity.Pages
 {
     public partial class Logging : ComponentBase
     {
-        [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
+        [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Logging> Logger { get; set; } = default!;
         [Inject] public IWebLoggerService WebLogger { get; set; } = default!;
@@ -98,7 +98,7 @@ namespace BusinessEntity.Pages
             try
             {
                 var loginUrl = AuthService.GetLoginUrl("/logging");
-                Logger.LogInformation($"Redirecting user to Authentic login url={loginUrl}");
+                Logger.LogInformation($"Redirecting user to Authentik login url={loginUrl}");
                 Navigation.NavigateTo(loginUrl, forceLoad: true);
             }
             catch (Exception ex)

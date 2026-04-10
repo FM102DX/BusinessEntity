@@ -8,12 +8,12 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
 using System.Security.Claims;
-using BusinessEntity.Contracts;
+using BusinessEntity.Services;
 
 namespace BusinessEntity.Pages
 {    public partial class Index : ComponentBase
     {
-        [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
+        [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
         [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
@@ -95,7 +95,7 @@ namespace BusinessEntity.Pages
             try
             {
                 var loginUrl = AuthService.GetLoginUrl("/");
-                Logger.LogInformation($"Redirecting user to Authentic login url={loginUrl}");
+                Logger.LogInformation($"Redirecting user to Authentik login url={loginUrl}");
                 Navigation.NavigateTo(loginUrl, forceLoad: true);
             }
             catch (Exception ex)
