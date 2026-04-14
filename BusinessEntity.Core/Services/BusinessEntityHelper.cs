@@ -128,6 +128,13 @@ namespace BusinessEntity.Core.Services
             return await _businessEntityRepository.GetAllAsync(null, take);
         }
 
+        public async Task<IReadOnlyList<Classes.BusinessEntity>> GetSpacesAsync(int? take = null)
+        {
+            return await _businessEntityRepository.GetAllAsync(
+                e => e.EntityType == BusinessEntityTypeEnum.Space,
+                take);
+        }
+
         public async Task<IReadOnlyList<Relation>> GetAllRelations(int? take = null)
         {
             return await _relationRepository.GetAllAsync(null, take);

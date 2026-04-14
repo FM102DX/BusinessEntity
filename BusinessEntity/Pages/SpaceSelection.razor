@@ -1,7 +1,7 @@
 @page "/space-selection"
 @attribute [Authorize]
 @inject BusinessEntity.Contracts.IUserContextService UserContext
-@inject global::BusinessEntity.Core.Contracts.IAsyncRepository<global::BusinessEntity.Core.Classes.BusinessEntity> Repository
+@inject global::BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper
 @inject NavigationManager NavManager
 @inject Microsoft.JSInterop.IJSRuntime JS
 
@@ -33,7 +33,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var list = await Repository.GetAllAsync(e => e.EntityType == global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Space);
+        var list = await BusinessEntityHelper.GetSpacesAsync();
         spaces = list.ToList();
     }
 
