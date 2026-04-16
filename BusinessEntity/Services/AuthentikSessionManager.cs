@@ -110,8 +110,7 @@ namespace BusinessEntity.Services
                 ["redirect_uri"] = _redirectUri,
                 ["response_type"] = "code",
                 ["scope"] = _scope,
-                ["state"] = state,
-                ["prompt"] = "login"
+                ["state"] = state
             };
 
             return _browserBaseUrl + QueryHelpers.AddQueryString("/application/o/authorize/", query);
