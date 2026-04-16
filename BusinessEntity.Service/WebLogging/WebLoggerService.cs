@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Runtime;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using BusinessEntity.Service;
@@ -30,6 +31,14 @@ namespace BusinessEntity.WebLogger.Services
         private WebLoggerLocalSettings _settings;
         private GenericAppSettings _genAppSettings;
         private string _host;
+        private readonly HttpClient _httpClient;
+        private int _consecutiveFailures;
+        private DateTime _suspendedUntilUtc = DateTime.MinValue;
+
+        private static readonly TimeSpan LogRequestTimeout = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan SuspensionDuration = TimeSpan.FromMinutes(1);
+        private const int FailureThresholdBeforeSuspension = 5;
+
         public WebLoggerService(WebLoggerLocalSettings settings, GenericAppSettings genAppSettings)
         {
            // Console.WriteLine($"Constructing class WebLoggerService");
@@ -39,6 +48,10 @@ namespace BusinessEntity.WebLogger.Services
             _host = _genAppSettings.IsDocker ? _settings.HostAliasWhenDocker : _settings.HostAliasWhenIISExpress;
             //Console.WriteLine($"ServiceCode={_settings.ServiceCode}");
             _loggerUrl = $"http://{_host}/api/WebLogger/CreateLogRecord";
+            _httpClient = new HttpClient
+            {
+                Timeout = LogRequestTimeout
+            };
             //Console.WriteLine($"LoggerUrl={_loggerUrl}");
         }
 
@@ -48,30 +61,30 @@ namespace BusinessEntity.WebLogger.Services
         }
         public Task Debug(string text)
         {
-            _ = Task.Run(() => SendLogAsync("Debug", text));
+            _ = SendLogAsync("Debug", text);
             return Task.CompletedTask;
         }
 
         public Task Information(string text)
         {
-            _ = Task.Run(() => SendLogAsync("Info", text));
+            _ = SendLogAsync("Info", text);
             return Task.CompletedTask;
         }
 
         public Task Warning(string text)
         {
-            _ = Task.Run(() => SendLogAsync("Warning", text));
+            _ = SendLogAsync("Warning", text);
             return Task.CompletedTask;
         }
         public Task Error(string text)
         {
-            _ = Task.Run(() => SendLogAsync("Error", text));
+            _ = SendLogAsync("Error", text);
             return Task.CompletedTask;
         }
         public Task Error(Exception ex)
         {
             var details = FormatException(ex);
-            _ = Task.Run(() => SendLogAsync("Error", details));
+            _ = SendLogAsync("Error", details);
             return Task.CompletedTask;
         }
         public Task SendObject(object data)
@@ -79,13 +92,14 @@ namespace BusinessEntity.WebLogger.Services
             // Сериализация объекта в JSON
             string serializedData = JsonConvert.SerializeObject(data, Formatting.Indented);
 
-            _ = Task.Run(() => SendLogAsync("OBJECT", serializedData));
+            _ = SendLogAsync("OBJECT", serializedData);
             return Task.CompletedTask;
         }
 
         private async Task SendLogAsync(string messageType, string message)
         {
             if (!_isActive) return;
+            if (DateTime.UtcNow < _suspendedUntilUtc) return;
             try
             {
                 var logEntry = new LogEntryTransferDto
@@ -96,16 +110,28 @@ namespace BusinessEntity.WebLogger.Services
                     Message = message
                 };
                 //Console.WriteLine($"LGR_P1 -- sending message {message}");
-                using var httpClient = new HttpClient();
                 //Console.WriteLine($"LGR_P2");
                 var content = new StringContent(Newtonsoft.Json.JsonConvert.SerializeObject(logEntry), Encoding.UTF8, "application/json");
                 //Console.WriteLine($"LGR_P3 url={_loggerUrl} content={content} base={httpClient.BaseAddress}");
-                var response = await httpClient.PostAsync(_loggerUrl, content);
+                var response = await _httpClient.PostAsync(_loggerUrl, content);
                 //Console.WriteLine($"LGR_P4 {response.IsSuccessStatusCode} {response.ToString()}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Interlocked.Exchange(ref _consecutiveFailures, 0);
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"An error occurred: msg={ex.Message} inn={ex.InnerException?.Message}");
+                var failures = Interlocked.Increment(ref _consecutiveFailures);
+                if (failures >= FailureThresholdBeforeSuspension)
+                {
+                    _suspendedUntilUtc = DateTime.UtcNow.Add(SuspensionDuration);
+                    Console.WriteLine($"[WebLoggerService] Suspended outgoing log delivery for {SuspensionDuration.TotalSeconds} seconds after {failures} failures. Last error: {ex.Message}");
+                    Interlocked.Exchange(ref _consecutiveFailures, 0);
+                    return;
+                }
+
+                Console.WriteLine($"[WebLoggerService] Log delivery failed ({failures}/{FailureThresholdBeforeSuspension}) to {_loggerUrl}: {ex.Message}");
             }
         }
 
