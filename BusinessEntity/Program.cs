@@ -3,6 +3,7 @@ using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Services;
 using BusinessEntity.DataAccess.Classes;
 using BusinessEntity.DataAccess.Repositories;
+using BusinessEntity.MiniApps.UserMiniApp.Registration;
 using BusinessEntity.Service;
 using BusinessEntity.Service.WebLogging;
 using BusinessEntity.Services;
@@ -85,8 +86,9 @@ namespace BusinessEntity
 			});
 
 			builder.Services.AddAuthorization();
-			builder.Services.AddHttpContextAccessor();
+            builder.Services.AddHttpContextAccessor();
             builder.Services.AddScoped<AuthentikSessionManager>();
+            builder.Services.AddUserMiniApp();
 
             builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
             builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity>, InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntity>>();

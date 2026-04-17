@@ -1,24 +1,20 @@
-using System.Collections.ObjectModel;
-using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.Services;
+using BusinessEntity.Core.Contracts;
 using BusinessEntity.Models;
-using DynamicData;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
-using ReactiveUI;
-using System.Security.Claims;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
+using Microsoft.AspNetCore.Components;
 
 namespace BusinessEntity.Pages
 {    public partial class Index : ComponentBase
     {
         [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
+        [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
         [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
         [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
-        [Inject] public BusinessEntity.Services.ITreeSelectionService TreeSelectionService { get; set; } = default!;
+        [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
         
         private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }
@@ -35,18 +31,13 @@ namespace BusinessEntity.Pages
         {
             try
             {
-                IsAuthenticated = await AuthService.IsUserAuthenticatedAsync();
-                  if (IsAuthenticated)
+                var currentUser = await UserConnector.GetCurrentUserAsync();
+                IsAuthenticated = currentUser?.IsAuthenticated == true;
+
+                if (IsAuthenticated)
                 {
-                    CurrentUserName = await AuthService.GetUserNameAsync();
-                    
-                    // Получаем ID пользователя из клеймов
-                    var currentUser = await AuthService.GetCurrentUserAsync();
-                    if (currentUser?.Identity != null)
-                    {
-                        CurrentUserId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                                       ?? currentUser.FindFirst("sub")?.Value;
-                    }
+                    CurrentUserName = currentUser!.UserName;
+                    CurrentUserId = currentUser.UserId;
                     
                     // Получаем возможные отношения между сущностями
                     PossibleRelations = RelationTypesProvider.GetPossibleRelations();
@@ -61,7 +52,7 @@ namespace BusinessEntity.Pages
                     var entities = await BusinessEntityHelper.GetAllBusinessEntities();
                     BusinessEntities = entities.ToList();
                     
-                    Logger.LogInformation($"User {CurrentUserName} accessed main page");
+                    Logger.LogInformation("User {UserName} accessed main page", CurrentUserName);
                 }
                 else
                 {
@@ -81,7 +72,7 @@ namespace BusinessEntity.Pages
         {
             try
             {
-                Logger.LogInformation($"Tree selection changed: {selectedNodes.Count} nodes selected");
+                Logger.LogInformation("Tree selection changed: {Count} nodes selected", selectedNodes.Count);
                 StateHasChanged(); // Обновляем UI при изменении выбора
             }
             catch (Exception ex)
@@ -95,7 +86,7 @@ namespace BusinessEntity.Pages
             try
             {
                 var loginUrl = AuthService.GetLoginUrl("/");
-                Logger.LogInformation($"Redirecting user to Authentik login url={loginUrl}");
+                Logger.LogInformation("Redirecting user to Authentik login url={LoginUrl}", loginUrl);
                 Navigation.NavigateTo(loginUrl, forceLoad: true);
             }
             catch (Exception ex)

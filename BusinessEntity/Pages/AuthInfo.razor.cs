@@ -1,62 +1,48 @@
-using System.Collections.ObjectModel;
-using DynamicData;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
-using ReactiveUI;
-using System.Security.Claims;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
+using Microsoft.AspNetCore.Components;
 
 namespace BusinessEntity.Pages
 {
     public partial class AuthInfo : ComponentBase
     {
         [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
+        [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<AuthInfo> Logger { get; set; } = default!;
 
+        private BusinessEntityUser? CurrentUserModel { get; set; }
         private string? CurrentUserName { get; set; }
         private string? CurrentUserEmail { get; set; }
         private string? CurrentUserId { get; set; }
         private string? IdentityToken { get; set; }
-        private ClaimsPrincipal? CurrentUser { get; set; }
-        private List<Claim> AllClaims { get; set; } = new();
-        private Dictionary<string, List<Claim>> ClaimsByType { get; set; } = new();
+        private List<BusinessEntityClaim> AllClaims { get; set; } = new();
+        private Dictionary<string, List<BusinessEntityClaim>> ClaimsByType { get; set; } = new();
+        private List<string> AuthentikGroups { get; set; } = new();
 
-        // Computed properties for UI
-        private string AuthenticationStatusText => CurrentUser?.Identity?.IsAuthenticated == true ? "Да" : "Нет";
+        private string AuthenticationStatusText => CurrentUserModel?.IsAuthenticated == true ? "Да" : "Нет";
 
         protected override async Task OnInitializedAsync()
         {
             try
             {
-                var isAuthenticated = await AuthService.IsUserAuthenticatedAsync();
-                
-                if (isAuthenticated)
+                CurrentUserModel = await UserConnector.GetCurrentUserAsync();
+
+                if (CurrentUserModel?.IsAuthenticated == true)
                 {
-                    // Получаем базовую информацию о пользователе
-                    CurrentUserName = await AuthService.GetUserNameAsync();
-                    CurrentUserEmail = await AuthService.GetUserEmailAsync();
+                    CurrentUserName = CurrentUserModel.UserName;
+                    CurrentUserEmail = CurrentUserModel.Email;
+                    CurrentUserId = CurrentUserModel.UserId;
                     IdentityToken = await AuthService.GetIdentityTokenAsync();
-                    
-                    // Получаем полный объект пользователя с клеймами
-                    CurrentUser = await AuthService.GetCurrentUserAsync();
-                    
-                    if (CurrentUser?.Identity != null)
-                    {
-                        // Извлекаем все клеймы
-                        AllClaims = CurrentUser.Claims.ToList();
-                        
-                        // Группируем клеймы по типам для удобного отображения
-                        ClaimsByType = AllClaims
-                            .GroupBy(c => c.Type)
-                            .ToDictionary(g => g.Key, g => g.ToList());
-                        
-                        // Получаем ID пользователя из клеймов
-                        CurrentUserId = CurrentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                                       ?? CurrentUser.FindFirst("sub")?.Value;
-                    }
-                    
-                    Logger.LogInformation($"User {CurrentUserName} accessed AuthInfo page with {AllClaims.Count} claims");
+
+                    AllClaims = CurrentUserModel.Claims.ToList();
+                    ClaimsByType = AllClaims
+                        .GroupBy(claim => claim.Type)
+                        .ToDictionary(group => group.Key, group => group.ToList());
+                    AuthentikGroups = CurrentUserModel.Groups.ToList();
+
+                    Logger.LogInformation("User {UserName} accessed AuthInfo page with {ClaimsCount} claims", CurrentUserName, AllClaims.Count);
                 }
                 else
                 {
@@ -75,7 +61,7 @@ namespace BusinessEntity.Pages
             try
             {
                 var loginUrl = AuthService.GetLoginUrl("/authinfo");
-                Logger.LogInformation($"Redirecting user to Authentik login url={loginUrl}");
+                Logger.LogInformation("Redirecting user to Authentik login url={LoginUrl}", loginUrl);
                 Navigation.NavigateTo(loginUrl, forceLoad: true);
             }
             catch (Exception ex)
@@ -88,15 +74,17 @@ namespace BusinessEntity.Pages
         {
             try
             {
-                Logger.LogInformation($"User {CurrentUserName} is requesting sign out from AuthInfo page");
-                
-                // Очищаем локальные данные
+                Logger.LogInformation("User {UserName} is requesting sign out from AuthInfo page", CurrentUserName);
+
+                CurrentUserModel = null;
                 CurrentUserName = null;
                 CurrentUserEmail = null;
-                
-                // Принудительно обновляем компонент
+                CurrentUserId = null;
+                AuthentikGroups.Clear();
+                AllClaims.Clear();
+                ClaimsByType.Clear();
+
                 StateHasChanged();
-                
                 Logger.LogInformation("Redirecting to sign out page");
             }
             catch (Exception ex)
@@ -105,10 +93,9 @@ namespace BusinessEntity.Pages
             }
             finally
             {
-                // Перенаправляем на страницу выхода
                 Navigation.NavigateTo("/auth/logout", forceLoad: true);
             }
-            
+
             return Task.CompletedTask;
         }
 
@@ -116,13 +103,13 @@ namespace BusinessEntity.Pages
         {
             return claimType switch
             {
-                ClaimTypes.NameIdentifier => "ID пользователя",
-                ClaimTypes.Name => "Имя пользователя", 
-                ClaimTypes.Email => "Email",
-                ClaimTypes.GivenName => "Имя",
-                ClaimTypes.Surname => "Фамилия",
-                ClaimTypes.Role => "Роль",
-                ClaimTypes.AuthenticationMethod => "Метод аутентификации",
+                System.Security.Claims.ClaimTypes.NameIdentifier => "ID пользователя",
+                System.Security.Claims.ClaimTypes.Name => "Имя пользователя",
+                System.Security.Claims.ClaimTypes.Email => "Email",
+                System.Security.Claims.ClaimTypes.GivenName => "Имя",
+                System.Security.Claims.ClaimTypes.Surname => "Фамилия",
+                System.Security.Claims.ClaimTypes.Role => "Роль",
+                System.Security.Claims.ClaimTypes.AuthenticationMethod => "Метод аутентификации",
                 "sub" => "Субъект (Subject)",
                 "aud" => "Аудитория (Audience)",
                 "iss" => "Издатель (Issuer)",
@@ -130,6 +117,7 @@ namespace BusinessEntity.Pages
                 "exp" => "Истекает (Expires)",
                 "nbf" => "Не действителен до (Not Before)",
                 "jti" => "JWT ID",
+                "groups" => "Группы пользователя",
                 "preferred_username" => "Предпочитаемое имя пользователя",
                 "given_name" => "Имя",
                 "family_name" => "Фамилия",

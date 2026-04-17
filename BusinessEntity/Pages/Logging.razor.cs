@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -8,6 +9,7 @@ namespace BusinessEntity.Pages
     public partial class Logging : ComponentBase
     {
         [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
+        [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Logging> Logger { get; set; } = default!;
         [Inject] public IWebLoggerService WebLogger { get; set; } = default!;
@@ -59,14 +61,15 @@ namespace BusinessEntity.Pages
 
             try
             {
-                var userName = await AuthService.GetUserNameAsync();
+                var currentUser = await UserConnector.GetCurrentUserAsync();
+                var userName = currentUser?.UserName ?? "Unknown";
                 var fullMessage = $"[{userName}] {LogMessage}";
                 
                 // Отправляем сообщение в веб-логгер
                 await WebLogger.Information(fullMessage);
                 
                 // Логгируем в консольный логгер
-                Logger.LogInformation($"Message sent to web logger: {fullMessage}");
+                Logger.LogInformation("Message sent to web logger: {Message}", fullMessage);
                 
                 SetStatusMessage($"Сообщение успешно отправлено в логгер: \"{LogMessage}\"", false);
                 
@@ -75,7 +78,7 @@ namespace BusinessEntity.Pages
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, $"Error sending message to web logger: {LogMessage}");
+                Logger.LogError(ex, "Error sending message to web logger: {Message}", LogMessage);
                 SetStatusMessage($"Ошибка при отправке сообщения: {ex.Message}", true);
             }
             finally
@@ -98,7 +101,7 @@ namespace BusinessEntity.Pages
             try
             {
                 var loginUrl = AuthService.GetLoginUrl("/logging");
-                Logger.LogInformation($"Redirecting user to Authentik login url={loginUrl}");
+                Logger.LogInformation("Redirecting user to Authentik login url={LoginUrl}", loginUrl);
                 Navigation.NavigateTo(loginUrl, forceLoad: true);
             }
             catch (Exception ex)
