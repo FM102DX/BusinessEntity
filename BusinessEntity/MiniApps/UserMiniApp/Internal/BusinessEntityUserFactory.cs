@@ -5,15 +5,18 @@ using BusinessEntity.Services;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Internal
 {
+    // Преобразует текущий ClaimsPrincipal из Authentik в доменный BusinessEntityUser.
     internal sealed class BusinessEntityUserFactory
     {
         private readonly AuthentikSessionManager _authentikSessionManager;
 
+        // Сохраняет доступ к текущей Authentik session для последующего построения пользователя.
         public BusinessEntityUserFactory(AuthentikSessionManager authentikSessionManager)
         {
             _authentikSessionManager = authentikSessionManager;
         }
 
+        // Строит BusinessEntityUser из текущего principal и извлекает из claims группы и базовые поля.
         public async Task<BusinessEntityUser?> CreateAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -48,6 +51,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 claims.FirstOrDefault(claim => claim.Type == ClaimTypes.Email)?.Value
                 ?? claims.FirstOrDefault(claim => claim.Type == "email")?.Value;
 
+            // Нормализуем группы, даже если middleware отдаст их как JSON-массив в одном claim.
             var groups = ExtractGroups(claims);
 
             return new BusinessEntityUser(
@@ -59,6 +63,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 claims);
         }
 
+        // Извлекает группы пользователя из raw claims и приводит их к плоскому списку строк.
         private static IReadOnlyList<string> ExtractGroups(IEnumerable<BusinessEntityClaim> claims)
         {
             var groups = new List<string>();

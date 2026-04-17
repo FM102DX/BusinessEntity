@@ -3,6 +3,7 @@ using ReactiveUI;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Internal
 {
+    // Подписывает mini-app на bus-запросы и публикует ответы с текущим пользователем.
     internal sealed class UserMiniAppMessageHandler : IDisposable
     {
         private readonly IMessageBus _messageBus;
@@ -10,6 +11,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         private readonly ILogger<UserMiniAppMessageHandler> _logger;
         private IDisposable? _subscription;
 
+        // Получает bus, сервис mini-app и логгер для централизованной обработки запросов.
         public UserMiniAppMessageHandler(
             IMessageBus messageBus,
             UserMiniAppService userMiniAppService,
@@ -20,6 +22,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             _logger = logger;
         }
 
+        // Инициализирует единственную подписку на GetUserRequest для текущего scope mini-app.
         public void EnsureSubscribed()
         {
             if (_subscription != null)
@@ -29,11 +32,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
 
             _subscription = _messageBus
                 .Listen<GetUserRequest>()
+                // Передаём запрос в async-обработчик, который соберёт пользователя и отправит ответ.
                 .Subscribe(request => _ = HandleGetUserAsync(request));
 
             _logger.LogInformation("UserMiniApp subscribed to GetUserRequest messages.");
         }
 
+        // Обрабатывает bus-запрос пользователя и публикует типизированный ответ в bus.
         private async Task HandleGetUserAsync(GetUserRequest request)
         {
             try
@@ -48,6 +53,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             }
         }
 
+        // Освобождает подписку mini-app на bus при завершении scope.
         public void Dispose()
         {
             _subscription?.Dispose();
