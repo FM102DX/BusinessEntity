@@ -8,6 +8,11 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
     // Преобразует текущий ClaimsPrincipal из Authentik в доменный BusinessEntityUser.
     internal sealed class BusinessEntityUserFactory
     {
+        // Имя встроенного технического администратора Authentik.
+        private const string AkadminUserName = "akadmin";
+        // Бизнес-группа приложения, которая даёт общий административный признак.
+        private const string GeneralAdminsGroup = "BusinessEntityAdmins";
+
         private readonly AuthentikSessionManager _authentikSessionManager;
 
         // Сохраняет доступ к текущей Authentik session для последующего построения пользователя.
@@ -53,12 +58,18 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
 
             // Нормализуем группы, даже если middleware отдаст их как JSON-массив в одном claim.
             var groups = ExtractGroups(claims);
+            // Отмечаем встроенного технического администратора по имени аккаунта.
+            var isAkadmin = string.Equals(userName, AkadminUserName, StringComparison.OrdinalIgnoreCase);
+            // Общим администратором считаем только участника бизнес-группы администраторов приложения.
+            var isGeneralAdmin = groups.Any(group => string.Equals(group, GeneralAdminsGroup, StringComparison.OrdinalIgnoreCase));
 
             return new BusinessEntityUser(
                 userId,
                 userName,
                 email,
                 true,
+                isAkadmin,
+                isGeneralAdmin,
                 groups,
                 claims);
         }
