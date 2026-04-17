@@ -33,6 +33,13 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Если пространство уже восстановлено из cookies, страница выбора больше не нужна.
+        if (UserContext.HasSelectedSpace)
+        {
+            NavManager.NavigateTo("/");
+            return;
+        }
+
         var list = await BusinessEntityHelper.GetSpacesAsync();
         spaces = list.ToList();
     }

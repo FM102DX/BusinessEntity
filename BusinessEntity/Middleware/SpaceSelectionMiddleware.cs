@@ -41,25 +41,10 @@ namespace BusinessEntity.Middleware
 
             if (isAuthenticated && !shouldBypass && !userContext.HasSelectedSpace)
             {
-                var repository = context.RequestServices.GetRequiredService<IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity>>();
-                var spaces = await repository.GetAllAsync(e => e.EntityType == BusinessEntityTypeEnum.Space, ct: context.RequestAborted);
-
-                var defaultSpace = spaces
-                    .OrderByDescending(space => string.Equals(space.Name, "Документы", StringComparison.OrdinalIgnoreCase))
-                    .ThenBy(space => space.Name)
-                    .FirstOrDefault();
-
-                if (defaultSpace != null)
-                {
-                    userContext.SetSpace(defaultSpace.Id, defaultSpace.Name);
-                    _logger.LogInformation("Auto-selected default space {SpaceName} ({SpaceId}) for authenticated user", defaultSpace.Name, defaultSpace.Id);
-                }
-                else
-                {
-                    _logger.LogDebug("No spaces available, redirecting to /space-selection");
-                    context.Response.Redirect("/space-selection");
-                    return;
-                }
+                // Если пространство не восстановилось из cookies, всегда отправляем пользователя на явный выбор.
+                _logger.LogInformation("Authenticated user has no selected space in cookies/context, redirecting to /space-selection");
+                context.Response.Redirect("/space-selection");
+                return;
             }
 
             await _next(context);
