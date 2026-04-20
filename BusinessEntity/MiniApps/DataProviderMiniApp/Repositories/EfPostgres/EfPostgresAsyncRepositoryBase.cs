@@ -1,4 +1,5 @@
 using BusinessEntity.DataAccess.Classes;
+using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
@@ -15,6 +16,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Сохраняет фабрику потокобезопасных DbContext для дальнейших CRUD-операций.
     /// </summary>
+    // Сохраняет фабрику DbContext для всех дальнейших EF-операций.
     protected EfPostgresAsyncRepositoryBase(ThreadSafeDbContextFactory dbContextFactory)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
@@ -23,6 +25,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Возвращает набор записей с optional-фильтром и ограничением количества.
     /// </summary>
+    // Читает список записей из таблицы текущего DTO-типа.
     public async Task<IReadOnlyList<T>> GetAllAsync(Expression<Func<T, bool>>? filter = null, int? take = null, CancellationToken ct = default)
     {
         using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_read");
@@ -46,6 +49,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Возвращает запись по идентификатору.
     /// </summary>
+    // Читает одну запись текущего DTO-типа по id.
     public async Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_get");
@@ -55,6 +59,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Проверяет существование записи по идентификатору.
     /// </summary>
+    // Проверяет наличие записи в таблице по id.
     public async Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
     {
         using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_exists");
@@ -65,6 +70,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Добавляет новую запись в хранилище.
     /// </summary>
+    // Добавляет новую DTO-запись и сохраняет изменения в БД.
     public async Task<T> AddAsync(T entity, CancellationToken ct = default)
     {
         if (entity == null)
@@ -81,6 +87,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Обновляет существующую запись в хранилище.
     /// </summary>
+    // Помечает DTO-запись как изменённую и сохраняет изменения.
     public async Task UpdateAsync(T entity, CancellationToken ct = default)
     {
         if (entity == null)
@@ -96,6 +103,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Удаляет запись по идентификатору.
     /// </summary>
+    // Находит DTO-запись по id и удаляет её из БД.
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_del");
@@ -113,6 +121,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Возвращает количество записей указанного типа.
     /// </summary>
+    // Возвращает количество строк для текущего DTO-типа.
     public async Task<int> GetCountAsync(CancellationToken ct = default)
     {
         using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_cnt");
@@ -123,6 +132,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     /// <summary>
     /// Полностью очищает таблицу текущего типа.
     /// </summary>
+    // Удаляет все записи текущего DTO-типа из таблицы.
     public async Task DeleteAllAsync(CancellationToken ct = default)
     {
         using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_clr");

@@ -11,6 +11,7 @@ public sealed class BusinessEntityDataDtoEfPostgresRepository : EfPostgresAsyncR
     /// <summary>
     /// Передает фабрику DbContext в базовый EF-репозиторий.
     /// </summary>
+    // Создаёт typed-репозиторий для BusinessEntityDataDto.
     public BusinessEntityDataDtoEfPostgresRepository(ThreadSafeDbContextFactory dbContextFactory) : base(dbContextFactory)
     {
     }

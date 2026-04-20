@@ -8,6 +8,5 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 public class BusinessEntityDataDto : BaseEntity
 {
     public Guid BusinessEntityId { get; set; }
-    public string Data { get; set; } = string.Empty;
-
+    public byte[] Data { get; set; } = Array.Empty<byte>();
 }

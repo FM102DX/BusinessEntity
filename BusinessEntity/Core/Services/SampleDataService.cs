@@ -45,12 +45,12 @@ namespace BusinessEntity.Core.Services
             {
                 _webLogger?.Information("[Seed] InitializeSampleDataAsync: start");
                 // Проверяем наличие пространств и связей для дерева.
-                var existingEntities = await _dataProviderConnector.GetAllAsync<BusinessEntity.Core.Classes.BusinessEntity>(cancellationToken: ct);
+                var existingEntities = await _dataProviderConnector.GetAllAsync(ct);
                 var existingSpaces = existingEntities.Where(e => e.EntityType == BusinessEntityTypeEnum.Space).ToList();
 
                 // Если пространства существуют И при этом уже есть хотя бы одна связь VisuallyContains –
                 // считаем, что демонстрационные данные уже были сгенерированы и можно выйти.
-                var existingRelations = await _dataProviderConnector.GetAllAsync<Relation>(cancellationToken: ct);
+                var existingRelations = await _dataProviderConnector.GetAllRelationsAsync(ct);
                 bool hasVisualRelations = existingRelations.Any(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
                 _webLogger?.Information($"[Seed] Existing: entities={existingEntities.Count}, spaces={existingSpaces.Count}, relations={existingRelations.Count}, visualRelations={existingRelations.Count(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())}");
                 if (existingSpaces.Any() && hasVisualRelations)

@@ -1,4 +1,4 @@
-using System.Linq.Expressions;
+using BusinessEntity.Core.Classes;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
 {
@@ -8,52 +8,18 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
     /// </summary>
     public interface IDataProviderConnector
     {
-        /// <summary>
-        /// Возвращает записи указанного типа с optional filter и take.
-        /// </summary>
-        Task<IReadOnlyList<T>> GetAllAsync<T>(Expression<Func<T, bool>>? filter = null, int? take = null, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity;
-
-        /// <summary>
-        /// Возвращает запись указанного типа по идентификатору.
-        /// </summary>
-        Task<T?> GetByIdAsync<T>(Guid id, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity;
-
-        /// <summary>
-        /// Проверяет существование записи указанного типа.
-        /// </summary>
-        Task<bool> ExistsAsync<T>(Guid id, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity;
-
-        /// <summary>
-        /// Добавляет новую запись указанного типа.
-        /// </summary>
-        Task<T> AddAsync<T>(T entity, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity;
-
-        /// <summary>
-        /// Обновляет существующую запись указанного типа.
-        /// </summary>
-        Task UpdateAsync<T>(T entity, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity;
-
-        /// <summary>
-        /// Удаляет запись указанного типа по идентификатору.
-        /// </summary>
-        Task DeleteAsync<T>(Guid id, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity;
-
-        /// <summary>
-        /// Возвращает количество записей указанного типа.
-        /// </summary>
-        Task<int> GetCountAsync<T>(CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity;
-
-        /// <summary>
-        /// Полностью очищает хранилище указанного типа.
-        /// </summary>
-        Task DeleteAllAsync<T>(CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity;
+        Task<IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity>> GetAllAsync(CancellationToken cancellationToken = default);
+        Task<BusinessEntity.Core.Classes.BusinessEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+        Task<T?> GetDataAsync<T>(Guid id, CancellationToken cancellationToken = default);
+        Task UpdateDataAsync<T>(Guid id, T data, CancellationToken cancellationToken = default);
+        Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default);
+        Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default);
+        Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<BusinessEntityRelation>> GetAllRelationsAsync(CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<BusinessEntityRelation>> GetRelationsAsync(Guid objectAId, Guid objectBId, CancellationToken cancellationToken = default);
+        Task<BusinessEntityRelation?> GetRelationByIdAsync(Guid id, CancellationToken cancellationToken = default);
+        Task<BusinessEntityRelation> CreateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default);
+        Task UpdateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default);
+        Task DeleteRelationAsync(Guid id, CancellationToken cancellationToken = default);
     }
 }

@@ -1,27 +1,23 @@
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.Contracts;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using ReactiveUI;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 {
     /// <summary>
-    /// Централизованно подписывает mini-app на bus-запросы к хранилищу и публикует типизированные ответы.
+    /// Централизованно подписывает mini-app на bus-запросы к хранилищу и публикует ответы.
     /// </summary>
     internal sealed class DataProviderMessageHandler : IDisposable
     {
         private readonly IMessageBus _messageBus;
-        private readonly DataProviderService _dataProviderService;
+        private readonly IDataProviderCrudService _dataProviderService;
         private readonly ILogger<DataProviderMessageHandler> _logger;
         private readonly List<IDisposable> _subscriptions = new();
 
-        /// <summary>
-        /// Получает bus, внутренний сервис mini-app и логгер.
-        /// </summary>
         public DataProviderMessageHandler(
             IMessageBus messageBus,
-            DataProviderService dataProviderService,
+            IDataProviderCrudService dataProviderService,
             ILogger<DataProviderMessageHandler> logger)
         {
             _messageBus = messageBus;
@@ -29,9 +25,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             _logger = logger;
         }
 
-        /// <summary>
-        /// Инициализирует подписки mini-app один раз на текущий scope bus.
-        /// </summary>
+        // Один раз подписывает mini-app на все входящие bus-сообщения.
         public void EnsureSubscribed()
         {
             if (_subscriptions.Count > 0)
@@ -39,171 +33,220 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 return;
             }
 
-            SubscribeFor<BusinessEntity.Core.Classes.BusinessEntity>();
-            SubscribeFor<Relation>();
-            SubscribeFor<BusinessEntityData>();
-            SubscribeFor<BusinessEntityDto>();
-            SubscribeFor<BusinessEntityDataDto>();
-            SubscribeFor<BusinessEntityRelationDto>();
-            SubscribeFor<BusinessEntityPropertyDto>();
+            _subscriptions.Add(_messageBus.Listen<GetBusinessEntitiesRequest>().Subscribe(request => _ = HandleGetBusinessEntitiesAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<GetBusinessEntityByIdRequest>().Subscribe(request => _ = HandleGetBusinessEntityByIdAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<AddBusinessEntityRequest>().Subscribe(request => _ = HandleAddBusinessEntityAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<UpdateBusinessEntityRequest>().Subscribe(request => _ = HandleUpdateBusinessEntityAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<DeleteBusinessEntityRequest>().Subscribe(request => _ = HandleDeleteBusinessEntityAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<GetAllRelationsRequest>().Subscribe(request => _ = HandleGetAllRelationsAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<GetRelationsRequest>().Subscribe(request => _ = HandleGetRelationsAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<GetRelationByIdRequest>().Subscribe(request => _ = HandleGetRelationByIdAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<CreateRelationRequest>().Subscribe(request => _ = HandleCreateRelationAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<UpdateRelationRequest>().Subscribe(request => _ = HandleUpdateRelationAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<DeleteRelationRequest>().Subscribe(request => _ = HandleDeleteRelationAsync(request)));
+
+            _subscriptions.Add(_messageBus.Listen<GetBusinessEntityDataRequest>().Subscribe(request => _ = HandleGetDataAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<UpdateBusinessEntityDataRequest>().Subscribe(request => _ = HandleUpdateDataAsync(request)));
 
             _logger.LogInformation("DataProviderMiniApp subscribed to storage messages.");
         }
 
-        /// <summary>
-        /// Подписывает все supported storage-операции для конкретного типа записи.
-        /// </summary>
-        private void SubscribeFor<T>() where T : class, IBaseEntity
-        {
-            _subscriptions.Add(_messageBus.Listen<GetRecordsRequest<T>>().Subscribe(request => _ = HandleGetRecordsAsync(request)));
-            _subscriptions.Add(_messageBus.Listen<GetRecordByIdRequest<T>>().Subscribe(request => _ = HandleGetByIdAsync(request)));
-            _subscriptions.Add(_messageBus.Listen<RecordExistsRequest<T>>().Subscribe(request => _ = HandleExistsAsync(request)));
-            _subscriptions.Add(_messageBus.Listen<AddRecordRequest<T>>().Subscribe(request => _ = HandleAddAsync(request)));
-            _subscriptions.Add(_messageBus.Listen<UpdateRecordRequest<T>>().Subscribe(request => _ = HandleUpdateAsync(request)));
-            _subscriptions.Add(_messageBus.Listen<DeleteRecordRequest<T>>().Subscribe(request => _ = HandleDeleteAsync(request)));
-            _subscriptions.Add(_messageBus.Listen<GetRecordCountRequest<T>>().Subscribe(request => _ = HandleCountAsync(request)));
-            _subscriptions.Add(_messageBus.Listen<DeleteAllRecordsRequest<T>>().Subscribe(request => _ = HandleDeleteAllAsync(request)));
-        }
-
-        /// <summary>
-        /// Обрабатывает запрос списка записей.
-        /// </summary>
-        private async Task HandleGetRecordsAsync<T>(GetRecordsRequest<T> request) where T : class, IBaseEntity
+        // Обрабатывает запрос на чтение всех бизнес-сущностей.
+        private async Task HandleGetBusinessEntitiesAsync(GetBusinessEntitiesRequest request)
         {
             try
             {
-                var records = await _dataProviderService.GetAllAsync(request.Filter, request.Take);
-                _messageBus.SendMessage(new GetRecordsResponse<T>(request.RequestId, records));
+                var records = await _dataProviderService.GetAllAsync();
+                _messageBus.SendMessage(new GetBusinessEntitiesResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load records for {RecordType}.", typeof(T).Name);
-                _messageBus.SendMessage(new GetRecordsResponse<T>(request.RequestId, Array.Empty<T>(), ex.Message));
+                _logger.LogError(ex, "Failed to load business entities.");
+                _messageBus.SendMessage(new GetBusinessEntitiesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.Classes.BusinessEntity>(), ex.Message));
             }
         }
 
-        /// <summary>
-        /// Обрабатывает запрос записи по идентификатору.
-        /// </summary>
-        private async Task HandleGetByIdAsync<T>(GetRecordByIdRequest<T> request) where T : class, IBaseEntity
+        // Обрабатывает запрос на чтение одной сущности по id.
+        private async Task HandleGetBusinessEntityByIdAsync(GetBusinessEntityByIdRequest request)
         {
             try
             {
-                var record = await _dataProviderService.GetByIdAsync<T>(request.Id);
-                _messageBus.SendMessage(new GetRecordByIdResponse<T>(request.RequestId, record));
+                var record = await _dataProviderService.GetByIdAsync(request.Id);
+                _messageBus.SendMessage(new GetBusinessEntityByIdResponse(request.RequestId, record));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load record {RecordId} for {RecordType}.", request.Id, typeof(T).Name);
-                _messageBus.SendMessage(new GetRecordByIdResponse<T>(request.RequestId, null, ex.Message));
+                _logger.LogError(ex, "Failed to load business entity {RecordId}.", request.Id);
+                _messageBus.SendMessage(new GetBusinessEntityByIdResponse(request.RequestId, null, ex.Message));
             }
         }
 
-        /// <summary>
-        /// Обрабатывает запрос проверки существования записи.
-        /// </summary>
-        private async Task HandleExistsAsync<T>(RecordExistsRequest<T> request) where T : class, IBaseEntity
+        // Обрабатывает запрос на чтение бинарного payload сущности.
+        private async Task HandleGetDataAsync(GetBusinessEntityDataRequest request)
         {
             try
             {
-                var exists = await _dataProviderService.ExistsAsync<T>(request.Id);
-                _messageBus.SendMessage(new RecordExistsResponse<T>(request.RequestId, exists));
+                var data = await _dataProviderService.GetDataPayloadAsync(request.BusinessEntityId);
+                _messageBus.SendMessage(new GetBusinessEntityDataResponse(request.RequestId, data));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to check record {RecordId} for {RecordType}.", request.Id, typeof(T).Name);
-                _messageBus.SendMessage(new RecordExistsResponse<T>(request.RequestId, false, ex.Message));
+                _logger.LogError(ex, "Failed to load business entity data {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new GetBusinessEntityDataResponse(request.RequestId, null, ex.Message));
             }
         }
 
-        /// <summary>
-        /// Обрабатывает команду добавления записи.
-        /// </summary>
-        private async Task HandleAddAsync<T>(AddRecordRequest<T> request) where T : class, IBaseEntity
+        // Обрабатывает команду на создание бизнес-сущности.
+        private async Task HandleAddBusinessEntityAsync(AddBusinessEntityRequest request)
         {
             try
             {
                 var record = await _dataProviderService.AddAsync(request.Record);
-                _messageBus.SendMessage(new AddRecordResponse<T>(request.RequestId, record));
+                _messageBus.SendMessage(new AddBusinessEntityResponse(request.RequestId, record));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to add record for {RecordType}.", typeof(T).Name);
-                _messageBus.SendMessage(new AddRecordResponse<T>(request.RequestId, null, ex.Message));
+                _logger.LogError(ex, "Failed to add business entity.");
+                _messageBus.SendMessage(new AddBusinessEntityResponse(request.RequestId, null, ex.Message));
             }
         }
 
-        /// <summary>
-        /// Обрабатывает команду обновления записи.
-        /// </summary>
-        private async Task HandleUpdateAsync<T>(UpdateRecordRequest<T> request) where T : class, IBaseEntity
+        // Обрабатывает команду на обновление бизнес-сущности.
+        private async Task HandleUpdateBusinessEntityAsync(UpdateBusinessEntityRequest request)
         {
             try
             {
                 await _dataProviderService.UpdateAsync(request.Record);
-                _messageBus.SendMessage(new UpdateRecordResponse<T>(request.RequestId, true));
+                _messageBus.SendMessage(new UpdateBusinessEntityResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to update record {RecordId} for {RecordType}.", request.Record.Id, typeof(T).Name);
-                _messageBus.SendMessage(new UpdateRecordResponse<T>(request.RequestId, false, ex.Message));
+                _logger.LogError(ex, "Failed to update business entity {RecordId}.", request.Record.Id);
+                _messageBus.SendMessage(new UpdateBusinessEntityResponse(request.RequestId, false, ex.Message));
             }
         }
 
-        /// <summary>
-        /// Обрабатывает команду удаления записи.
-        /// </summary>
-        private async Task HandleDeleteAsync<T>(DeleteRecordRequest<T> request) where T : class, IBaseEntity
+        // Обрабатывает команду на удаление бизнес-сущности.
+        private async Task HandleDeleteBusinessEntityAsync(DeleteBusinessEntityRequest request)
         {
             try
             {
-                await _dataProviderService.DeleteAsync<T>(request.Id);
-                _messageBus.SendMessage(new DeleteRecordResponse<T>(request.RequestId, true));
+                await _dataProviderService.DeleteAsync(request.Id);
+                _messageBus.SendMessage(new DeleteBusinessEntityResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to delete record {RecordId} for {RecordType}.", request.Id, typeof(T).Name);
-                _messageBus.SendMessage(new DeleteRecordResponse<T>(request.RequestId, false, ex.Message));
+                _logger.LogError(ex, "Failed to delete business entity {RecordId}.", request.Id);
+                _messageBus.SendMessage(new DeleteBusinessEntityResponse(request.RequestId, false, ex.Message));
             }
         }
 
-        /// <summary>
-        /// Обрабатывает запрос количества записей.
-        /// </summary>
-        private async Task HandleCountAsync<T>(GetRecordCountRequest<T> request) where T : class, IBaseEntity
+        // Обрабатывает команду на сохранение бинарного payload сущности.
+        private async Task HandleUpdateDataAsync(UpdateBusinessEntityDataRequest request)
         {
             try
             {
-                var count = await _dataProviderService.GetCountAsync<T>();
-                _messageBus.SendMessage(new GetRecordCountResponse<T>(request.RequestId, count));
+                await _dataProviderService.UpdateDataPayloadAsync(request.BusinessEntityId, request.Data);
+                _messageBus.SendMessage(new UpdateBusinessEntityDataResponse(request.RequestId, true));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to count records for {RecordType}.", typeof(T).Name);
-                _messageBus.SendMessage(new GetRecordCountResponse<T>(request.RequestId, 0, ex.Message));
+                _logger.LogError(ex, "Failed to update business entity data {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new UpdateBusinessEntityDataResponse(request.RequestId, false, ex.Message));
             }
         }
 
-        /// <summary>
-        /// Обрабатывает команду полной очистки хранилища.
-        /// </summary>
-        private async Task HandleDeleteAllAsync<T>(DeleteAllRecordsRequest<T> request) where T : class, IBaseEntity
+        // Обрабатывает запрос на чтение всех связей.
+        private async Task HandleGetAllRelationsAsync(GetAllRelationsRequest request)
         {
             try
             {
-                await _dataProviderService.DeleteAllAsync<T>();
-                _messageBus.SendMessage(new DeleteAllRecordsResponse<T>(request.RequestId, true));
+                var records = await _dataProviderService.GetAllRelationsAsync();
+                _messageBus.SendMessage(new GetAllRelationsResponse(request.RequestId, records));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to delete all records for {RecordType}.", typeof(T).Name);
-                _messageBus.SendMessage(new DeleteAllRecordsResponse<T>(request.RequestId, false, ex.Message));
+                _logger.LogError(ex, "Failed to load relations.");
+                _messageBus.SendMessage(new GetAllRelationsResponse(request.RequestId, Array.Empty<BusinessEntityRelation>(), ex.Message));
             }
         }
 
-        /// <summary>
-        /// Освобождает все bus-подписки mini-app.
-        /// </summary>
+        // Обрабатывает запрос на чтение связей между двумя сущностями.
+        private async Task HandleGetRelationsAsync(GetRelationsRequest request)
+        {
+            try
+            {
+                var records = await _dataProviderService.GetRelationsAsync(request.ObjectAId, request.ObjectBId);
+                _messageBus.SendMessage(new GetRelationsResponse(request.RequestId, records));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load relations between {ObjectAId} and {ObjectBId}.", request.ObjectAId, request.ObjectBId);
+                _messageBus.SendMessage(new GetRelationsResponse(request.RequestId, Array.Empty<BusinessEntityRelation>(), ex.Message));
+            }
+        }
+
+        // Обрабатывает запрос на чтение одной связи по id.
+        private async Task HandleGetRelationByIdAsync(GetRelationByIdRequest request)
+        {
+            try
+            {
+                var record = await _dataProviderService.GetRelationByIdAsync(request.Id);
+                _messageBus.SendMessage(new GetRelationByIdResponse(request.RequestId, record));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load relation {RecordId}.", request.Id);
+                _messageBus.SendMessage(new GetRelationByIdResponse(request.RequestId, null, ex.Message));
+            }
+        }
+
+        // Обрабатывает команду на создание связи.
+        private async Task HandleCreateRelationAsync(CreateRelationRequest request)
+        {
+            try
+            {
+                var record = await _dataProviderService.CreateRelationAsync(request.Record);
+                _messageBus.SendMessage(new CreateRelationResponse(request.RequestId, record));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to add relation.");
+                _messageBus.SendMessage(new CreateRelationResponse(request.RequestId, null, ex.Message));
+            }
+        }
+
+        // Обрабатывает команду на обновление связи.
+        private async Task HandleUpdateRelationAsync(UpdateRelationRequest request)
+        {
+            try
+            {
+                await _dataProviderService.UpdateRelationAsync(request.Record);
+                _messageBus.SendMessage(new UpdateRelationResponse(request.RequestId, true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update relation {RecordId}.", request.Record.Id);
+                _messageBus.SendMessage(new UpdateRelationResponse(request.RequestId, false, ex.Message));
+            }
+        }
+
+        // Обрабатывает команду на удаление связи.
+        private async Task HandleDeleteRelationAsync(DeleteRelationRequest request)
+        {
+            try
+            {
+                await _dataProviderService.DeleteRelationAsync(request.Id);
+                _messageBus.SendMessage(new DeleteRelationResponse(request.RequestId, true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete relation {RecordId}.", request.Id);
+                _messageBus.SendMessage(new DeleteRelationResponse(request.RequestId, false, ex.Message));
+            }
+        }
+
+        // Снимает все bus-подписки при остановке mini-app.
         public void Dispose()
         {
             foreach (var subscription in _subscriptions)

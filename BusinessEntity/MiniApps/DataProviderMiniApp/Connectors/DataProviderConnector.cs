@@ -1,8 +1,9 @@
-using System.Linq.Expressions;
+using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using ReactiveUI;
+using System.Text.Json;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
 {
@@ -12,26 +13,25 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
     /// </summary>
     public sealed class DataProviderConnector : IDataProviderConnector
     {
+        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         private readonly IMessageBus _messageBus;
 
         /// <summary>
         /// Инициализирует connector и гарантирует материализацию mini-app перед первым запросом.
         /// </summary>
+        // Поднимает инициализацию mini-app и сохраняет bus для request/response обмена.
         public DataProviderConnector(IMessageBus messageBus, IDataProviderMiniApp dataProviderMiniApp)
         {
             _messageBus = messageBus;
-            _ = dataProviderMiniApp;
+            dataProviderMiniApp.EnsureInitialized();
         }
 
-        /// <summary>
-        /// Отправляет запрос на получение списка записей и ждёт типизированный ответ.
-        /// </summary>
-        public async Task<IReadOnlyList<T>> GetAllAsync<T>(Expression<Func<T, bool>>? filter = null, int? take = null, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity
+        // Запрашивает полный список бизнес-сущностей через bus.
+        public async Task<IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity>> GetAllAsync(CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var response = await SendAndReceiveAsync<GetRecordsRequest<T>, GetRecordsResponse<T>>(
-                new GetRecordsRequest<T>(requestId, filter, take),
+            var response = await SendAndReceiveAsync<GetBusinessEntitiesRequest, GetBusinessEntitiesResponse>(
+                new GetBusinessEntitiesRequest(requestId),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
@@ -40,15 +40,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return response.Records;
         }
 
-        /// <summary>
-        /// Отправляет запрос на получение записи по идентификатору и ждёт ответ.
-        /// </summary>
-        public async Task<T?> GetByIdAsync<T>(Guid id, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity
+        // Запрашивает одну бизнес-сущность по id через bus.
+        public async Task<BusinessEntity.Core.Classes.BusinessEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var response = await SendAndReceiveAsync<GetRecordByIdRequest<T>, GetRecordByIdResponse<T>>(
-                new GetRecordByIdRequest<T>(requestId, id),
+            var response = await SendAndReceiveAsync<GetBusinessEntityByIdRequest, GetBusinessEntityByIdResponse>(
+                new GetBusinessEntityByIdRequest(requestId, id),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
@@ -57,49 +54,63 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return response.Record;
         }
 
-        /// <summary>
-        /// Отправляет запрос на проверку существования записи и ждёт ответ.
-        /// </summary>
-        public async Task<bool> ExistsAsync<T>(Guid id, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity
+        // Получает payload сущности и десериализует его в нужный тип.
+        public async Task<T?> GetDataAsync<T>(Guid id, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var response = await SendAndReceiveAsync<RecordExistsRequest<T>, RecordExistsResponse<T>>(
-                new RecordExistsRequest<T>(requestId, id),
+            var response = await SendAndReceiveAsync<GetBusinessEntityDataRequest, GetBusinessEntityDataResponse>(
+                new GetBusinessEntityDataRequest(requestId, id),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
 
             EnsureNoError(response.ErrorMessage);
-            return response.Exists;
+            if (response.Data == null || response.Data.Length == 0)
+            {
+                return default;
+            }
+
+            return JsonSerializer.Deserialize<T>(response.Data, JsonOptions);
         }
 
-        /// <summary>
-        /// Отправляет команду на добавление записи и ждёт типизированный ответ.
-        /// </summary>
-        public async Task<T> AddAsync<T>(T entity, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity
+        // Сериализует payload и отправляет команду на его сохранение.
+        public async Task UpdateDataAsync<T>(Guid id, T data, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var response = await SendAndReceiveAsync<AddRecordRequest<T>, AddRecordResponse<T>>(
-                new AddRecordRequest<T>(requestId, entity),
+            var payload = JsonSerializer.SerializeToUtf8Bytes(data, JsonOptions);
+            var response = await SendAndReceiveAsync<UpdateBusinessEntityDataRequest, UpdateBusinessEntityDataResponse>(
+                new UpdateBusinessEntityDataRequest(requestId, id, payload),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
 
             EnsureNoError(response.ErrorMessage);
-            return response.Record ?? throw new InvalidOperationException($"DataProvider returned null record after AddAsync for '{typeof(T).Name}'.");
+            if (!response.Success)
+            {
+                throw new InvalidOperationException($"DataProvider failed to update data for business entity '{id}'.");
+            }
         }
 
-        /// <summary>
-        /// Отправляет команду на обновление записи и ждёт подтверждение.
-        /// </summary>
-        public async Task UpdateAsync<T>(T entity, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity
+        // Отправляет команду на создание бизнес-сущности.
+        public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var response = await SendAndReceiveAsync<UpdateRecordRequest<T>, UpdateRecordResponse<T>>(
-                new UpdateRecordRequest<T>(requestId, entity),
+            var response = await SendAndReceiveAsync<AddBusinessEntityRequest, AddBusinessEntityResponse>(
+                new AddBusinessEntityRequest(requestId, entity),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            return response.Record ?? throw new InvalidOperationException("DataProvider returned null business entity after AddAsync.");
+        }
+
+        // Отправляет команду на обновление бизнес-сущности.
+        public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<UpdateBusinessEntityRequest, UpdateBusinessEntityResponse>(
+                new UpdateBusinessEntityRequest(requestId, entity),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
@@ -108,19 +119,16 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
 
             if (!response.Success)
             {
-                throw new InvalidOperationException($"DataProvider failed to update '{typeof(T).Name}' with id '{entity.Id}'.");
+                throw new InvalidOperationException($"DataProvider failed to update business entity '{entity.Id}'.");
             }
         }
 
-        /// <summary>
-        /// Отправляет команду на удаление записи и ждёт подтверждение.
-        /// </summary>
-        public async Task DeleteAsync<T>(Guid id, CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity
+        // Отправляет команду на удаление бизнес-сущности.
+        public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var response = await SendAndReceiveAsync<DeleteRecordRequest<T>, DeleteRecordResponse<T>>(
-                new DeleteRecordRequest<T>(requestId, id),
+            var response = await SendAndReceiveAsync<DeleteBusinessEntityRequest, DeleteBusinessEntityResponse>(
+                new DeleteBusinessEntityRequest(requestId, id),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
@@ -129,51 +137,101 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
 
             if (!response.Success)
             {
-                throw new InvalidOperationException($"DataProvider failed to delete '{typeof(T).Name}' with id '{id}'.");
+                throw new InvalidOperationException($"DataProvider failed to delete business entity '{id}'.");
             }
         }
 
-        /// <summary>
-        /// Отправляет запрос количества записей и ждёт ответ.
-        /// </summary>
-        public async Task<int> GetCountAsync<T>(CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity
+        // Запрашивает полный список связей между сущностями.
+        public async Task<IReadOnlyList<BusinessEntityRelation>> GetAllRelationsAsync(CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var response = await SendAndReceiveAsync<GetRecordCountRequest<T>, GetRecordCountResponse<T>>(
-                new GetRecordCountRequest<T>(requestId),
+            var response = await SendAndReceiveAsync<GetAllRelationsRequest, GetAllRelationsResponse>(
+                new GetAllRelationsRequest(requestId),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
 
             EnsureNoError(response.ErrorMessage);
-            return response.Count;
+            return response.Records;
         }
 
-        /// <summary>
-        /// Отправляет команду полной очистки хранилища и ждёт подтверждение.
-        /// </summary>
-        public async Task DeleteAllAsync<T>(CancellationToken cancellationToken = default)
-            where T : class, IBaseEntity
+        // Запрашивает связи между двумя бизнес-объектами.
+        public async Task<IReadOnlyList<BusinessEntityRelation>> GetRelationsAsync(Guid objectAId, Guid objectBId, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var response = await SendAndReceiveAsync<DeleteAllRecordsRequest<T>, DeleteAllRecordsResponse<T>>(
-                new DeleteAllRecordsRequest<T>(requestId),
+            var response = await SendAndReceiveAsync<GetRelationsRequest, GetRelationsResponse>(
+                new GetRelationsRequest(requestId, objectAId, objectBId),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
 
             EnsureNoError(response.ErrorMessage);
+            return response.Records;
+        }
 
+        // Запрашивает одну связь по её идентификатору.
+        public async Task<BusinessEntityRelation?> GetRelationByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<GetRelationByIdRequest, GetRelationByIdResponse>(
+                new GetRelationByIdRequest(requestId, id),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            return response.Record;
+        }
+
+        // Отправляет команду на создание связи.
+        public async Task<BusinessEntityRelation> CreateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<CreateRelationRequest, CreateRelationResponse>(
+                new CreateRelationRequest(requestId, relation),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            return response.Record ?? throw new InvalidOperationException("DataProvider returned null relation after CreateRelationAsync.");
+        }
+
+        // Отправляет команду на обновление связи.
+        public async Task UpdateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<UpdateRelationRequest, UpdateRelationResponse>(
+                new UpdateRelationRequest(requestId, relation),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
             if (!response.Success)
             {
-                throw new InvalidOperationException($"DataProvider failed to delete all '{typeof(T).Name}' records.");
+                throw new InvalidOperationException($"DataProvider failed to update relation '{relation.Id}'.");
             }
         }
 
-        /// <summary>
-        /// Выполняет общий bus-roundtrip для request/response сценария.
-        /// </summary>
+        // Отправляет команду на удаление связи.
+        public async Task DeleteRelationAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<DeleteRelationRequest, DeleteRelationResponse>(
+                new DeleteRelationRequest(requestId, id),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            if (!response.Success)
+            {
+                throw new InvalidOperationException($"DataProvider failed to delete relation '{id}'.");
+            }
+        }
+
+        // Выполняет общий request/response цикл поверх IMessageBus.
         private async Task<TResponse> SendAndReceiveAsync<TRequest, TResponse>(
             TRequest request,
             Func<TResponse, Guid> requestIdSelector,
@@ -206,9 +264,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return await completion.Task;
         }
 
-        /// <summary>
-        /// Превращает storage-error в исключение connector-уровня.
-        /// </summary>
+        // Превращает ошибку из ответа в исключение connector-уровня.
         private static void EnsureNoError(string? errorMessage)
         {
             if (!string.IsNullOrWhiteSpace(errorMessage))

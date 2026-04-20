@@ -1,101 +1,42 @@
-using System.Linq.Expressions;
-using BusinessEntity.Core.Contracts;
+using BusinessEntity.Core.Classes;
 
-namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages
-{
-    /// <summary>
-    /// Запрашивает список записей указанного типа.
-    /// </summary>
-    public sealed record GetRecordsRequest<T>(Guid RequestId, Expression<Func<T, bool>>? Filter = null, int? Take = null)
-        where T : class, IBaseEntity;
+namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 
-    /// <summary>
-    /// Возвращает список записей указанного типа.
-    /// </summary>
-    public sealed record GetRecordsResponse<T>(Guid RequestId, IReadOnlyList<T> Records, string? ErrorMessage = null)
-        where T : class, IBaseEntity;
+public sealed record GetBusinessEntitiesRequest(Guid RequestId);
+public sealed record GetBusinessEntitiesResponse(Guid RequestId, IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity> Records, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Запрашивает запись указанного типа по идентификатору.
-    /// </summary>
-    public sealed record GetRecordByIdRequest<T>(Guid RequestId, Guid Id)
-        where T : class, IBaseEntity;
+public sealed record GetBusinessEntityByIdRequest(Guid RequestId, Guid Id);
+public sealed record GetBusinessEntityByIdResponse(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity? Record, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Возвращает запись указанного типа по идентификатору.
-    /// </summary>
-    public sealed record GetRecordByIdResponse<T>(Guid RequestId, T? Record, string? ErrorMessage = null)
-        where T : class, IBaseEntity;
+public sealed record GetBusinessEntityDataRequest(Guid RequestId, Guid BusinessEntityId);
+public sealed record GetBusinessEntityDataResponse(Guid RequestId, byte[]? Data, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Запрашивает проверку существования записи.
-    /// </summary>
-    public sealed record RecordExistsRequest<T>(Guid RequestId, Guid Id)
-        where T : class, IBaseEntity;
+public sealed record AddBusinessEntityRequest(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity Record);
+public sealed record AddBusinessEntityResponse(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity? Record, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Возвращает признак существования записи.
-    /// </summary>
-    public sealed record RecordExistsResponse<T>(Guid RequestId, bool Exists, string? ErrorMessage = null)
-        where T : class, IBaseEntity;
+public sealed record UpdateBusinessEntityRequest(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity Record);
+public sealed record UpdateBusinessEntityResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Команда на добавление новой записи.
-    /// </summary>
-    public sealed record AddRecordRequest<T>(Guid RequestId, T Record)
-        where T : class, IBaseEntity;
+public sealed record DeleteBusinessEntityRequest(Guid RequestId, Guid Id);
+public sealed record DeleteBusinessEntityResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Возвращает добавленную запись.
-    /// </summary>
-    public sealed record AddRecordResponse<T>(Guid RequestId, T? Record, string? ErrorMessage = null)
-        where T : class, IBaseEntity;
+public sealed record UpdateBusinessEntityDataRequest(Guid RequestId, Guid BusinessEntityId, byte[] Data);
+public sealed record UpdateBusinessEntityDataResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Команда на обновление записи.
-    /// </summary>
-    public sealed record UpdateRecordRequest<T>(Guid RequestId, T Record)
-        where T : class, IBaseEntity;
+public sealed record GetAllRelationsRequest(Guid RequestId);
+public sealed record GetAllRelationsResponse(Guid RequestId, IReadOnlyList<BusinessEntityRelation> Records, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Возвращает результат обновления записи.
-    /// </summary>
-    public sealed record UpdateRecordResponse<T>(Guid RequestId, bool Success, string? ErrorMessage = null)
-        where T : class, IBaseEntity;
+public sealed record GetRelationsRequest(Guid RequestId, Guid ObjectAId, Guid ObjectBId);
+public sealed record GetRelationsResponse(Guid RequestId, IReadOnlyList<BusinessEntityRelation> Records, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Команда на удаление записи по идентификатору.
-    /// </summary>
-    public sealed record DeleteRecordRequest<T>(Guid RequestId, Guid Id)
-        where T : class, IBaseEntity;
+public sealed record GetRelationByIdRequest(Guid RequestId, Guid Id);
+public sealed record GetRelationByIdResponse(Guid RequestId, BusinessEntityRelation? Record, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Возвращает результат удаления записи.
-    /// </summary>
-    public sealed record DeleteRecordResponse<T>(Guid RequestId, bool Success, string? ErrorMessage = null)
-        where T : class, IBaseEntity;
+public sealed record CreateRelationRequest(Guid RequestId, BusinessEntityRelation Record);
+public sealed record CreateRelationResponse(Guid RequestId, BusinessEntityRelation? Record, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Запрашивает количество записей указанного типа.
-    /// </summary>
-    public sealed record GetRecordCountRequest<T>(Guid RequestId)
-        where T : class, IBaseEntity;
+public sealed record UpdateRelationRequest(Guid RequestId, BusinessEntityRelation Record);
+public sealed record UpdateRelationResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 
-    /// <summary>
-    /// Возвращает количество записей указанного типа.
-    /// </summary>
-    public sealed record GetRecordCountResponse<T>(Guid RequestId, int Count, string? ErrorMessage = null)
-        where T : class, IBaseEntity;
-
-    /// <summary>
-    /// Команда на полную очистку хранилища указанного типа.
-    /// </summary>
-    public sealed record DeleteAllRecordsRequest<T>(Guid RequestId)
-        where T : class, IBaseEntity;
-
-    /// <summary>
-    /// Возвращает результат полной очистки хранилища указанного типа.
-    /// </summary>
-    public sealed record DeleteAllRecordsResponse<T>(Guid RequestId, bool Success, string? ErrorMessage = null)
-        where T : class, IBaseEntity;
-}
+public sealed record DeleteRelationRequest(Guid RequestId, Guid Id);
+public sealed record DeleteRelationResponse(Guid RequestId, bool Success, string? ErrorMessage = null);

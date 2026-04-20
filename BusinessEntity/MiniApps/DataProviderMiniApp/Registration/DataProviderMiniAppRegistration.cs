@@ -14,14 +14,14 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
         /// <summary>
         /// Подключает mini-app хранения данных, его connector, state и message handler.
         /// </summary>
+        // Регистрирует все зависимости mini-app в контейнере DI.
         public static IServiceCollection AddDataProviderMiniApp(this IServiceCollection services)
         {
             services.AddSingleton<BusinessEntityDtoEfPostgresRepository>();
             services.AddSingleton<BusinessEntityDataDtoEfPostgresRepository>();
             services.AddSingleton<BusinessEntityRelationDtoEfPostgresRepository>();
-            services.AddSingleton<BusinessEntityPropertyDtoEfPostgresRepository>();
             services.AddSingleton<DataProviderState>();
-            services.AddScoped<DataProviderService>();
+            services.AddScoped<IDataProviderCrudService, DataProviderService>();
             services.AddScoped<DataProviderMessageHandler>();
             services.AddScoped<IDataProviderMiniApp, Facade.DataProviderMiniApp>();
             services.AddScoped<IDataProviderConnector, DataProviderConnector>();

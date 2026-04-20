@@ -9,8 +9,6 @@ public class BusinessEntityRelationDto : BaseEntity
 {
     public Guid ObjectAId { get; set; }
     public Guid ObjectBId { get; set; }
-    public string Text { get; set; } = string.Empty;
     public string RelationType { get; set; } = string.Empty;
     public string RelationParams { get; set; } = string.Empty;
-
 }

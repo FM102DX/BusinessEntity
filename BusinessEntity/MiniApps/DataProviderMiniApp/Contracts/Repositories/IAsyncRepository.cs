@@ -1,3 +1,5 @@
+using BusinessEntity.Core.Contracts;
+
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Repositories;
 
 /// <summary>

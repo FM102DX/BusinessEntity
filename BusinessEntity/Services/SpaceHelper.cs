@@ -17,8 +17,8 @@ namespace BusinessEntity.Services
         /// </summary>
         public async Task<BusinessEntity.Core.Classes.BusinessEntity?> GetSpaceByIdAsync(Guid spaceId)
         {
-            var spaces = await _dataProviderConnector.GetAllAsync<BusinessEntity.Core.Classes.BusinessEntity>(e => e.Id == spaceId && e.EntityType == BusinessEntityTypeEnum.Space);
-            return spaces.FirstOrDefault();
+            var entity = await _dataProviderConnector.GetByIdAsync(spaceId);
+            return entity?.EntityType == BusinessEntityTypeEnum.Space ? entity : null;
         }
     }
 }
