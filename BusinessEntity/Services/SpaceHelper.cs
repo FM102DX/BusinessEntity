@@ -1,15 +1,15 @@
-using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 
 namespace BusinessEntity.Services
 {
     public class SpaceHelper
     {
-        private readonly BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity> _repository;
+        private readonly IDataProviderConnector _dataProviderConnector;
 
-        public SpaceHelper(BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity> repository)
+        public SpaceHelper(IDataProviderConnector dataProviderConnector)
         {
-            _repository = repository;
+            _dataProviderConnector = dataProviderConnector;
         }
 
         /// <summary>
@@ -17,7 +17,7 @@ namespace BusinessEntity.Services
         /// </summary>
         public async Task<BusinessEntity.Core.Classes.BusinessEntity?> GetSpaceByIdAsync(Guid spaceId)
         {
-            var spaces = await _repository.GetAllAsync(e => e.Id == spaceId && e.EntityType.ToString() == "Space");
+            var spaces = await _dataProviderConnector.GetAllAsync<BusinessEntity.Core.Classes.BusinessEntity>(e => e.Id == spaceId && e.EntityType == BusinessEntityTypeEnum.Space);
             return spaces.FirstOrDefault();
         }
     }

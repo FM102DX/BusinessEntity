@@ -9,7 +9,7 @@ using BusinessEntity.Core.Contracts;
 
 namespace BusinessEntity.DataAccess.Repositories;
 
-public class InMemoryRepository<T> : IAsyncRepository<T> where T : class, IBaseEntity
+public class InMemoryRepository<T> : BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Repositories.IAsyncRepository<T> where T : class, IBaseEntity
 {
     private readonly ConcurrentDictionary<Guid, T> _storage = new();
     private readonly object _lock = new();

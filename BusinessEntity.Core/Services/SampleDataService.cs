@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Core.Services
@@ -11,6 +12,7 @@ namespace BusinessEntity.Core.Services
     public class SampleDataService : ISampleDataService
     {
         private readonly BusinessEntityHelper _helper;
+        private readonly IDataProviderConnector _dataProviderConnector;
         private readonly IPossibleEntityRelationTypesProvider _relations;
         private readonly IDataFillLineProvider _dataFill;
         private readonly IWebLoggerService? _webLogger;
@@ -19,11 +21,13 @@ namespace BusinessEntity.Core.Services
 
         public SampleDataService(
             BusinessEntityHelper helper,
+            IDataProviderConnector dataProviderConnector,
             IPossibleEntityRelationTypesProvider relations,
             IDataFillLineProvider dataFill,
             IWebLoggerService? webLogger)
         {
             _helper = helper ?? throw new ArgumentNullException(nameof(helper));
+            _dataProviderConnector = dataProviderConnector ?? throw new ArgumentNullException(nameof(dataProviderConnector));
             _relations = relations ?? throw new ArgumentNullException(nameof(relations));
             _dataFill = dataFill ?? throw new ArgumentNullException(nameof(dataFill));
             _webLogger = webLogger;
@@ -41,12 +45,12 @@ namespace BusinessEntity.Core.Services
             {
                 _webLogger?.Information("[Seed] InitializeSampleDataAsync: start");
                 // Проверяем наличие пространств и связей для дерева.
-                var existingEntities = await _helper.GetAllBusinessEntities();
+                var existingEntities = await _dataProviderConnector.GetAllAsync<BusinessEntity.Core.Classes.BusinessEntity>(cancellationToken: ct);
                 var existingSpaces = existingEntities.Where(e => e.EntityType == BusinessEntityTypeEnum.Space).ToList();
 
                 // Если пространства существуют И при этом уже есть хотя бы одна связь VisuallyContains –
                 // считаем, что демонстрационные данные уже были сгенерированы и можно выйти.
-                var existingRelations = await _helper.GetAllRelations();
+                var existingRelations = await _dataProviderConnector.GetAllAsync<Relation>(cancellationToken: ct);
                 bool hasVisualRelations = existingRelations.Any(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
                 _webLogger?.Information($"[Seed] Existing: entities={existingEntities.Count}, spaces={existingSpaces.Count}, relations={existingRelations.Count}, visualRelations={existingRelations.Count(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())}");
                 if (existingSpaces.Any() && hasVisualRelations)

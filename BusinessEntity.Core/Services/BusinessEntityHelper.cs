@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using System.Linq;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Core.Services
@@ -14,22 +15,15 @@ namespace BusinessEntity.Core.Services
     /// </summary>
     public class BusinessEntityHelper
     {
-        private readonly IAsyncRepository<Classes.BusinessEntity> _businessEntityRepository;
-        private readonly IAsyncRepository<Relation> _relationRepository;
+        private readonly IDataProviderConnector _dataProviderConnector;
         private readonly IWebLoggerService? _webLogger;
-        // Добавлено: репозиторий для данных сущностей
-        private readonly IAsyncRepository<BusinessEntityData> _dataRepository;
 
         public BusinessEntityHelper(
-            IAsyncRepository<Classes.BusinessEntity> businessEntityRepository, 
-            IAsyncRepository<Relation> relationRepository,
-            IWebLoggerService? webLogger,
-            IAsyncRepository<BusinessEntityData> dataRepository)
+            IDataProviderConnector dataProviderConnector,
+            IWebLoggerService? webLogger)
         {
-            _businessEntityRepository = businessEntityRepository ?? throw new ArgumentNullException(nameof(businessEntityRepository));
-            _relationRepository = relationRepository ?? throw new ArgumentNullException(nameof(relationRepository));
+            _dataProviderConnector = dataProviderConnector ?? throw new ArgumentNullException(nameof(dataProviderConnector));
             _webLogger = webLogger; // Логгер может быть не настроен, поэтому допускаем null
-            _dataRepository = dataRepository ?? throw new ArgumentNullException(nameof(dataRepository));
         }
 
         public async Task<Classes.BusinessEntity> CreateBusinessEntity(BusinessEntityTypeEnum type, string name)
@@ -43,22 +37,22 @@ namespace BusinessEntity.Core.Services
                 BusinessEntityType = type
             };
 
-            return await _businessEntityRepository.AddAsync(entity);
+            return await _dataProviderConnector.AddAsync(entity);
         }
 
         public async Task RemoveBusinessEntity(Guid id)
         {
             _webLogger?.Warning($"RemoveBusinessEntity: id={id}");
             // Сначала удаляем все связи, где участвует данная сущность
-            var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == id || r.ObjectBId == id);
+            var relations = await _dataProviderConnector.GetAllAsync<Relation>(r => r.ObjectAId == id || r.ObjectBId == id);
             
             foreach (var relation in relations)
             {
-                await _relationRepository.DeleteAsync(relation.Id);
+                await _dataProviderConnector.DeleteAsync<Relation>(relation.Id);
             }
 
             // Затем удаляем саму сущность
-            await _businessEntityRepository.DeleteAsync(id);
+            await _dataProviderConnector.DeleteAsync<Classes.BusinessEntity>(id);
         }
 
         public async Task<Relation> CreateRelation(IBusinessEntity entityA, IBusinessEntity entityB, MacroRelationType macroRelationType, string parameters = "")
@@ -77,7 +71,7 @@ namespace BusinessEntity.Core.Services
                 RelationParams = parameters
             };
 
-            return await _relationRepository.AddAsync(relation);
+            return await _dataProviderConnector.AddAsync(relation);
         }
 
         /// <summary>
@@ -95,7 +89,7 @@ namespace BusinessEntity.Core.Services
             if (macroRelationType == null) throw new ArgumentNullException(nameof(macroRelationType));
 
             // Находим все связи такого типа между сущностями А и Б
-            var relationsToRemove = await _relationRepository.GetAllAsync(r => 
+            var relationsToRemove = await _dataProviderConnector.GetAllAsync<Relation>(r => 
                 r.ObjectAId == entityA.Id && 
                 r.ObjectBId == entityB.Id && 
                 r.RelationType == macroRelationType.RelationType.ToString());
@@ -103,7 +97,7 @@ namespace BusinessEntity.Core.Services
             int removedCount = 0;
             foreach (var relation in relationsToRemove)
             {
-                await _relationRepository.DeleteAsync(relation.Id);
+                await _dataProviderConnector.DeleteAsync<Relation>(relation.Id);
                 removedCount++;
                 _webLogger?.Debug($"Removed relation: ID={relation.Id}, Type={relation.RelationType}");
             }
@@ -115,34 +109,34 @@ namespace BusinessEntity.Core.Services
         public async Task<Classes.BusinessEntity?> GetBusinessEntityById(Guid id)
         {
             _webLogger?.Debug($"GetBusinessEntityById: id={id}");
-            return await _businessEntityRepository.GetByIdAsync(id);
+            return await _dataProviderConnector.GetByIdAsync<Classes.BusinessEntity>(id);
         }
 
         public async Task<Relation?> GetRelationById(Guid id)
         {
-            return await _relationRepository.GetByIdAsync(id);
+            return await _dataProviderConnector.GetByIdAsync<Relation>(id);
         }
 
         public async Task<IReadOnlyList<Classes.BusinessEntity>> GetAllBusinessEntities(int? take = null)
         {
-            return await _businessEntityRepository.GetAllAsync(null, take);
+            return await _dataProviderConnector.GetAllAsync<Classes.BusinessEntity>(null, take);
         }
 
         public async Task<IReadOnlyList<Classes.BusinessEntity>> GetSpacesAsync(int? take = null)
         {
-            return await _businessEntityRepository.GetAllAsync(
+            return await _dataProviderConnector.GetAllAsync<Classes.BusinessEntity>(
                 e => e.EntityType == BusinessEntityTypeEnum.Space,
                 take);
         }
 
         public async Task<IReadOnlyList<Relation>> GetAllRelations(int? take = null)
         {
-            return await _relationRepository.GetAllAsync(null, take);
+            return await _dataProviderConnector.GetAllAsync<Relation>(null, take);
         }
 
         public async Task<IReadOnlyList<Relation>> GetRelationsByEntityIdAsync(Guid entityId, CancellationToken ct = default)
         {
-            return await _relationRepository.GetAllAsync(r => r.ObjectAId == entityId || r.ObjectBId == entityId, ct: ct);
+            return await _dataProviderConnector.GetAllAsync<Relation>(r => r.ObjectAId == entityId || r.ObjectBId == entityId, cancellationToken: ct);
         }
 
         /// <summary>
@@ -150,13 +144,13 @@ namespace BusinessEntity.Core.Services
         /// </summary>
         public async Task<IEnumerable<Classes.BusinessEntity>> GetContainedEntitiesAsync(Guid parentId, CancellationToken ct = default)
         {
-            var relations = await _relationRepository.GetAllAsync(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString(), ct: ct);
+            var relations = await _dataProviderConnector.GetAllAsync<Relation>(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString(), cancellationToken: ct);
             var childIds = relations.Select(r => r.ObjectBId).ToList();
             
             var children = new List<Classes.BusinessEntity>();
             foreach (var childId in childIds)
             {
-                var child = await _businessEntityRepository.GetByIdAsync(childId);
+                var child = await _dataProviderConnector.GetByIdAsync<Classes.BusinessEntity>(childId);
                 if (child != null)
                 {
                     children.Add(child);
@@ -170,8 +164,8 @@ namespace BusinessEntity.Core.Services
         public async Task<IEnumerable<Classes.BusinessEntity>> GetRootEntitiesAsync()
         {
             // Находим все сущности, которые НЕ являются объектом B в отношении "VisuallyContains"
-            var allEntities = await _businessEntityRepository.GetAllAsync();
-            var visuallyContainsRelations = await _relationRepository.GetAllAsync(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
+            var allEntities = await _dataProviderConnector.GetAllAsync<Classes.BusinessEntity>();
+            var visuallyContainsRelations = await _dataProviderConnector.GetAllAsync<Relation>(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
             var childIds = visuallyContainsRelations.Select(r => r.ObjectBId).ToHashSet();
             
             var rootEntities = allEntities.Where(e => !childIds.Contains(e.Id));
@@ -228,7 +222,7 @@ namespace BusinessEntity.Core.Services
             };
 
             // Сохраняем сущность
-            await _businessEntityRepository.AddAsync(entity, ct);
+            await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
 
             // Создаем связь между родителем и дочерним элементом (визуальная связь)
             var relation = new Relation
@@ -241,7 +235,7 @@ namespace BusinessEntity.Core.Services
             };
 
             // Сохраняем связь
-            await _relationRepository.AddAsync(relation, ct);
+            await _dataProviderConnector.AddAsync(relation, cancellationToken: ct);
 
             _webLogger?.Information($"Created new folder '{name}' (ID: {entity.Id}) under parent '{parent.Name}' (ID: {parent.Id})");
 
@@ -286,7 +280,7 @@ namespace BusinessEntity.Core.Services
             };
 
             // Сохраняем сущность
-            await _businessEntityRepository.AddAsync(entity, ct);
+            await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
 
             // Создаем визуальную связь с родителем
             var relation = new Relation
@@ -298,7 +292,7 @@ namespace BusinessEntity.Core.Services
                 RelationParams = string.Empty
             };
 
-            await _relationRepository.AddAsync(relation, ct);
+            await _dataProviderConnector.AddAsync(relation, cancellationToken: ct);
 
             // Определяем текст для сохранения: используем переданный, иначе плейсхолдер из 100 символов
             var dataToSave = string.IsNullOrWhiteSpace(bodyText) ? new string('x', 100) : bodyText;
@@ -310,7 +304,7 @@ namespace BusinessEntity.Core.Services
                 Data = dataToSave!
             };
 
-            await _dataRepository.AddAsync(beData, ct);
+            await _dataProviderConnector.AddAsync(beData, cancellationToken: ct);
 
             _webLogger?.Debug($"Created BusinessEntityData for document '{name}' (DocID: {entity.Id}), DataLength={dataToSave?.Length ?? 0}");
 
@@ -341,7 +335,7 @@ namespace BusinessEntity.Core.Services
             }
 
             // Находим текущего визуального родителя данного элемента
-            var currentVisualParentRelations = await _relationRepository.GetAllAsync(r => 
+            var currentVisualParentRelations = await _dataProviderConnector.GetAllAsync<Relation>(r => 
                 r.ObjectBId == child.Id && 
                 r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
 
@@ -354,7 +348,7 @@ namespace BusinessEntity.Core.Services
             // Удаляем все существующие связи VisuallyContains для данного child
             foreach (var currentRelation in currentVisualParentRelations)
             {
-                var currentParent = await _businessEntityRepository.GetByIdAsync(currentRelation.ObjectAId);
+                var currentParent = await _dataProviderConnector.GetByIdAsync<Classes.BusinessEntity>(currentRelation.ObjectAId);
                 if (currentParent != null)
                 {
                     _webLogger?.Debug($"Removing visual relation between '{currentParent.Name}' and '{child.Name}'");
@@ -379,7 +373,7 @@ namespace BusinessEntity.Core.Services
             var messages = new List<string>();
             
             // Проверяем, существует ли сущность
-            var entity = await _businessEntityRepository.GetByIdAsync(entityId);
+            var entity = await _dataProviderConnector.GetByIdAsync<Classes.BusinessEntity>(entityId);
             if (entity == null)
             {
                 // Если сущность не найдена, возвращаем true и пустой список (как указано в требованиях)
@@ -406,7 +400,7 @@ namespace BusinessEntity.Core.Services
             await RemoveAllEntityRelations(entityId, ct);
             
             // Удаляем саму сущность
-            await _businessEntityRepository.DeleteAsync(entityId, ct);
+            await _dataProviderConnector.DeleteAsync<Classes.BusinessEntity>(entityId, ct);
             
             return (true, new List<string>());
         }
@@ -422,16 +416,16 @@ namespace BusinessEntity.Core.Services
             var allMessages = new List<string>();
             
             // Получаем всех прямых потомков (связи типа VisuallyContains, где parentId является ObjectA)
-            var childRelations = await _relationRepository.GetAllAsync(
+            var childRelations = await _dataProviderConnector.GetAllAsync<Relation>(
                 r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString(), 
-                ct: ct);
+                cancellationToken: ct);
             
             foreach (var relation in childRelations)
             {
                 var childId = relation.ObjectBId;
                 
                 // Проверяем, существует ли дочерняя сущность
-                var childEntity = await _businessEntityRepository.GetByIdAsync(childId, ct);
+                var childEntity = await _dataProviderConnector.GetByIdAsync<Classes.BusinessEntity>(childId, cancellationToken: ct);
                 if (childEntity == null)
                 {
                     // Если дочерняя сущность не найдена, просто продолжаем
@@ -459,7 +453,7 @@ namespace BusinessEntity.Core.Services
                 await RemoveAllEntityRelations(childId, ct);
                 
                 // Удаляем саму дочернюю сущность
-                await _businessEntityRepository.DeleteAsync(childId, ct);
+                await _dataProviderConnector.DeleteAsync<Classes.BusinessEntity>(childId, ct);
             }
             
             return (true, allMessages);
@@ -487,15 +481,15 @@ namespace BusinessEntity.Core.Services
         private async Task RemoveAllEntityRelations(Guid entityId, CancellationToken ct = default)
         {
             // Получаем все связи, где сущность является ObjectA
-            var relationsAsA = await _relationRepository.GetAllAsync(r => r.ObjectAId == entityId, ct: ct);
+            var relationsAsA = await _dataProviderConnector.GetAllAsync<Relation>(r => r.ObjectAId == entityId, cancellationToken: ct);
             
             // Получаем все связи, где сущность является ObjectB
-            var relationsAsB = await _relationRepository.GetAllAsync(r => r.ObjectBId == entityId, ct: ct);
+            var relationsAsB = await _dataProviderConnector.GetAllAsync<Relation>(r => r.ObjectBId == entityId, cancellationToken: ct);
             
             // Удаляем все найденные связи
             foreach (var relation in relationsAsA.Concat(relationsAsB))
             {
-                await _relationRepository.DeleteAsync(relation.Id, ct);
+                await _dataProviderConnector.DeleteAsync<Relation>(relation.Id, ct);
             }
         }
 
@@ -517,7 +511,7 @@ namespace BusinessEntity.Core.Services
             }
             
             // Получаем сущность
-            var entity = await _businessEntityRepository.GetByIdAsync(entityId, ct);
+            var entity = await _dataProviderConnector.GetByIdAsync<Classes.BusinessEntity>(entityId, cancellationToken: ct);
             if (entity == null)
             {
                 _webLogger?.Warning($"RenameEntity: сущность с ID {entityId} не найдена");
@@ -528,7 +522,7 @@ namespace BusinessEntity.Core.Services
             entity.Name = newName.Trim();
             
             // Сохраняем изменения
-            await _businessEntityRepository.UpdateAsync(entity, ct);
+            await _dataProviderConnector.UpdateAsync(entity, cancellationToken: ct);
             _webLogger?.Information($"RenameEntity: сущность успешно переименована в '{newName}'");
             
             return entity;
@@ -559,7 +553,7 @@ namespace BusinessEntity.Core.Services
         private async Task<bool> IsDescendantInDatabase(Guid descendantId, Guid ancestorId)
         {
             // Получаем родителя descendantId
-            var parentRelations = await _relationRepository.GetAllAsync(r => 
+            var parentRelations = await _dataProviderConnector.GetAllAsync<Relation>(r => 
                 r.ObjectBId == descendantId && 
                 r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
 
@@ -585,7 +579,7 @@ namespace BusinessEntity.Core.Services
             _webLogger?.Debug($"GetData: entityId={entity.Id}, type={entity.EntityType}");
 
             // Базовая загрузка всех чанков по EntityId
-            var chunks = await _dataRepository.GetAllAsync(d => d.EntityId == entity.Id);
+            var chunks = await _dataProviderConnector.GetAllAsync<BusinessEntityData>(d => d.EntityId == entity.Id);
 
             // Возможность различать логику по типам сущностей
             switch (entity.EntityType)
@@ -623,23 +617,23 @@ namespace BusinessEntity.Core.Services
             _webLogger?.Information($"SaveEntity: entityId={entity.Id}, name='{entity.Name}', dataLen={data?.Data?.Length ?? 0}");
 
             // Сохраняем (добавляем или обновляем) саму сущность
-            if (await _businessEntityRepository.ExistsAsync(entity.Id))
+            if (await _dataProviderConnector.ExistsAsync<Classes.BusinessEntity>(entity.Id))
             {
-                await _businessEntityRepository.UpdateAsync(entity);
+                await _dataProviderConnector.UpdateAsync(entity);
             }
             else
             {
-                await _businessEntityRepository.AddAsync(entity);
+                await _dataProviderConnector.AddAsync(entity);
             }
 
             // Сохраняем (добавляем или обновляем) данные сущности
-            if (await _dataRepository.ExistsAsync(data.Id))
+            if (await _dataProviderConnector.ExistsAsync<BusinessEntityData>(data.Id))
             {
-                await _dataRepository.UpdateAsync(data);
+                await _dataProviderConnector.UpdateAsync(data);
             }
             else
             {
-                await _dataRepository.AddAsync(data);
+                await _dataProviderConnector.AddAsync(data);
             }
 
             _webLogger?.Debug($"SaveEntity: saved entity {entity.Id} and data {data.Id}");

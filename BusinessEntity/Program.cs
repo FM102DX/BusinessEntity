@@ -2,7 +2,7 @@ using BusinessEntity.Contracts;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Services;
 using BusinessEntity.DataAccess.Classes;
-using BusinessEntity.DataAccess.Repositories;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Registration;
 using BusinessEntity.MiniApps.UserMiniApp.Registration;
 using BusinessEntity.Service;
 using BusinessEntity.Service.WebLogging;
@@ -85,15 +85,13 @@ namespace BusinessEntity
 				};
 			});
 
-			builder.Services.AddAuthorization();
+            builder.Services.AddAuthorization();
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddScoped<AuthentikSessionManager>();
+            builder.Services.AddDataProviderMiniApp();
             builder.Services.AddUserMiniApp();
 
             builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
-            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntity>, InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntity>>();
-            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.Relation>, InMemoryRepository<BusinessEntity.Core.Classes.Relation>>();
-            builder.Services.AddSingleton<BusinessEntity.Core.Contracts.IAsyncRepository<BusinessEntity.Core.Classes.BusinessEntityData>, InMemoryRepository<BusinessEntity.Core.Classes.BusinessEntityData>>();
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
             builder.Services.AddScoped<BusinessEntity.Core.Contracts.ISampleDataService, BusinessEntity.Core.Services.SampleDataService>();
@@ -107,6 +105,7 @@ namespace BusinessEntity
 			optionsBuilder.UseNpgsql(connectionString);
 
 			builder.Services.AddSingleton(provider => optionsBuilder.Options);
+            builder.Services.AddSingleton<ThreadSafeDbContextFactory>();
 
 			using (var context = new KmsBusinessEntityDbContext(optionsBuilder.Options))
 			{

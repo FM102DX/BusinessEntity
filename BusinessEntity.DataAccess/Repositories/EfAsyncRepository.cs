@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BusinessEntity.DataAccess.Repositories;
 
-public class EfAsyncRepository<T> : IAsyncRepository<T> where T : class, IBaseEntity
+public class EfAsyncRepository<T> : BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Repositories.IAsyncRepository<T> where T : class, IBaseEntity
 {
     private readonly ThreadSafeDbContextFactory _dbContextFactory;
 

@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject BusinessEntity.Contracts.IUserContextService UserContext
 @inject global::BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper
+@inject global::BusinessEntity.Services.SpaceHelper SpaceHelper
 @inject NavigationManager NavManager
 @inject Microsoft.JSInterop.IJSRuntime JS
 
@@ -33,11 +34,20 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // Если пространство уже восстановлено из cookies, страница выбора больше не нужна.
-        if (UserContext.HasSelectedSpace)
+        // Если пространство восстановилось из cookies и реально существует в текущем storage,
+        // страница выбора больше не нужна.
+        if (UserContext.HasSelectedSpace && UserContext.CurrentSpaceId.HasValue)
         {
-            NavManager.NavigateTo("/");
-            return;
+            var existingSpace = await SpaceHelper.GetSpaceByIdAsync(UserContext.CurrentSpaceId.Value);
+            if (existingSpace != null)
+            {
+                NavManager.NavigateTo("/");
+                return;
+            }
+
+            // После рестартов in-memory storage старый space из cookies может исчезнуть.
+            // В этом случае очищаем контекст и даём пользователю выбрать пространство заново.
+            UserContext.ClearSpace();
         }
 
         var list = await BusinessEntityHelper.GetSpacesAsync();

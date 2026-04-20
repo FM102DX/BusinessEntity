@@ -1,6 +1,7 @@
 using BusinessEntity.Contracts;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
+using BusinessEntity.Services;
 
 namespace BusinessEntity.Middleware
 {
@@ -32,12 +33,23 @@ namespace BusinessEntity.Middleware
         public async Task InvokeAsync(HttpContext context)
         {
             var userContext = context.RequestServices.GetRequiredService<IUserContextService>();
+            var spaceHelper = context.RequestServices.GetRequiredService<SpaceHelper>();
             var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 
             bool shouldBypass = _bypassPaths.Any(p => path.StartsWith(p)) || path.Contains('.');
 
             // Редиректуем только если пользователь уже аутентифицирован
             bool isAuthenticated = context.User?.Identity?.IsAuthenticated ?? false;
+
+            if (isAuthenticated && userContext.HasSelectedSpace && userContext.CurrentSpaceId.HasValue)
+            {
+                var existingSpace = await spaceHelper.GetSpaceByIdAsync(userContext.CurrentSpaceId.Value);
+                if (existingSpace == null)
+                {
+                    _logger.LogInformation("Selected space {SpaceId} is missing in current storage. Clearing user context and forcing explicit selection.", userContext.CurrentSpaceId.Value);
+                    userContext.ClearSpace();
+                }
+            }
 
             if (isAuthenticated && !shouldBypass && !userContext.HasSelectedSpace)
             {
