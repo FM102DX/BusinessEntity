@@ -272,32 +272,6 @@ BusinessEntityData
 
 Это не окончательная схема, а стартовая гипотеза для дальнейшего уточнения.
 
-### Что реально подтверждено текущим кодом
-
-В текущем коде уже явно подтверждены следующие общие поля:
-
-- `Id`
-- `CreatedDate`
-- `LastModifiedDate`
-
-Для базовой сущности объекта дополнительно уже подтверждены:
-
-- `Name`
-- `BusinessEntityType`
-- `EntityType`
-
-Для связи уже подтверждены:
-
-- `ObjectAId`
-- `ObjectBId`
-- `RelationType`
-- `RelationParams`
-
-Для payload-данных уже подтверждены:
-
-- `EntityId`
-- `Data`
-
 ### Предлагаемый состав `BusinessEntityDto`
 
 Минимум, прямо следующий из текущего кода:
@@ -307,14 +281,6 @@ BusinessEntityData
 - `EntityType`
 - `CreatedDate`
 - `LastModifiedDate`
-
-Рекомендуемое дополнение для новой DTO-модели:
-
-- `BusinessEntityType`
-- `Code`
-- `Description`
-- `State`
-- `SortOrder`
 
 ### Предлагаемый состав `BusinessEntityRelationDto`
 
@@ -328,13 +294,6 @@ BusinessEntityData
 - `CreatedDate`
 - `LastModifiedDate`
 
-Рекомендуемое дополнение для новой DTO-модели:
-
-- `SortOrder`
-- `IsBidirectional`
-- `IsSystem`
-- `State`
-
 ### Предлагаемый состав `BusinessEntityPropertyDto`
 
 Прямого аналога этой сущности в текущем коде нет, поэтому ниже приведен рекомендуемый минимальный состав для атомарных свойств:
@@ -347,19 +306,6 @@ BusinessEntityData
 - `CreatedDate`
 - `LastModifiedDate`
 
-Рекомендуемое дополнение для новой DTO-модели:
-
-- `PropertyCode`
-- `ValueType`
-- `StringValue`
-- `NumberValue`
-- `DateValue`
-- `BoolValue`
-- `JsonValue`
-- `ValueUnit`
-- `SortOrder`
-- `IsIndexed`
-
 ### Предлагаемый состав `BusinessEntityDataDto`
 
 Минимум, прямо следующий из текущего кода:
@@ -370,17 +316,6 @@ BusinessEntityData
 - `CreatedDate`
 - `LastModifiedDate`
 
-Рекомендуемое дополнение для новой DTO-модели:
-
-- `DataType`
-- `SerializationFormat`
-- `SchemaVersion`
-- `ContentType`
-- `ContentEncoding`
-- `ContentHash`
-- `IsCompressed`
-- `ChunkIndex`
-- `ChunkCount`
 
 ### Краткая логика распределения полей
 
