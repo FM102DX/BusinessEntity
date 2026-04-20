@@ -1,5 +1,4 @@
 using System.Linq.Expressions;
-using BusinessEntity.Core.Contracts;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
 {

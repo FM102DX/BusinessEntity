@@ -29,6 +29,10 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="DataAccess\Contracts\" />
+  </ItemGroup>
   <PropertyGroup>
     <DockerDisableTLS>true</DockerDisableTLS>
   </PropertyGroup>

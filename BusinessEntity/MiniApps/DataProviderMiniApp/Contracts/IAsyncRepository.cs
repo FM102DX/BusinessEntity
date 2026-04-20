@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BusinessEntity.Core.Contracts;
+namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 
 public interface IAsyncRepository<T> where T : IBaseEntity
 {

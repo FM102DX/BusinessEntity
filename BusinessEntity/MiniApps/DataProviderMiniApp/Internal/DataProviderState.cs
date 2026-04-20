@@ -1,8 +1,8 @@
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Repositories.EfPostgres;
 using BusinessEntity.DataAccess.Repositories;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 {

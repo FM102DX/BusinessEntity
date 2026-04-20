@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-using BusinessEntity.Core.Contracts;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 {

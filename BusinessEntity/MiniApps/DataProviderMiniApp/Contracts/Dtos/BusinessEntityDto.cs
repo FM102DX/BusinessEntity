@@ -8,10 +8,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 public class BusinessEntityDto : BaseEntity
 {
     public string Name { get; set; } = string.Empty;
-    public string Code { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string State { get; set; } = string.Empty;
-    public int SortOrder { get; set; }
-    public BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Undefined;
+    public string Tag { get; set; } = string.Empty;
     public BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Undefined;
 }

@@ -1,5 +1,5 @@
-using BusinessEntity.Core.Contracts;
 using BusinessEntity.DataAccess.Classes;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 

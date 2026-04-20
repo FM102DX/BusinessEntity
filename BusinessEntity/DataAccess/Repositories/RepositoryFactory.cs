@@ -1,6 +1,5 @@
-using BusinessEntity.Core.Contracts;
-using BusinessEntity.DataAccess.Contracts;
 using BusinessEntity.DataAccess.Classes;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 
 namespace BusinessEntity.DataAccess.Repositories;
 
