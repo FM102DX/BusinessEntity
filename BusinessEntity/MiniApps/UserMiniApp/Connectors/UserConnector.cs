@@ -14,10 +14,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
         public UserConnector(IMessageBus messageBus, IUserMiniApp userMiniApp)
         {
             _messageBus = messageBus;
-
-            // MiniApp materialization ensures the message subscriptions are initialized
-            // before the first connector roundtrip.
-            _ = userMiniApp;
+            userMiniApp.EnsureInitialized();
         }
 
         // Отправляет GetUserRequest в bus и ждёт типизированный ответ от user mini-app.

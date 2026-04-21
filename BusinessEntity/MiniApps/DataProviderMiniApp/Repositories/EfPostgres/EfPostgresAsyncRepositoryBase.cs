@@ -9,7 +9,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Repositories.EfPostgres;
 /// <summary>
 /// Базовая EF/Postgres-реализация generic-репозитория mini-app хранения данных.
 /// </summary>
-public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Repositories.IAsyncRepository<T> where T : class, IBaseEntity
+public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.IAsyncRepository<T> where T : class, IBaseEntity
 {
     private readonly ThreadSafeDbContextFactory _dbContextFactory;
 

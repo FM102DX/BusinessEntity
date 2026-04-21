@@ -2,7 +2,9 @@ using BusinessEntity.Contracts;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Services;
 using BusinessEntity.DataAccess.Classes;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Registration;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Registration;
 using BusinessEntity.Service;
 using BusinessEntity.Service.WebLogging;
@@ -20,8 +22,10 @@ namespace BusinessEntity
 		{
 			var builder = WebApplication.CreateBuilder(args);
 
+			// Включает базовый консольный логгер для всего приложения.
 			builder.Logging.AddConsole();
 
+			// Регистрирует базовый ASP.NET Core UI/API стек.
 			builder.Services.AddControllers();
 			builder.Services.AddRazorPages();
 			builder.Services.AddServerSideBlazor()
@@ -29,17 +33,21 @@ namespace BusinessEntity
 			builder.Services.AddEndpointsApiExplorer();
 			builder.Services.AddAutoMapper(typeof(Program));
 
+            // Регистрирует общие настройки приложения и режим запуска.
             var genApp = new GenericAppSettings();
             genApp.IsDocker = Environment.GetEnvironmentVariable("IS_DOCKER") == "true";
             builder.Services.AddSingleton(typeof(GenericAppSettings), (x) => genApp);
 
+            // Регистрирует локальные настройки web-логгера и его сервис.
             var webLoggerSettings = new WebLoggerLocalSettings();
             builder.Configuration.GetSection("WebLoggerLocalSettings").Bind(webLoggerSettings);
             builder.Services.AddSingleton(webLoggerSettings);
             builder.Services.AddScoped<IWebLoggerService, WebLoggerService>();
 
+            // Подключает UI-компоненты Radzen.
             builder.Services.AddRadzenComponents();
 
+            // Настраивает HTTP-клиент для интеграции с Authentik.
             var akBaseUrl = (
                 Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL")
                 ?? builder.Configuration["AuthentikAuth:BaseUrl"]
@@ -58,6 +66,7 @@ namespace BusinessEntity
                 client.DefaultRequestHeaders.Host = akHostHeader;
             });
 
+			// Подключает cookie-аутентификацию приложения.
 			builder.Services.AddAuthentication(options =>
 			{
 				options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -85,12 +94,16 @@ namespace BusinessEntity
 				};
 			});
 
+            // Регистрирует авторизацию и веб-контекст запроса.
             builder.Services.AddAuthorization();
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddScoped<AuthentikSessionManager>();
+
+            // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddDataProviderMiniApp();
             builder.Services.AddUserMiniApp();
 
+            // Регистрирует прикладные сервисы и message bus.
             builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
@@ -100,6 +113,7 @@ namespace BusinessEntity
             builder.Services.AddScoped<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
 
+            // Настраивает EF Core и фабрику DbContext для работы с БД.
             var connectionString = builder.Configuration.GetConnectionString("DockerConnection");
 			var optionsBuilder = new DbContextOptionsBuilder<KmsBusinessEntityDbContext>();
 			optionsBuilder.UseNpgsql(connectionString);
@@ -112,10 +126,26 @@ namespace BusinessEntity
 				context.Database.EnsureCreated();
 			}
 
+			// Подключает Swagger для диагностики API.
 			builder.Services.AddSwaggerGen();
 
 			var app = builder.Build();
 
+            // Явно поднимает DataProviderMiniApp при старте приложения.
+            using (var scope = app.Services.CreateScope())
+            {
+                var dataProviderMiniApp = scope.ServiceProvider.GetRequiredService<IDataProviderMiniApp>();
+                dataProviderMiniApp.EnsureInitialized();
+            }
+
+            // Явно поднимает UserMiniApp при старте приложения.
+            using (var scope = app.Services.CreateScope())
+            {
+                var userMiniApp = scope.ServiceProvider.GetRequiredService<IUserMiniApp>();
+                userMiniApp.EnsureInitialized();
+            }
+
+            // Инициализирует тестовые данные при старте приложения.
             using (var scope = app.Services.CreateScope())
             {
                 try
@@ -130,11 +160,13 @@ namespace BusinessEntity
                 }
             }
 
+			// Подключает production-only обработчик ошибок.
 			if (!app.Environment.IsDevelopment())
 			{
 				app.UseExceptionHandler("/Error");
 			}
 			
+			// Собирает HTTP pipeline приложения.
 			app.UseSwagger();
 			app.UseSwaggerUI();
 			app.UseStaticFiles();

@@ -33,22 +33,39 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 return;
             }
 
+            SubscribeBusinessEntityMessages();
+            SubscribeRelationMessages();
+            SubscribeBusinessEntityDataMessages();
+
+            _logger.LogInformation("DataProviderMiniApp subscribed to storage messages.");
+        }
+
+        // Подписывает сообщения, которые работают с BusinessEntity.
+        private void SubscribeBusinessEntityMessages()
+        {
             _subscriptions.Add(_messageBus.Listen<GetBusinessEntitiesRequest>().Subscribe(request => _ = HandleGetBusinessEntitiesAsync(request)));
             _subscriptions.Add(_messageBus.Listen<GetBusinessEntityByIdRequest>().Subscribe(request => _ = HandleGetBusinessEntityByIdAsync(request)));
             _subscriptions.Add(_messageBus.Listen<AddBusinessEntityRequest>().Subscribe(request => _ = HandleAddBusinessEntityAsync(request)));
             _subscriptions.Add(_messageBus.Listen<UpdateBusinessEntityRequest>().Subscribe(request => _ = HandleUpdateBusinessEntityAsync(request)));
             _subscriptions.Add(_messageBus.Listen<DeleteBusinessEntityRequest>().Subscribe(request => _ = HandleDeleteBusinessEntityAsync(request)));
+        }
+
+        // Подписывает сообщения, которые работают с BusinessEntityRelation.
+        private void SubscribeRelationMessages()
+        {
             _subscriptions.Add(_messageBus.Listen<GetAllRelationsRequest>().Subscribe(request => _ = HandleGetAllRelationsAsync(request)));
             _subscriptions.Add(_messageBus.Listen<GetRelationsRequest>().Subscribe(request => _ = HandleGetRelationsAsync(request)));
             _subscriptions.Add(_messageBus.Listen<GetRelationByIdRequest>().Subscribe(request => _ = HandleGetRelationByIdAsync(request)));
             _subscriptions.Add(_messageBus.Listen<CreateRelationRequest>().Subscribe(request => _ = HandleCreateRelationAsync(request)));
             _subscriptions.Add(_messageBus.Listen<UpdateRelationRequest>().Subscribe(request => _ = HandleUpdateRelationAsync(request)));
             _subscriptions.Add(_messageBus.Listen<DeleteRelationRequest>().Subscribe(request => _ = HandleDeleteRelationAsync(request)));
+        }
 
+        // Подписывает сообщения, которые работают с BusinessEntityData.
+        private void SubscribeBusinessEntityDataMessages()
+        {
             _subscriptions.Add(_messageBus.Listen<GetBusinessEntityDataRequest>().Subscribe(request => _ = HandleGetDataAsync(request)));
             _subscriptions.Add(_messageBus.Listen<UpdateBusinessEntityDataRequest>().Subscribe(request => _ = HandleUpdateDataAsync(request)));
-
-            _logger.LogInformation("DataProviderMiniApp subscribed to storage messages.");
         }
 
         // Обрабатывает запрос на чтение всех бизнес-сущностей.

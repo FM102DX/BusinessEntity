@@ -11,25 +11,32 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
     internal sealed class DataProviderService : IDataProviderCrudService
     {
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-        private readonly DataProviderState _state;
+        private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
+        private readonly IAsyncRepository<BusinessEntityDataDto> _businessEntityDataRepository;
+        private readonly IAsyncRepository<BusinessEntityRelationDto> _businessEntityRelationRepository;
 
-        // Получает доступ к репозиториям mini-app через внутреннее состояние.
-        public DataProviderService(DataProviderState state)
+        // Получает typed-репозитории mini-app напрямую из DI-контейнера.
+        public DataProviderService(
+            IAsyncRepository<BusinessEntityDto> businessEntityRepository,
+            IAsyncRepository<BusinessEntityDataDto> businessEntityDataRepository,
+            IAsyncRepository<BusinessEntityRelationDto> businessEntityRelationRepository)
         {
-            _state = state;
+            _businessEntityRepository = businessEntityRepository;
+            _businessEntityDataRepository = businessEntityDataRepository;
+            _businessEntityRelationRepository = businessEntityRelationRepository;
         }
 
         // Читает все DTO сущностей и маппит их в runtime BusinessEntity.
         public async Task<IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity>> GetAllAsync(CancellationToken cancellationToken = default)
         {
-            var entities = await _state.BusinessEntityRepository.GetAllAsync(ct: cancellationToken);
+            var entities = await _businessEntityRepository.GetAllAsync(ct: cancellationToken);
             return entities.Select(DataProviderMapper.ToBusinessEntity).ToList();
         }
 
         // Читает одну DTO сущности и маппит её в runtime BusinessEntity.
         public async Task<BusinessEntity.Core.Classes.BusinessEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            var entity = await _state.BusinessEntityRepository.GetByIdAsync(id, cancellationToken);
+            var entity = await _businessEntityRepository.GetByIdAsync(id, cancellationToken);
             return entity == null ? null : DataProviderMapper.ToBusinessEntity(entity);
         }
 
@@ -62,7 +69,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         // Создаёт или обновляет raw payload для сущности.
         public async Task UpdateDataPayloadAsync(Guid id, byte[] payload, CancellationToken cancellationToken = default)
         {
-            var entity = await _state.BusinessEntityRepository.GetByIdAsync(id, cancellationToken);
+            var entity = await _businessEntityRepository.GetByIdAsync(id, cancellationToken);
             if (entity == null)
             {
                 throw new KeyNotFoundException($"BusinessEntity with id '{id}' was not found.");
@@ -79,20 +86,20 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                     Data = payload
                 };
 
-                await _state.BusinessEntityDataRepository.AddAsync(dto, cancellationToken);
+                await _businessEntityDataRepository.AddAsync(dto, cancellationToken);
                 return;
             }
 
             dto.Data = payload;
             dto.LastModifiedDate = DateTime.UtcNow;
-            await _state.BusinessEntityDataRepository.UpdateAsync(dto, cancellationToken);
+            await _businessEntityDataRepository.UpdateAsync(dto, cancellationToken);
         }
 
         // Преобразует runtime сущность в DTO и сохраняет её.
         public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(entity);
-            var saved = await _state.BusinessEntityRepository.AddAsync(dto, cancellationToken);
+            var saved = await _businessEntityRepository.AddAsync(dto, cancellationToken);
             return DataProviderMapper.ToBusinessEntity(saved);
         }
 
@@ -100,7 +107,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(entity);
-            await _state.BusinessEntityRepository.UpdateAsync(dto, cancellationToken);
+            await _businessEntityRepository.UpdateAsync(dto, cancellationToken);
         }
 
         // Удаляет сущность, её payload и все связанные relation-записи.
@@ -109,29 +116,29 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             var dataDto = await FindDataDtoAsync(id, cancellationToken);
             if (dataDto != null)
             {
-                await _state.BusinessEntityDataRepository.DeleteAsync(dataDto.Id, cancellationToken);
+                await _businessEntityDataRepository.DeleteAsync(dataDto.Id, cancellationToken);
             }
 
-            var relations = await _state.BusinessEntityRelationRepository.GetAllAsync(ct: cancellationToken);
+            var relations = await _businessEntityRelationRepository.GetAllAsync(ct: cancellationToken);
             foreach (var relation in relations.Where(r => r.ObjectAId == id || r.ObjectBId == id))
             {
-                await _state.BusinessEntityRelationRepository.DeleteAsync(relation.Id, cancellationToken);
+                await _businessEntityRelationRepository.DeleteAsync(relation.Id, cancellationToken);
             }
 
-            await _state.BusinessEntityRepository.DeleteAsync(id, cancellationToken);
+            await _businessEntityRepository.DeleteAsync(id, cancellationToken);
         }
 
         // Читает все relation DTO и маппит их в runtime BusinessEntityRelation.
         public async Task<IReadOnlyList<BusinessEntityRelation>> GetAllRelationsAsync(CancellationToken cancellationToken = default)
         {
-            var relations = await _state.BusinessEntityRelationRepository.GetAllAsync(ct: cancellationToken);
+            var relations = await _businessEntityRelationRepository.GetAllAsync(ct: cancellationToken);
             return relations.Select(DataProviderMapper.ToBusinessEntityRelation).ToList();
         }
 
         // Читает relation DTO между двумя сущностями и маппит их в runtime BusinessEntityRelation.
         public async Task<IReadOnlyList<BusinessEntityRelation>> GetRelationsAsync(Guid objectAId, Guid objectBId, CancellationToken cancellationToken = default)
         {
-            var relations = await _state.BusinessEntityRelationRepository.GetAllAsync(
+            var relations = await _businessEntityRelationRepository.GetAllAsync(
                 r => (r.ObjectAId == objectAId && r.ObjectBId == objectBId) || (r.ObjectAId == objectBId && r.ObjectBId == objectAId),
                 ct: cancellationToken);
             return relations.Select(DataProviderMapper.ToBusinessEntityRelation).ToList();
@@ -140,7 +147,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         // Читает одну relation DTO и маппит её в runtime BusinessEntityRelation.
         public async Task<BusinessEntityRelation?> GetRelationByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            var relation = await _state.BusinessEntityRelationRepository.GetByIdAsync(id, cancellationToken);
+            var relation = await _businessEntityRelationRepository.GetByIdAsync(id, cancellationToken);
             return relation == null ? null : DataProviderMapper.ToBusinessEntityRelation(relation);
         }
 
@@ -148,7 +155,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         public async Task<BusinessEntityRelation> CreateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(relation);
-            var saved = await _state.BusinessEntityRelationRepository.AddAsync(dto, cancellationToken);
+            var saved = await _businessEntityRelationRepository.AddAsync(dto, cancellationToken);
             return DataProviderMapper.ToBusinessEntityRelation(saved);
         }
 
@@ -156,19 +163,19 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         public async Task UpdateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(relation);
-            await _state.BusinessEntityRelationRepository.UpdateAsync(dto, cancellationToken);
+            await _businessEntityRelationRepository.UpdateAsync(dto, cancellationToken);
         }
 
         // Удаляет relation-запись по id.
         public Task DeleteRelationAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            return _state.BusinessEntityRelationRepository.DeleteAsync(id, cancellationToken);
+            return _businessEntityRelationRepository.DeleteAsync(id, cancellationToken);
         }
 
         // Ищет первую data-запись, привязанную к конкретной сущности.
         private async Task<BusinessEntityDataDto?> FindDataDtoAsync(Guid businessEntityId, CancellationToken cancellationToken)
         {
-            var dataItems = await _state.BusinessEntityDataRepository.GetAllAsync(d => d.BusinessEntityId == businessEntityId, 1, cancellationToken);
+            var dataItems = await _businessEntityDataRepository.GetAllAsync(d => d.BusinessEntityId == businessEntityId, 1, cancellationToken);
             return dataItems.FirstOrDefault();
         }
     }

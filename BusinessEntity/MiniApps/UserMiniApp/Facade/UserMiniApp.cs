@@ -7,6 +7,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
     internal sealed class UserMiniApp : IUserMiniApp
     {
         private readonly UserMiniAppService _userMiniAppService;
+        private readonly UserMiniAppMessageHandler _messageHandler;
 
         // Инициализирует фасад mini-app и активирует message handler.
         public UserMiniApp(
@@ -14,7 +15,14 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
             UserMiniAppMessageHandler messageHandler)
         {
             _userMiniAppService = userMiniAppService;
-            messageHandler.EnsureSubscribed();
+            _messageHandler = messageHandler;
+            _messageHandler.EnsureSubscribed();
+        }
+
+        // Даёт внешнему коду явную точку для ленивой или startup-инициализации mini-app.
+        public void EnsureInitialized()
+        {
+            _messageHandler.EnsureSubscribed();
         }
 
         // Делегирует получение текущего пользователя во внутренний сервис mini-app.
