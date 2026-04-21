@@ -4,16 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using BusinessEntity.Core.Contracts;
-using Microsoft.Extensions.Hosting;
+using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.WebLogger.Services;
+using Microsoft.Extensions.Hosting;
 
-namespace BusinessEntity.Services
+namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
 {
-    /// <summary>
-    /// Reads lines from a relative text file and returns one line per call.
-    /// Wraps around when reaching the end.
-    /// </summary>
+    // Читает строки из файла наполнения и отдаёт их по одной для тестовых документов.
     public class DataFillLineProvider : IDataFillLineProvider
     {
         private readonly IHostEnvironment _env;
@@ -22,19 +19,23 @@ namespace BusinessEntity.Services
         private List<string>? _lines;
         private int _index = 0;
 
+        // Получает окружение приложения и логгер для загрузки файла наполнения.
         public DataFillLineProvider(IHostEnvironment env, IWebLoggerService? logger)
         {
             _env = env ?? throw new ArgumentNullException(nameof(env));
-            _logger = logger; // optional
+            _logger = logger;
         }
 
+        // Возвращает следующую строку из источника наполнения.
         public Task<string> GetNextLineAsync(CancellationToken ct = default)
         {
             EnsureLoaded();
             lock (_lock)
             {
                 if (_lines == null || _lines.Count == 0)
+                {
                     return Task.FromResult(string.Empty);
+                }
 
                 var line = _lines[_index];
                 _index = (_index + 1) % _lines.Count;
@@ -42,27 +43,32 @@ namespace BusinessEntity.Services
             }
         }
 
+        // Загружает файл наполнения один раз и подготавливает его к циклической выдаче строк.
         private void EnsureLoaded()
         {
-            if (_lines != null) return;
+            if (_lines != null)
+            {
+                return;
+            }
 
             lock (_lock)
             {
-                if (_lines != null) return;
+                if (_lines != null)
+                {
+                    return;
+                }
 
-                // Try to resolve the file from multiple known locations
                 var candidates = new[]
                 {
-                    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Resources", "DataFill_01.txt")), // copied via csproj Link
+                    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Resources", "DataFill_01.txt")),
                     Path.GetFullPath(Path.Combine(_env.ContentRootPath, "..", "BusinessEntityData.Resources", "DataFill_01.txt")),
                     Path.GetFullPath(Path.Combine(_env.ContentRootPath, "BusinessEntityData.Resources", "DataFill_01.txt")),
                     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "BusinessEntityData.Resources", "DataFill_01.txt"))
                 };
 
-                // Log candidates for diagnostics
-                foreach (var c in candidates)
+                foreach (var candidate in candidates)
                 {
-                    _logger?.Debug($"[DataFill] Candidate: {c} exists={File.Exists(c)}");
+                    _logger?.Debug($"[DataFill] Candidate: {candidate} exists={File.Exists(candidate)}");
                 }
 
                 string? path = candidates.FirstOrDefault(File.Exists);
@@ -81,11 +87,11 @@ namespace BusinessEntity.Services
                 }
 
                 var lines = File.ReadAllLines(path)
-                                .Select(l => l.TrimEnd('\r', '\n'))
-                                .Where(l => !string.IsNullOrWhiteSpace(l))
-                                .ToList();
+                    .Select(l => l.TrimEnd('\r', '\n'))
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .ToList();
 
-                _lines = lines.Count > 0 ? lines : new List<string> { "" };
+                _lines = lines.Count > 0 ? lines : new List<string> { string.Empty };
                 _logger?.Information($"DataFillLineProvider loaded {_lines.Count} lines from {path}");
             }
         }

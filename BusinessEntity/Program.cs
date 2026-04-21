@@ -4,6 +4,8 @@ using BusinessEntity.Core.Services;
 using BusinessEntity.DataAccess.Classes;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Registration;
+using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
+using BusinessEntity.MiniApps.SampleDataMiniApp.Registration;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Registration;
 using BusinessEntity.Service;
@@ -101,14 +103,13 @@ namespace BusinessEntity
 
             // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddDataProviderMiniApp();
+            builder.Services.AddSampleDataMiniApp();
             builder.Services.AddUserMiniApp();
 
             // Регистрирует прикладные сервисы и message bus.
             builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
-            builder.Services.AddScoped<BusinessEntity.Core.Contracts.ISampleDataService, BusinessEntity.Core.Services.SampleDataService>();
-            builder.Services.AddScoped<BusinessEntity.Core.Contracts.IDataFillLineProvider, BusinessEntity.Services.DataFillLineProvider>();
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
             builder.Services.AddScoped<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
@@ -150,8 +151,8 @@ namespace BusinessEntity
             {
                 try
                 {
-                    var seeder = scope.ServiceProvider.GetRequiredService<BusinessEntity.Core.Contracts.ISampleDataService>();
-                    seeder.InitializeSampleDataAsync().GetAwaiter().GetResult();
+                    var sampleDataMiniApp = scope.ServiceProvider.GetRequiredService<ISampleDataMiniApp>();
+                    sampleDataMiniApp.EnsureInitializedAsync().GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {

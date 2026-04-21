@@ -5,10 +5,12 @@ using System.Threading.Tasks;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.WebLogger.Services;
 
-namespace BusinessEntity.Core.Services
+namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
 {
+    // Выполняет фактическую заливку тестовых пространств, папок и документов.
     public class SampleDataService : ISampleDataService
     {
         private readonly BusinessEntityHelper _helper;
@@ -19,6 +21,7 @@ namespace BusinessEntity.Core.Services
         private static readonly object _syncLock = new();
         private static bool _seededGlobal = false;
 
+        // Получает зависимости, необходимые для построения демонстрационных данных.
         public SampleDataService(
             BusinessEntityHelper helper,
             IDataProviderConnector dataProviderConnector,
@@ -33,6 +36,7 @@ namespace BusinessEntity.Core.Services
             _webLogger = webLogger;
         }
 
+        // Инициализирует тестовые данные, если они ещё не были созданы.
         public async Task InitializeSampleDataAsync(CancellationToken ct = default)
         {
             lock (_syncLock)
@@ -44,12 +48,9 @@ namespace BusinessEntity.Core.Services
             try
             {
                 _webLogger?.Information("[Seed] InitializeSampleDataAsync: start");
-                // Проверяем наличие пространств и связей для дерева.
                 var existingEntities = await _dataProviderConnector.GetAllAsync(ct);
                 var existingSpaces = existingEntities.Where(e => e.EntityType == BusinessEntityTypeEnum.Space).ToList();
 
-                // Если пространства существуют И при этом уже есть хотя бы одна связь VisuallyContains –
-                // считаем, что демонстрационные данные уже были сгенерированы и можно выйти.
                 var existingRelations = await _dataProviderConnector.GetAllRelationsAsync(ct);
                 bool hasVisualRelations = existingRelations.Any(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
                 _webLogger?.Information($"[Seed] Existing: entities={existingEntities.Count}, spaces={existingSpaces.Count}, relations={existingRelations.Count}, visualRelations={existingRelations.Count(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())}");
@@ -59,9 +60,6 @@ namespace BusinessEntity.Core.Services
                     return;
                 }
 
-                // Если либо нет пространств, либо отсутствуют связи для дерева – генерируем демо-данные повторно.
-
-                // Находим или создаём пространства (idempotent)
                 var docsExisted = existingSpaces.Any(s => s.Name == "Документы");
                 var documentsSpace = existingSpaces.FirstOrDefault(s => s.Name == "Документы")
                                      ?? await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Space, "Документы");
@@ -71,7 +69,6 @@ namespace BusinessEntity.Core.Services
                                      ?? await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Space, "Новости");
                 _webLogger?.Information($"[Seed] Space 'Новости': {(newsExisted ? "reused" : "created")}, Id={newsSpace.Id}");
 
-                // Получаем возможные типы отношений
                 var relationTypes = _relations.GetPossibleRelations().ToList();
                 var spaceContainsFolder = relationTypes.FirstOrDefault(r => r.RelationName == "basic:space-contains-folder");
                 var spaceContainsPage = relationTypes.FirstOrDefault(r => r.RelationName == "basic:space-contains-page");
@@ -79,14 +76,12 @@ namespace BusinessEntity.Core.Services
                 var folderContainsFolder = relationTypes.FirstOrDefault(r => r.RelationName == "basic:folder-contains-folder");
                 _webLogger?.Information($"[Seed] RelationTypes: spaceContainsFolder={(spaceContainsFolder != null)}, spaceContainsPage={(spaceContainsPage != null)}, folderContainsPage={(folderContainsPage != null)}, folderContainsFolder={(folderContainsFolder != null)}");
 
-                // Проверяем, есть ли уже дети у пространств (чтобы не дублировать наполнение)
                 var docsHasChildren = (await _helper.GetContainedEntitiesAsync(documentsSpace.Id, ct)).Any();
                 var newsHasChildren = (await _helper.GetContainedEntitiesAsync(newsSpace.Id, ct)).Any();
                 _webLogger?.Information($"[Seed] Children flags: docsHasChildren={docsHasChildren}, newsHasChildren={newsHasChildren}");
 
                 if (!docsHasChildren)
                 {
-                    // Создаём несколько страниц прямо в пространстве "Документы" c заполнением текста
                     try
                     {
                         _webLogger?.Information("[Seed] Creating direct pages in 'Документы' space");
@@ -107,7 +102,6 @@ namespace BusinessEntity.Core.Services
                         throw;
                     }
 
-                    // Создаём 3 папки в "Документы"
                     for (int i = 1; i <= 3; i++)
                     {
                         try
@@ -115,8 +109,7 @@ namespace BusinessEntity.Core.Services
                             _webLogger?.Information($"[Seed] Creating folder {i} in 'Документы'");
                             var folder = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Folder, $"Folder {i}");
                             _webLogger?.Information($"[Seed] Created folder {i}: Id={folder.Id}");
-                            
-                            // Связываем Space с Folder
+
                             if (spaceContainsFolder != null)
                             {
                                 await _helper.CreateRelation(documentsSpace, folder, spaceContainsFolder, "");
@@ -127,8 +120,7 @@ namespace BusinessEntity.Core.Services
                                 _webLogger?.Warning("[Seed] Relation type 'space-contains-folder' not found");
                             }
 
-                            // Создаём 2-3 страницы в каждой папке (с наполнением текста)
-                            int pageCount = i == 1 ? 2 : 3; // В первой папке 2 страницы, в остальных по 3
+                            int pageCount = i == 1 ? 2 : 3;
                             for (int j = 1; j <= pageCount; j++)
                             {
                                 var pageText = await _dataFill.GetNextLineAsync(ct);
@@ -136,15 +128,13 @@ namespace BusinessEntity.Core.Services
                                 await _helper.RenameEntity(page.Id, $"Document {i}-{j}", ct);
                                 _webLogger?.Information($"[Seed] Created document {i}-{j}: Id={page.Id}");
                             }
-                            
-                            // Создаём вложенную папку в первой папке для демонстрации
+
                             if (i == 1 && folderContainsFolder != null)
                             {
                                 var subFolder = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Folder, "Subfolder 1-1");
                                 await _helper.CreateRelation(folder, subFolder, folderContainsFolder, "");
                                 _webLogger?.Information($"[Seed] Created subfolder under Folder 1: Id={subFolder.Id}");
-                                
-                                // Добавляем страницу в подпапку (с наполнением текста)
+
                                 var subText = await _dataFill.GetNextLineAsync(ct);
                                 var subPage = await _helper.CreateDocumentAsync(subFolder, subText, ct);
                                 await _helper.RenameEntity(subPage.Id, "Sub-document 1-1-1", ct);
@@ -159,12 +149,9 @@ namespace BusinessEntity.Core.Services
                         }
                     }
                 }
-                // Демонстрация дублирования удалена: каждый документ находится ровно в одной папке
 
                 if (!newsHasChildren)
                 {
-                    // Заполняем пространство "Новости"
-                    // 1) Прямые страницы
                     try
                     {
                         _webLogger?.Information("[Seed] Creating direct pages in 'Новости' space");
@@ -184,7 +171,6 @@ namespace BusinessEntity.Core.Services
                         throw;
                     }
 
-                    // 2) Создаём 2 рубрики (папки) в "Новости"
                     for (int i = 1; i <= 2; i++)
                     {
                         try
@@ -201,7 +187,6 @@ namespace BusinessEntity.Core.Services
                                 _webLogger?.Warning("[Seed] Relation type 'space-contains-folder' not found (Новости)");
                             }
 
-                            // В каждой рубрике по 2 новости (с наполнением текста)
                             for (int j = 1; j <= 2; j++)
                             {
                                 var newsText = await _dataFill.GetNextLineAsync(ct);
@@ -221,21 +206,25 @@ namespace BusinessEntity.Core.Services
             }
             catch (Exception ex)
             {
-                // В случае ошибки сбрасываем флаг, чтобы можно было попробовать ещё раз
                 try
                 {
                     _webLogger?.Error(FormatException(ex, "InitializeSampleDataAsync"));
                     _webLogger?.Warning("[Seed] Seeding failed. Resetting seeded flag.");
                 }
-                catch { }
+                catch
+                {
+                }
+
                 lock (_syncLock)
                 {
                     _seededGlobal = false;
                 }
+
                 throw;
             }
         }
 
+        // Преобразует исключение заливки в подробный диагностический текст.
         private static string FormatException(Exception ex, string? context = null)
         {
             var sb = new System.Text.StringBuilder();
@@ -243,6 +232,7 @@ namespace BusinessEntity.Core.Services
             {
                 sb.AppendLine($"[Seed] Exception context: {context}");
             }
+
             int level = 0;
             var current = ex;
             while (current != null)
@@ -252,7 +242,6 @@ namespace BusinessEntity.Core.Services
                 sb.AppendLine($"Message: {current.Message}");
                 if (!string.IsNullOrWhiteSpace(current.Source)) sb.AppendLine($"Source: {current.Source}");
                 if (current.TargetSite != null) sb.AppendLine($"TargetSite: {current.TargetSite}");
-                // Dump Data dictionary if present
                 if (current.Data != null && current.Data.Count > 0)
                 {
                     sb.AppendLine("Data:");
@@ -261,13 +250,15 @@ namespace BusinessEntity.Core.Services
                         sb.AppendLine($"  {entry.Key} = {entry.Value}");
                     }
                 }
+
                 sb.AppendLine("StackTrace:");
                 sb.AppendLine(current.StackTrace);
                 sb.AppendLine("----");
                 current = current.InnerException;
                 level++;
             }
+
             return sb.ToString();
         }
     }
-} 
+}
