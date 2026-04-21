@@ -87,30 +87,30 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             EnsureNoError(response.ErrorMessage);
             if (!response.Success)
             {
-                throw new InvalidOperationException($"DataProvider failed to update data for business entity '{id}'.");
+                throw new InvalidOperationException($"DataProvider failed to update data for business entityData '{id}'.");
             }
         }
 
         // Отправляет команду на создание бизнес-сущности.
-        public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default)
+        public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
             var response = await SendAndReceiveAsync<AddBusinessEntityRequest, AddBusinessEntityResponse>(
-                new AddBusinessEntityRequest(requestId, entity),
+                new AddBusinessEntityRequest(requestId, entityData),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
 
             EnsureNoError(response.ErrorMessage);
-            return response.Record ?? throw new InvalidOperationException("DataProvider returned null business entity after AddAsync.");
+            return response.Record ?? throw new InvalidOperationException("DataProvider returned null business entityData after AddAsync.");
         }
 
         // Отправляет команду на обновление бизнес-сущности.
-        public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default)
+        public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
             var response = await SendAndReceiveAsync<UpdateBusinessEntityRequest, UpdateBusinessEntityResponse>(
-                new UpdateBusinessEntityRequest(requestId, entity),
+                new UpdateBusinessEntityRequest(requestId, entityData),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
@@ -119,7 +119,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
 
             if (!response.Success)
             {
-                throw new InvalidOperationException($"DataProvider failed to update business entity '{entity.Id}'.");
+                throw new InvalidOperationException($"DataProvider failed to update business entityData '{entityData.Id}'.");
             }
         }
 
@@ -137,7 +137,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
 
             if (!response.Success)
             {
-                throw new InvalidOperationException($"DataProvider failed to delete business entity '{id}'.");
+                throw new InvalidOperationException($"DataProvider failed to delete business entityData '{id}'.");
             }
         }
 

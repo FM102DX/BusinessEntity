@@ -61,7 +61,7 @@ public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where
 
             if (!_storage.TryAdd(entity.Id, entity))
             {
-                throw new InvalidOperationException($"Entity with id '{entity.Id}' already exists.");
+                throw new InvalidOperationException($"EntityData with id '{entity.Id}' already exists.");
             }
 
             return Task.FromResult(entity);
@@ -77,7 +77,7 @@ public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where
         {
             if (!_storage.ContainsKey(entity.Id))
             {
-                throw new KeyNotFoundException($"Entity with id '{entity.Id}' was not found.");
+                throw new KeyNotFoundException($"EntityData with id '{entity.Id}' was not found.");
             }
 
             entity.LastModifiedDate = DateTime.UtcNow;

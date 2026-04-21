@@ -40,7 +40,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             _logger.LogInformation("DataProviderMiniApp subscribed to storage messages.");
         }
 
-        // Подписывает сообщения, которые работают с BusinessEntity.
+        // Подписывает сообщения, которые работают с BusinessEntityData.
         private void SubscribeBusinessEntityMessages()
         {
             _subscriptions.Add(_messageBus.Listen<GetBusinessEntitiesRequest>().Subscribe(request => _ = HandleGetBusinessEntitiesAsync(request)));
@@ -93,7 +93,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load business entity {RecordId}.", request.Id);
+                _logger.LogError(ex, "Failed to load business entityData {RecordId}.", request.Id);
                 _messageBus.SendMessage(new GetBusinessEntityByIdResponse(request.RequestId, null, ex.Message));
             }
         }
@@ -108,7 +108,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load business entity data {RecordId}.", request.BusinessEntityId);
+                _logger.LogError(ex, "Failed to load business entityData data {RecordId}.", request.BusinessEntityId);
                 _messageBus.SendMessage(new GetBusinessEntityDataResponse(request.RequestId, null, ex.Message));
             }
         }
@@ -123,7 +123,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to add business entity.");
+                _logger.LogError(ex, "Failed to add business entityData.");
                 _messageBus.SendMessage(new AddBusinessEntityResponse(request.RequestId, null, ex.Message));
             }
         }
@@ -138,7 +138,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to update business entity {RecordId}.", request.Record.Id);
+                _logger.LogError(ex, "Failed to update business entityData {RecordId}.", request.Record.Id);
                 _messageBus.SendMessage(new UpdateBusinessEntityResponse(request.RequestId, false, ex.Message));
             }
         }
@@ -153,7 +153,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to delete business entity {RecordId}.", request.Id);
+                _logger.LogError(ex, "Failed to delete business entityData {RecordId}.", request.Id);
                 _messageBus.SendMessage(new DeleteBusinessEntityResponse(request.RequestId, false, ex.Message));
             }
         }
@@ -168,7 +168,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to update business entity data {RecordId}.", request.BusinessEntityId);
+                _logger.LogError(ex, "Failed to update business entityData data {RecordId}.", request.BusinessEntityId);
                 _messageBus.SendMessage(new UpdateBusinessEntityDataResponse(request.RequestId, false, ex.Message));
             }
         }

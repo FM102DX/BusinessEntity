@@ -58,7 +58,7 @@ namespace BusinessEntity.Components
             try
             {
                 WebLogger?.Information($"[Doc] SaveAsync started: entityId={Entity.Id}, prevTitle='{Entity.Name}', newTitle='{EditTitle}'");
-                // Update entity title
+                // Update entityData title
                 Entity.Name = (EditTitle ?? string.Empty).Trim();
 
                 // Take first chunk or create new

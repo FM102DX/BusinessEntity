@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 
-namespace BusinessEntity.Core.Classes
+namespace BusinessEntity.Core.DomainEntities
 {
-    public class Space : BusinessEntityBase, IBusinessEntity
+    public class Space : BusinessEntityDataBase, IBusinessEntity
     {
         public override BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Space;
     }

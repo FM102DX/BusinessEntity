@@ -73,11 +73,11 @@ namespace BusinessEntity.Components
                         {
                             try
                             {
-                                var updatedEntity = msg?.Entity;
-                                WebLogger?.Information($"[Tree] EntityUpdatedMessage received: entity is {(updatedEntity == null ? "null" : updatedEntity.Id.ToString())}, name='{updatedEntity?.Name}'");
+                                var updatedEntity = msg?.EntityData;
+                                WebLogger?.Information($"[Tree] EntityUpdatedMessage received: entityData is {(updatedEntity == null ? "null" : updatedEntity.Id.ToString())}, name='{updatedEntity?.Name}'");
                                 if (updatedEntity == null)
                                 {
-                                    WebLogger?.Warning("[Tree] Received EntityUpdatedMessage with null Entity");
+                                    WebLogger?.Warning("[Tree] Received EntityUpdatedMessage with null EntityData");
                                     return;
                                 }
 
@@ -208,33 +208,33 @@ namespace BusinessEntity.Components
             return rootVm;
         }
 
-        private async Task<TreeNodeItemViewModelBase> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entity)
+        private async Task<TreeNodeItemViewModelBase> BuildTreeNodeAsync(BusinessEntity.Core.Classes.BusinessEntity entityData)
         {
-            var icon = GetEntityIcon(entity.EntityType);
+            var icon = GetEntityIcon(entityData.EntityType);
               // Создаем соответствующий тип наследника в зависимости от типа сущности
             // Space не обрабатываем здесь, так как он создается через BuildSpaceRootAsync
-            TreeNodeItemViewModelBase treeNodeVm = entity.EntityType.ToString() switch
+            TreeNodeItemViewModelBase treeNodeVm = entityData.EntityType.ToString() switch
             {
-                "Folder" => new FolderTreeNodeItemViewModel(entity, WebLogger),
+                "Folder" => new FolderTreeNodeItemViewModel(entityData, WebLogger),
                 "Document" => new DocumentTreeNodeItemViewModel(WebLogger),
                 "Page" => new DocumentTreeNodeItemViewModel(WebLogger),
-                _ => new FolderTreeNodeItemViewModel(entity, WebLogger) // По умолчанию используем Folder
+                _ => new FolderTreeNodeItemViewModel(entityData, WebLogger) // По умолчанию используем Folder
             };
 
             // Заполняем общие свойства (некоторые уже заполнены в конструкторе для Folder)
-            if (entity.EntityType.ToString() != "Folder")
+            if (entityData.EntityType.ToString() != "Folder")
             {
-                treeNodeVm.Title = entity.Name;
-                treeNodeVm.Entity = entity;
-                treeNodeVm.EntityType = entity.EntityType.ToString();
+                treeNodeVm.Title = entityData.Name;
+                treeNodeVm.Entity = entityData;
+                treeNodeVm.EntityType = entityData.EntityType.ToString();
             }
             treeNodeVm.Icon = icon;
             treeNodeVm.Expanded = true;
             // Индексируем узел
-            _nodeById[entity.Id] = treeNodeVm;
+            _nodeById[entityData.Id] = treeNodeVm;
 
             // Устанавливаем обратный вызов для создания сущностей у папок
-            if (entity.EntityType.ToString() == "Folder")
+            if (entityData.EntityType.ToString() == "Folder")
             {
                 treeNodeVm.OnEntityCreateRequested = OnEntityCreateRequestedAsync;
             }
@@ -246,7 +246,7 @@ namespace BusinessEntity.Components
             treeNodeVm.OnEntityRenameRequested = OnEntityRenameRequestedAsync;
 
             // Получаем дочерние сущности через BusinessEntityHelper для получения детей
-            var children = await BusinessEntityHelper.GetContainedEntitiesAsync(entity.Id);
+            var children = await BusinessEntityHelper.GetContainedEntitiesAsync(entityData.Id);
             var childNodes = new List<TreeNodeItemViewModelBase>(); 
 
             foreach (var child in children)
@@ -536,7 +536,7 @@ namespace BusinessEntity.Components
             {
                 if (parentNode?.Entity == null)
                 {
-                    WebLogger?.Warning("Cannot create entity - parent node or entity is null");
+                    WebLogger?.Warning("Cannot create entityData - parent node or entityData is null");
                     return;
                 }
 
@@ -595,7 +595,7 @@ namespace BusinessEntity.Components
                         break;
                         
                     default:
-                        WebLogger?.Information($"TODO: Create {entityType} entity under {parentNode.Entity.Name}");
+                        WebLogger?.Information($"TODO: Create {entityType} entityData under {parentNode.Entity.Name}");
                         break;
                 }
 
@@ -647,22 +647,22 @@ namespace BusinessEntity.Components
                 {
                     if (node?.Entity == null)
                     {
-                        WebLogger?.Warning($"Cannot delete node - Entity is null");
+                        WebLogger?.Warning($"Cannot delete node - EntityData is null");
                         continue;
                     }
 
-                    WebLogger?.Information($"Deleting entity '{node.Title}' (ID: {node.Entity.Id})");
+                    WebLogger?.Information($"Deleting entityData '{node.Title}' (ID: {node.Entity.Id})");
                     
                     try
                     {
                         // Удаляем через BusinessEntityHelper
                         await BusinessEntityHelper.RemoveBusinessEntity(node.Entity.Id);
-                        WebLogger?.Information($"Successfully deleted entity '{node.Title}'");
+                        WebLogger?.Information($"Successfully deleted entityData '{node.Title}'");
                         deletedNodes.Add(node);
                     }
                     catch (Exception ex)
                     {
-                        WebLogger?.Warning($"Failed to delete entity '{node.Title}': {ex.Message}");
+                        WebLogger?.Warning($"Failed to delete entityData '{node.Title}': {ex.Message}");
                     }
                 }
 
@@ -1187,7 +1187,7 @@ namespace BusinessEntity.Components
                     // Валидация через EntityNameValidator
                     if (entityNameValidator.IsValidEntityName(newName))
                     {
-                        WebLogger?.Information($"EntityNameValidator.IsValidEntityName=ОК EditingNode.Entity={EditingNode.Entity} newName={newName} EditingNode.Title={EditingNode.Title}");
+                        WebLogger?.Information($"EntityNameValidator.IsValidEntityName=ОК EditingNode.EntityData={EditingNode.Entity} newName={newName} EditingNode.Title={EditingNode.Title}");
                         if (newName != EditingNode.Title)
                         {
                             // Переименовываем сущность через BusinessEntityHelper
@@ -1195,7 +1195,7 @@ namespace BusinessEntity.Components
                             {
                                 if (EditingNode.Entity != null)
                                 {
-                                    WebLogger?.Information($"Renaming entity");
+                                    WebLogger?.Information($"Renaming entityData");
 
                                     var renamedEntity = await BusinessEntityHelper.RenameEntity(EditingNode.Entity.Id, newName);
 
@@ -1205,11 +1205,11 @@ namespace BusinessEntity.Components
                                         // Обновляем имя в узле дерева
                                         EditingNode.Title = newName;
                                         EditingNode.Entity.Name = newName;
-                                        WebLogger?.Information($"Successfully renamed entity to '{newName}'");
+                                        WebLogger?.Information($"Successfully renamed entityData to '{newName}'");
                                     }
                                     else
                                     {
-                                        WebLogger?.Error($"Failed to rename entity to '{newName}'");
+                                        WebLogger?.Error($"Failed to rename entityData to '{newName}'");
                                         HasValidationError = true;
                                         ValidationErrorMessage = "Не удалось сохранить изменения";
                                         await InvokeAsync(StateHasChanged);
@@ -1219,7 +1219,7 @@ namespace BusinessEntity.Components
                             }
                             catch (Exception ex)
                             {
-                                WebLogger?.Error($"Error renaming entity: {ex.Message}");
+                                WebLogger?.Error($"Error renaming entityData: {ex.Message}");
                                 HasValidationError = true;
                                 ValidationErrorMessage = "Ошибка при сохранении";
                                 await InvokeAsync(StateHasChanged);
@@ -1232,7 +1232,7 @@ namespace BusinessEntity.Components
                         // Показываем ошибку валидации
                         HasValidationError = true;
                         ValidationErrorMessage = "Имя должно содержать только буквы, цифры, пробелы, _ и -, и включать хотя бы одну букву";
-                        WebLogger?.Warning($"EntityNameValidator.IsValidEntityName=FAIL; Invalid entity name: '{EditingText}'. {ValidationErrorMessage}");
+                        WebLogger?.Warning($"EntityNameValidator.IsValidEntityName=FAIL; Invalid entityData name: '{EditingText}'. {ValidationErrorMessage}");
                         await InvokeAsync(StateHasChanged);
                         return; // Не выходим из режима редактирования при ошибке валидации
                     }

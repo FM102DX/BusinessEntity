@@ -279,7 +279,7 @@ namespace BusinessEntity.Core.Services
             // Генерируем уникальное имя документа
             var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Document, ct);
 
-            // Создаем документ как BusinessEntity с типом Document
+            // Создаем документ как BusinessEntityData с типом Document
             var entity = new Classes.BusinessEntity
             {
                 Id = Guid.NewGuid(),
@@ -584,27 +584,27 @@ namespace BusinessEntity.Core.Services
             return false;
         }
 
-        public async Task<IReadOnlyList<BusinessEntityData>> GetData(Classes.BusinessEntity entity)
+        public async Task<IReadOnlyList<BusinessEntityData>> GetData(Classes.BusinessEntity entityData)
         {
-            if (entity == null) throw new ArgumentNullException(nameof(entity));
-            _webLogger?.Debug($"GetData: entityId={entity.Id}, type={entity.EntityType}");
+            if (entityData == null) throw new ArgumentNullException(nameof(entityData));
+            _webLogger?.Debug($"GetData: entityId={entityData.Id}, type={entityData.EntityType}");
 
             // Базовая загрузка всех чанков по EntityId
-            var rawData = await _dataProviderConnector.GetDataAsync<string>(entity.Id);
+            var rawData = await _dataProviderConnector.GetDataAsync<string>(entityData.Id);
             var chunks = string.IsNullOrEmpty(rawData)
                 ? Array.Empty<BusinessEntityData>()
                 : new[]
                 {
                     new BusinessEntityData
                     {
-                        Id = entity.Id,
-                        EntityId = entity.Id,
+                        Id = entityData.Id,
+                        EntityId = entityData.Id,
                         Data = rawData
                     }
                 };
 
             // Возможность различать логику по типам сущностей
-            switch (entity.EntityType)
+            switch (entityData.EntityType)
             {
                 case BusinessEntityTypeEnum.Space:
                     // Специфическая обработка для Space (при необходимости)
@@ -626,33 +626,33 @@ namespace BusinessEntity.Core.Services
         /// <summary>
         /// Сохраняет бизнес-энтити и связанный с ней блок данных
         /// </summary>
-        /// <param name="entity">Сущность (например, документ)</param>
+        /// <param name="entityData">Сущность (например, документ)</param>
         /// <param name="data">Данные сущности</param>
-        public async Task SaveEntity(Classes.BusinessEntity entity, BusinessEntityData data)
+        public async Task SaveEntity(Classes.BusinessEntity entityData, BusinessEntityData data)
         {
-            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            if (entityData == null) throw new ArgumentNullException(nameof(entityData));
             if (data == null) throw new ArgumentNullException(nameof(data));
 
             // Всегда удостоверяемся, что данные привязаны к текущей сущности
-            data.EntityId = entity.Id;
+            data.EntityId = entityData.Id;
 
-            _webLogger?.Information($"SaveEntity: entityId={entity.Id}, name='{entity.Name}', dataLen={data?.Data?.Length ?? 0}");
+            _webLogger?.Information($"SaveEntity: entityId={entityData.Id}, name='{entityData.Name}', dataLen={data?.Data?.Length ?? 0}");
 
             // Сохраняем (добавляем или обновляем) саму сущность
-            var existingEntity = await _dataProviderConnector.GetByIdAsync(entity.Id);
+            var existingEntity = await _dataProviderConnector.GetByIdAsync(entityData.Id);
             if (existingEntity != null)
             {
-                await _dataProviderConnector.UpdateAsync(entity);
+                await _dataProviderConnector.UpdateAsync(entityData);
             }
             else
             {
-                await _dataProviderConnector.AddAsync(entity);
+                await _dataProviderConnector.AddAsync(entityData);
             }
 
             // Сохраняем данные сущности как сериализованный JSON payload
-            await _dataProviderConnector.UpdateDataAsync(entity.Id, data.Data);
+            await _dataProviderConnector.UpdateDataAsync(entityData.Id, data.Data);
 
-            _webLogger?.Debug($"SaveEntity: saved entity {entity.Id} and data {data.Id}");
+            _webLogger?.Debug($"SaveEntity: saved entityData {entityData.Id} and data {data.Id}");
         }
     }
 }

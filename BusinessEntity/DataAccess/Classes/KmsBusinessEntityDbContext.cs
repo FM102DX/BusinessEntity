@@ -4,7 +4,7 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 namespace BusinessEntity.DataAccess.Classes;
 
 /// <summary>
-/// DbContext, используемый репозиториями BusinessEntity. Конфигурация таблиц настраивается в вызывающем коде.
+/// DbContext, используемый репозиториями BusinessEntityData. Конфигурация таблиц настраивается в вызывающем коде.
 /// </summary>
 public class KmsBusinessEntityDbContext : DbContext
 {

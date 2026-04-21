@@ -11,11 +11,11 @@ namespace BusinessEntity.Models
         {
         }
 
-        public FolderTreeNodeItemViewModel(BusinessEntity.Core.Classes.BusinessEntity entity, IWebLoggerService? webLogger = null) : base(webLogger)
+        public FolderTreeNodeItemViewModel(BusinessEntity.Core.Classes.BusinessEntity entityData, IWebLoggerService? webLogger = null) : base(webLogger)
         {
-            Entity = entity;
-            Title = entity.Name;
-            EntityType = entity.EntityType.ToString();
+            Entity = entityData;
+            Title = entityData.Name;
+            EntityType = entityData.EntityType.ToString();
         }
 
         public override string MenuText => "Папка";

@@ -54,9 +54,9 @@ namespace BusinessEntity.Services
                 var candidates = new[]
                 {
                     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Resources", "DataFill_01.txt")), // copied via csproj Link
-                    Path.GetFullPath(Path.Combine(_env.ContentRootPath, "..", "BusinessEntity.Resources", "DataFill_01.txt")),
-                    Path.GetFullPath(Path.Combine(_env.ContentRootPath, "BusinessEntity.Resources", "DataFill_01.txt")),
-                    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "BusinessEntity.Resources", "DataFill_01.txt"))
+                    Path.GetFullPath(Path.Combine(_env.ContentRootPath, "..", "BusinessEntityData.Resources", "DataFill_01.txt")),
+                    Path.GetFullPath(Path.Combine(_env.ContentRootPath, "BusinessEntityData.Resources", "DataFill_01.txt")),
+                    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "BusinessEntityData.Resources", "DataFill_01.txt"))
                 };
 
                 // Log candidates for diagnostics

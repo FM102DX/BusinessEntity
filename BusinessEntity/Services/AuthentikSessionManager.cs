@@ -17,7 +17,7 @@ namespace BusinessEntity.Services
     public sealed class AuthentikSessionManager
     {
         private const string HttpClientName = "AuthentikAuth";
-        private const string StatePurpose = "BusinessEntity.Authentik.State";
+        private const string StatePurpose = "BusinessEntityData.Authentik.State";
         private const string AccessTokenName = "access_token";
         private const string RefreshTokenName = "refresh_token";
         private const string IdTokenName = "id_token";

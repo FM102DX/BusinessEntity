@@ -26,14 +26,14 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             _businessEntityRelationRepository = businessEntityRelationRepository;
         }
 
-        // Читает все DTO сущностей и маппит их в runtime BusinessEntity.
+        // Читает все DTO сущностей и маппит их в runtime BusinessEntityData.
         public async Task<IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity>> GetAllAsync(CancellationToken cancellationToken = default)
         {
             var entities = await _businessEntityRepository.GetAllAsync(ct: cancellationToken);
             return entities.Select(DataProviderMapper.ToBusinessEntity).ToList();
         }
 
-        // Читает одну DTO сущности и маппит её в runtime BusinessEntity.
+        // Читает одну DTO сущности и маппит её в runtime BusinessEntityData.
         public async Task<BusinessEntity.Core.Classes.BusinessEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
             var entity = await _businessEntityRepository.GetByIdAsync(id, cancellationToken);
@@ -72,7 +72,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             var entity = await _businessEntityRepository.GetByIdAsync(id, cancellationToken);
             if (entity == null)
             {
-                throw new KeyNotFoundException($"BusinessEntity with id '{id}' was not found.");
+                throw new KeyNotFoundException($"BusinessEntityData with id '{id}' was not found.");
             }
 
             var dto = await FindDataDtoAsync(id, cancellationToken);
@@ -96,17 +96,17 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         }
 
         // Преобразует runtime сущность в DTO и сохраняет её.
-        public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default)
+        public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
-            var dto = DataProviderMapper.ToDto(entity);
+            var dto = DataProviderMapper.ToDto(entityData);
             var saved = await _businessEntityRepository.AddAsync(dto, cancellationToken);
             return DataProviderMapper.ToBusinessEntity(saved);
         }
 
         // Преобразует runtime сущность в DTO и обновляет её в хранилище.
-        public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entity, CancellationToken cancellationToken = default)
+        public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
-            var dto = DataProviderMapper.ToDto(entity);
+            var dto = DataProviderMapper.ToDto(entityData);
             await _businessEntityRepository.UpdateAsync(dto, cancellationToken);
         }
 

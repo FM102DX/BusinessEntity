@@ -5,7 +5,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
 
 internal static class DataProviderMapper
 {
-    // Собирает runtime BusinessEntity из DTO-записи хранилища.
+    // Собирает runtime BusinessEntityData из DTO-записи хранилища.
     public static BusinessEntity.Core.Classes.BusinessEntity ToBusinessEntity(BusinessEntityDto dto)
     {
         return new BusinessEntity.Core.Classes.BusinessEntity
@@ -19,17 +19,17 @@ internal static class DataProviderMapper
         };
     }
 
-    // Преобразует runtime BusinessEntity в DTO для хранения.
-    public static BusinessEntityDto ToDto(BusinessEntity.Core.Classes.BusinessEntity entity)
+    // Преобразует runtime BusinessEntityData в DTO для хранения.
+    public static BusinessEntityDto ToDto(BusinessEntity.Core.Classes.BusinessEntity entityData)
     {
         return new BusinessEntityDto
         {
-            Id = entity.Id,
-            CreatedDate = entity.CreatedDate,
-            LastModifiedDate = entity.LastModifiedDate,
-            Name = entity.Name,
-            BusinessEntityType = entity.BusinessEntityType,
-            EntityType = entity.EntityType
+            Id = entityData.Id,
+            CreatedDate = entityData.CreatedDate,
+            LastModifiedDate = entityData.LastModifiedDate,
+            Name = entityData.Name,
+            BusinessEntityType = entityData.BusinessEntityType,
+            EntityType = entityData.EntityType
         };
     }
 
