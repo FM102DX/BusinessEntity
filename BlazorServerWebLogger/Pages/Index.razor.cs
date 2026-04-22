@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using BlazorServerWebLogger.Contracts;
 using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.Messages;
@@ -45,7 +47,10 @@ namespace BlazorServerWebLogger.Pages
 
         public LogEntryDbStorable SelectedLogEntry { get; set; }
 
-        private Timer _timer;
+        private PeriodicTimer? _refreshTimer;
+        private CancellationTokenSource? _refreshLoopCts;
+        private Task? _refreshLoopTask;
+        private int _updateInProgress;
 
         protected override async Task OnInitializedAsync()
         {
@@ -67,12 +72,40 @@ namespace BlazorServerWebLogger.Pages
             // Обновляем состояние интерфейса
             StateHasChanged();
 
-            // Запускаем таймер для обновления данных
-            _timer = new Timer(async _ => await UpdateDataAsync(), null, 0, 500);
+            // Запускаем последовательный polling-цикл без наложения timer callbacks.
+            _refreshLoopCts = new CancellationTokenSource();
+            _refreshTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+            _refreshLoopTask = RunRefreshLoopAsync(_refreshLoopCts.Token);
+        }
+
+        private async Task RunRefreshLoopAsync(CancellationToken cancellationToken)
+        {
+            if (_refreshTimer == null)
+            {
+                return;
+            }
+
+            try
+            {
+                while (await _refreshTimer.WaitForNextTickAsync(cancellationToken))
+                {
+                    await UpdateDataAsync();
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Нормальное завершение цикла при dispose страницы.
+            }
         }
 
         private async Task UpdateDataAsync()
         {
+            // Не допускаем наложения poll-циклов друг на друга.
+            if (Interlocked.Exchange(ref _updateInProgress, 1) == 1)
+            {
+                return;
+            }
+
             try
             {
                 var newEntries = await LogReaderService.ReadNewEntriesAsync(LogEntries.FirstOrDefault()?.Timestamp ?? DateTime.MinValue);
@@ -82,9 +115,14 @@ namespace BlazorServerWebLogger.Pages
                 {
                     if (newEntries.Any())
                     {
+                        // UI хранит только уникальные записи по Id, даже если read-цикл пересекся.
+                        var existingIds = LogEntries.Select(entry => entry.Id).ToHashSet();
                         foreach (var entry in newEntries)
                         {
-                            LogEntries.Insert(0, entry);
+                            if (existingIds.Add(entry.Id))
+                            {
+                                LogEntries.Insert(0, entry);
+                            }
                         }
                         TotalLogsCount = totalCount;
                         UpdateFilters();
@@ -103,9 +141,13 @@ namespace BlazorServerWebLogger.Pages
                     Console.WriteLine($"[INDEX-ERROR] Время: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
                     Console.WriteLine($"[INDEX-ERROR] Количество записей в UI: {LogEntries.Count}");
                 }
-                
+
                 // Не пробрасываем исключение, чтобы таймер продолжал работать
                 // Следующая попытка будет через 500ms
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _updateInProgress, 0);
             }
         }
 
@@ -319,8 +361,10 @@ namespace BlazorServerWebLogger.Pages
 
         public void Dispose()
         {
-            // Очищаем таймер при завершении работы компонента
-            _timer?.Dispose();
+            // Останавливаем polling страницы при уничтожении компонента.
+            _refreshLoopCts?.Cancel();
+            _refreshTimer?.Dispose();
+            _refreshLoopCts?.Dispose();
         }
 
         // Вспомогательные классы для фильтров

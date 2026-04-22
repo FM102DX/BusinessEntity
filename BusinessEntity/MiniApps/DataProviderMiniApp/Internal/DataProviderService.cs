@@ -2,6 +2,7 @@ using System.Text.Json;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 {
@@ -14,16 +15,19 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
         private readonly IAsyncRepository<BusinessEntityDataDto> _businessEntityDataRepository;
         private readonly IAsyncRepository<BusinessEntityRelationDto> _businessEntityRelationRepository;
+        private readonly IWebLoggerService? _webLogger;
 
         // Получает typed-репозитории mini-app напрямую из DI-контейнера.
         public DataProviderService(
             IAsyncRepository<BusinessEntityDto> businessEntityRepository,
             IAsyncRepository<BusinessEntityDataDto> businessEntityDataRepository,
-            IAsyncRepository<BusinessEntityRelationDto> businessEntityRelationRepository)
+            IAsyncRepository<BusinessEntityRelationDto> businessEntityRelationRepository,
+            IWebLoggerService? webLogger)
         {
             _businessEntityRepository = businessEntityRepository;
             _businessEntityDataRepository = businessEntityDataRepository;
             _businessEntityRelationRepository = businessEntityRelationRepository;
+            _webLogger = webLogger;
         }
 
         // Читает все DTO сущностей и маппит их в runtime BusinessEntityData.
@@ -86,20 +90,26 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                     Data = payload
                 };
 
+                // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-data-dto] Создан DTO payload entityId={id} dtoId={dto.Id} payloadLength={payload.Length}");
                 await _businessEntityDataRepository.AddAsync(dto, cancellationToken);
+                // _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-data-dto] DTO payload записан в хранилище entityId={id} dtoId={dto.Id} payloadLength={payload.Length}");
                 return;
             }
 
             dto.Data = payload;
             dto.LastModifiedDate = DateTime.UtcNow;
+            // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-data-dto] Обновляем DTO payload entityId={id} dtoId={dto.Id} payloadLength={payload.Length}");
             await _businessEntityDataRepository.UpdateAsync(dto, cancellationToken);
+            // _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-data-dto] DTO payload обновлен в хранилище entityId={id} dtoId={dto.Id} payloadLength={payload.Length}");
         }
 
         // Преобразует runtime сущность в DTO и сохраняет её.
         public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(entityData);
+            _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-dto] BusinessEntity -> DTO entityId={entityData.Id} dtoId={dto.Id} type={dto.EntityType} name='{dto.Name}'");
             var saved = await _businessEntityRepository.AddAsync(dto, cancellationToken);
+            _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-dto] DTO сущности записан в хранилище entityId={saved.Id} type={saved.EntityType} name='{saved.Name}'");
             return DataProviderMapper.ToBusinessEntity(saved);
         }
 
@@ -107,7 +117,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(entityData);
+            _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-dto] Обновляем DTO сущности entityId={entityData.Id} dtoId={dto.Id} type={dto.EntityType} name='{dto.Name}'");
             await _businessEntityRepository.UpdateAsync(dto, cancellationToken);
+            _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-dto] DTO сущности обновлен в хранилище entityId={dto.Id} type={dto.EntityType} name='{dto.Name}'");
         }
 
         // Удаляет сущность, её payload и все связанные relation-записи.
@@ -126,6 +138,14 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
 
             await _businessEntityRepository.DeleteAsync(id, cancellationToken);
+        }
+
+        // Полностью очищает все DTO-таблицы mini-app для debug re-seed сценария.
+        public async Task ClearAllAsync(CancellationToken cancellationToken = default)
+        {
+            await _businessEntityDataRepository.DeleteAllAsync(cancellationToken);
+            await _businessEntityRelationRepository.DeleteAllAsync(cancellationToken);
+            await _businessEntityRepository.DeleteAllAsync(cancellationToken);
         }
 
         // Читает все relation DTO и маппит их в runtime BusinessEntityRelation.
@@ -155,7 +175,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         public async Task<BusinessEntityRelation> CreateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(relation);
+            // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-relation-dto] Relation -> DTO relationId={relation.Id} dtoId={dto.Id} objectA={dto.ObjectAId} objectB={dto.ObjectBId} type={dto.RelationType}");
             var saved = await _businessEntityRelationRepository.AddAsync(dto, cancellationToken);
+            // _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-relation-dto] DTO relation записан в хранилище relationId={saved.Id} objectA={saved.ObjectAId} objectB={saved.ObjectBId} type={saved.RelationType}");
             return DataProviderMapper.ToBusinessEntityRelation(saved);
         }
 
@@ -163,7 +185,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         public async Task UpdateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(relation);
+            // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-relation-dto] Обновляем DTO relation relationId={relation.Id} dtoId={dto.Id} objectA={dto.ObjectAId} objectB={dto.ObjectBId} type={dto.RelationType}");
             await _businessEntityRelationRepository.UpdateAsync(dto, cancellationToken);
+            // _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-relation-dto] DTO relation обновлен в хранилище relationId={dto.Id} objectA={dto.ObjectAId} objectB={dto.ObjectBId} type={dto.RelationType}");
         }
 
         // Удаляет relation-запись по id.

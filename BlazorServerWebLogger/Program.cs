@@ -5,6 +5,7 @@ using BlazorServerWebLogger.Data.App;
 using BlazorServerWebLogger.Data.Services;
 using BlazorServerWebLogger.Data.Services.HostedServices;
 using BlazorServerWebLogger.DataAccess.Repository;
+using BlazorServerWebLogger.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,7 @@ namespace BlazorServerWebLogger
             builder.Services.AddServerSideBlazor();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddAutoMapper(typeof(Program));
+            builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(90));
             var _app = new WebLoggerApp();
 
             // ������ �������� �� appsettings.json
@@ -74,7 +76,7 @@ namespace BlazorServerWebLogger
                     maxRetryCount: 5,
                     maxRetryDelay: TimeSpan.FromSeconds(10),
                     errorCodesToAdd: null);
-                options.CommandTimeout(30);
+                options.CommandTimeout(120);
             }); // ��������� ������������� PostgreSQL
 
             // ������������ DbContextOptions<WebLoggerDbContext> � DI
@@ -93,6 +95,9 @@ namespace BlazorServerWebLogger
             builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // ����������� ������� ������������
             builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>(); // ����������� ������� ������������
             builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>(); // ����������� ������� ������������
+            builder.Services.AddSingleton<LogIngestionQueue>();
+            builder.Services.AddSingleton<ILogIngestionQueue>(provider => provider.GetRequiredService<LogIngestionQueue>());
+            builder.Services.AddHostedService(provider => provider.GetRequiredService<LogIngestionQueue>());
             builder.Services.AddScoped<LogReaderService>();
             builder.Services.AddHostedService<SampleLogGeneratorService>();
             var logEraserEnabled = builder.Configuration.GetSection("LogEraserSettings").GetValue<bool>("Enabled");

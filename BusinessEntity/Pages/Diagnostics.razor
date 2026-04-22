@@ -1,8 +1,12 @@
 @page "/diagnostics"
 @using System.Linq
 @using BusinessEntity.Core.Classes
+@using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
+@using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts
 @using global::BusinessEntity.Core.Classes
 @inject global::BusinessEntity.Core.Services.BusinessEntityHelper Helper
+@inject IDataProviderConnector DataProviderConnector
+@inject ISampleDataMiniApp SampleDataMiniApp
 
 
 <PageTitle>Диагностика</PageTitle>
@@ -19,6 +23,19 @@ else
 {
     <div class="container py-3">
         <h3 class="mb-3">Диагностика сущностей и связей</h3>
+
+        <div class="mb-3 d-flex gap-2 align-items-center">
+            <button class="btn btn-danger"
+                    @onclick="ReSeedAsync"
+                    disabled="@IsReseeding">
+                @(IsReseeding ? "Re-seed..." : "Re-seed")
+            </button>
+
+            @if (!string.IsNullOrWhiteSpace(OperationStatus))
+            {
+                <span class="text-muted">@OperationStatus</span>
+            }
+        </div>
 
         <div class="mb-3">
             <strong>Всего сущностей:</strong> @Entities.Count
@@ -152,9 +169,40 @@ else
     private Dictionary<Guid, BusinessEntity> EntityById = new();
 
     private bool IsLoading = true;
+    private bool IsReseeding;
     private string? Error;
+    private string? OperationStatus;
 
     protected override async Task OnInitializedAsync()
+    {
+        await LoadDiagnosticsAsync();
+    }
+
+    private async Task ReSeedAsync()
+    {
+        try
+        {
+            IsReseeding = true;
+            Error = null;
+            OperationStatus = "Очищаем хранилище и запускаем seed заново...";
+
+            await DataProviderConnector.ClearAllAsync();
+            await SampleDataMiniApp.ForceReseedAsync();
+            await LoadDiagnosticsAsync();
+            OperationStatus = $"Re-seed завершен. Сущностей: {Entities.Count}, связей: {Relations.Count}.";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsReseeding = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadDiagnosticsAsync()
     {
         try
         {

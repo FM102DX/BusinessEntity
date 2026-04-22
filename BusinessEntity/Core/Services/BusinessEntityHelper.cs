@@ -38,6 +38,7 @@ namespace BusinessEntity.Core.Services
         {
             _webLogger?.Information($"CreateBusinessEntity: type={type}, name={name}");
             var entity = CreateEntityForType(type, name);
+            _webLogger?.Information($"[мини-апп:business-entity-helper] [entity:create] [dispatch:add-entity] Подготовлена сущность type={type} id={entity.Id} name='{entity.Name}'");
 
             return await _dataProviderConnector.AddAsync(entity);
         }
@@ -229,6 +230,7 @@ namespace BusinessEntity.Core.Services
             var entity = CreateEntityForType(BusinessEntityTypeEnum.Folder, name);
 
             // Сохраняем сущность
+            // _webLogger?.Information($"[мини-апп:business-entity-helper] [entity:create] [folder] Создаем folder id={entity.Id} name='{name}' parentId={parent.Id} parentName='{parent.Name}'");
             await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
 
             // Создаем визуальную связь родитель -> дочерний элемент
@@ -242,6 +244,7 @@ namespace BusinessEntity.Core.Services
             };
 
             // Сохраняем связь
+            // _webLogger?.Information($"[мини-апп:business-entity-helper] [relation:create] [dispatch:add-relation] Folder parent-child relation parentId={parent.Id} childId={entity.Id} type={relation.RelationType}");
             await _dataProviderConnector.CreateRelationAsync(relation, cancellationToken: ct);
 
             _webLogger?.Information($"Created new folder '{name}' (ID: {entity.Id}) under parent '{parent.Name}' (ID: {parent.Id})");
@@ -279,6 +282,7 @@ namespace BusinessEntity.Core.Services
 
             // Создаем runtime-объект документа через фабрику
             var entity = CreateEntityForType(BusinessEntityTypeEnum.Document, name, dataToSave);
+            // _webLogger?.Information($"[мини-апп:business-entity-helper] [entity:create] [document] Создаем document id={entity.Id} name='{name}' parentId={parent.Id} parentName='{parent.Name}' payloadLength={dataToSave.Length}");
 
             // Сохраняем сущность
             await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
@@ -293,9 +297,11 @@ namespace BusinessEntity.Core.Services
                 RelationParams = string.Empty
             };
 
+            // _webLogger?.Information($"[мини-апп:business-entity-helper] [relation:create] [dispatch:add-relation] Document parent-child relation parentId={parent.Id} childId={entity.Id} type={relation.RelationType}");
             await _dataProviderConnector.CreateRelationAsync(relation, cancellationToken: ct);
 
             // Создаем payload документа
+            // _webLogger?.Information($"[мини-апп:business-entity-helper] [entity-data:create] [dispatch:update-data] Создаем payload для document entityId={entity.Id} length={dataToSave.Length}");
             await _dataProviderConnector.UpdateDataAsync(entity.Id, dataToSave!, ct);
 
             _webLogger?.Debug($"Created BusinessEntityData for document '{name}' (DocID: {entity.Id}), DataLength={dataToSave?.Length ?? 0}");

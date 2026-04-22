@@ -34,7 +34,7 @@ namespace BlazorServerWebLogger.Data.Services
             try
             {
                 var result = await _repo.GetAllAsync(
-                    filter: entry => entry.Timestamp > lastTimestamp, null // Фильтруем по времени
+                    filter: entry => entry.Timestamp >= lastTimestamp, null // Берем >= и режем дубли уже по Id на уровне UI
                 );
 
                 return result.Items

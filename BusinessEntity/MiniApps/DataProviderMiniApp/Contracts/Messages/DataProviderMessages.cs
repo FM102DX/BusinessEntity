@@ -20,6 +20,9 @@ public sealed record UpdateBusinessEntityResponse(Guid RequestId, bool Success, 
 public sealed record DeleteBusinessEntityRequest(Guid RequestId, Guid Id);
 public sealed record DeleteBusinessEntityResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 
+public sealed record ClearDataProviderStorageRequest(Guid RequestId);
+public sealed record ClearDataProviderStorageResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
+
 public sealed record UpdateBusinessEntityDataRequest(Guid RequestId, Guid BusinessEntityId, byte[] Data);
 public sealed record UpdateBusinessEntityDataResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 

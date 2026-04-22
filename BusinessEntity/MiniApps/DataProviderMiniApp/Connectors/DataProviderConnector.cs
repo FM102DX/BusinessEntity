@@ -141,6 +141,23 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             }
         }
 
+        // Отправляет debug-команду на полную очистку DTO-хранилища mini-app.
+        public async Task ClearAllAsync(CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<ClearDataProviderStorageRequest, ClearDataProviderStorageResponse>(
+                new ClearDataProviderStorageRequest(requestId),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            if (!response.Success)
+            {
+                throw new InvalidOperationException("DataProvider failed to clear storage.");
+            }
+        }
+
         // Запрашивает полный список связей между сущностями.
         public async Task<IReadOnlyList<BusinessEntityRelation>> GetAllRelationsAsync(CancellationToken cancellationToken = default)
         {

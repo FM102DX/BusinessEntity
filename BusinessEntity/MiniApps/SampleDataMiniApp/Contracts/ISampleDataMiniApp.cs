@@ -5,5 +5,7 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Contracts
     {
         // Инициализирует mini-app и запускает заливку тестовых данных.
         Task EnsureInitializedAsync(CancellationToken cancellationToken = default);
+        // Сбрасывает внутренний флаг сидера и запускает полную заливку заново.
+        Task ForceReseedAsync(CancellationToken cancellationToken = default);
     }
 }

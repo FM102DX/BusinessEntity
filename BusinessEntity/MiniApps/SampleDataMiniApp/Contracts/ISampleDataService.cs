@@ -8,5 +8,7 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Contracts
     {
         // Запускает инициализацию тестовых данных.
         Task InitializeSampleDataAsync(CancellationToken ct = default);
+        // Сбрасывает состояние сидера и принудительно запускает тестовую заливку снова.
+        Task ForceReseedAsync(CancellationToken ct = default);
     }
 }

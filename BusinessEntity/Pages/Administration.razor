@@ -1,6 +1,10 @@
 @page "/administration"
 @using Microsoft.Extensions.Configuration
+@using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
+@using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts
 @inject IConfiguration Configuration
+@inject IDataProviderConnector DataProviderConnector
+@inject ISampleDataMiniApp SampleDataMiniApp
 
 <PageTitle>Администрирование</PageTitle>
 
@@ -24,9 +28,37 @@
             </a>
         </div>
     </div>
+
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5 class="card-title">Debug Re-seed</h5>
+            <p class="card-text">
+                Временно для отладки: полностью очищает BusinessEntity-хранилище и запускает seed заново.
+            </p>
+            <button class="btn btn-danger"
+                    @onclick="ReSeedAsync"
+                    disabled="@IsReseeding">
+                @(IsReseeding ? "Re-seed..." : "Re-seed")
+            </button>
+
+            @if (!string.IsNullOrWhiteSpace(ReSeedStatus))
+            {
+                <div class="mt-2 text-muted">@ReSeedStatus</div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(ReSeedError))
+            {
+                <div class="mt-2 text-danger">@ReSeedError</div>
+            }
+        </div>
+    </div>
 </div>
 
 @code {
+    private bool IsReseeding;
+    private string? ReSeedStatus;
+    private string? ReSeedError;
+
     private string AuthentikAdminUrl =>
         (
             Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL_FOR_BROWSER")
@@ -34,4 +66,25 @@
             ?? Configuration["AuthentikAuth:BaseUrl"]
             ?? "http://localhost:9000"
         ).TrimEnd('/') + "/if/admin/";
+
+    private async Task ReSeedAsync()
+    {
+        try
+        {
+            IsReseeding = true;
+            ReSeedError = null;
+            ReSeedStatus = "Очищаем хранилище и запускаем seed заново...";
+            await DataProviderConnector.ClearAllAsync();
+            await SampleDataMiniApp.ForceReseedAsync();
+            ReSeedStatus = "Re-seed завершен.";
+        }
+        catch (Exception ex)
+        {
+            ReSeedError = ex.Message;
+        }
+        finally
+        {
+            IsReseeding = false;
+        }
+    }
 }

@@ -2,6 +2,7 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using ReactiveUI;
 using BusinessEntity.Core.Classes;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 {
@@ -13,16 +14,19 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         private readonly IMessageBus _messageBus;
         private readonly IDataProviderCrudService _dataProviderService;
         private readonly ILogger<DataProviderMessageHandler> _logger;
+        private readonly IWebLoggerService? _webLogger;
         private readonly List<IDisposable> _subscriptions = new();
 
         public DataProviderMessageHandler(
             IMessageBus messageBus,
             IDataProviderCrudService dataProviderService,
-            ILogger<DataProviderMessageHandler> logger)
+            ILogger<DataProviderMessageHandler> logger,
+            IWebLoggerService? webLogger)
         {
             _messageBus = messageBus;
             _dataProviderService = dataProviderService;
             _logger = logger;
+            _webLogger = webLogger;
         }
 
         // Один раз подписывает mini-app на все входящие bus-сообщения.
@@ -48,6 +52,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             _subscriptions.Add(_messageBus.Listen<AddBusinessEntityRequest>().Subscribe(request => _ = HandleAddBusinessEntityAsync(request)));
             _subscriptions.Add(_messageBus.Listen<UpdateBusinessEntityRequest>().Subscribe(request => _ = HandleUpdateBusinessEntityAsync(request)));
             _subscriptions.Add(_messageBus.Listen<DeleteBusinessEntityRequest>().Subscribe(request => _ = HandleDeleteBusinessEntityAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<ClearDataProviderStorageRequest>().Subscribe(request => _ = HandleClearStorageAsync(request)));
         }
 
         // Подписывает сообщения, которые работают с BusinessEntityRelation.
@@ -118,6 +123,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         {
             try
             {
+                _webLogger?.Information($"[мини-апп:data-provider] [bus:received] [entity:add] Получено AddBusinessEntityRequest requestId={request.RequestId} entityId={request.Record.Id} type={request.Record.EntityType} name='{request.Record.Name}'");
                 var record = await _dataProviderService.AddAsync(request.Record);
                 _messageBus.SendMessage(new AddBusinessEntityResponse(request.RequestId, record));
             }
@@ -158,11 +164,27 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
         }
 
+        // Обрабатывает debug-команду на полную очистку DTO-хранилища mini-app.
+        private async Task HandleClearStorageAsync(ClearDataProviderStorageRequest request)
+        {
+            try
+            {
+                await _dataProviderService.ClearAllAsync();
+                _messageBus.SendMessage(new ClearDataProviderStorageResponse(request.RequestId, true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to clear DataProvider storage.");
+                _messageBus.SendMessage(new ClearDataProviderStorageResponse(request.RequestId, false, ex.Message));
+            }
+        }
+
         // Обрабатывает команду на сохранение бинарного payload сущности.
         private async Task HandleUpdateDataAsync(UpdateBusinessEntityDataRequest request)
         {
             try
             {
+                // _webLogger?.Information($"[мини-апп:data-provider] [bus:received] [entity-data:update] Получено UpdateBusinessEntityDataRequest requestId={request.RequestId} entityId={request.BusinessEntityId} payloadLength={request.Data?.Length ?? 0}");
                 await _dataProviderService.UpdateDataPayloadAsync(request.BusinessEntityId, request.Data);
                 _messageBus.SendMessage(new UpdateBusinessEntityDataResponse(request.RequestId, true));
             }
@@ -223,6 +245,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         {
             try
             {
+                // _webLogger?.Information($"[мини-апп:data-provider] [bus:received] [relation:add] Получено CreateRelationRequest requestId={request.RequestId} relationId={request.Record.Id} objectA={request.Record.ObjectAId} objectB={request.Record.ObjectBId} type={request.Record.RelationType}");
                 var record = await _dataProviderService.CreateRelationAsync(request.Record);
                 _messageBus.SendMessage(new CreateRelationResponse(request.RequestId, record));
             }

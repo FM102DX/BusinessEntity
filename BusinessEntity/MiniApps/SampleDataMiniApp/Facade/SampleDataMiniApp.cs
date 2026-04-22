@@ -18,5 +18,11 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Facade
         {
             return _sampleDataService.InitializeSampleDataAsync(cancellationToken);
         }
+
+        // Принудительно запускает повторную заливку данных через mini-app-обертку.
+        public Task ForceReseedAsync(CancellationToken cancellationToken = default)
+        {
+            return _sampleDataService.ForceReseedAsync(cancellationToken);
+        }
     }
 }

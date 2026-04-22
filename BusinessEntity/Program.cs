@@ -26,6 +26,7 @@ namespace BusinessEntity
 
 			// Включает базовый консольный логгер для всего приложения.
 			builder.Logging.AddConsole();
+            builder.Logging.AddFilter("System.Net.Http.HttpClient.WebLogger", LogLevel.Warning);
 
 			// Регистрирует базовый ASP.NET Core UI/API стек.
 			builder.Services.AddControllers();
@@ -44,7 +45,13 @@ namespace BusinessEntity
             var webLoggerSettings = new WebLoggerLocalSettings();
             builder.Configuration.GetSection("WebLoggerLocalSettings").Bind(webLoggerSettings);
             builder.Services.AddSingleton(webLoggerSettings);
-            builder.Services.AddScoped<IWebLoggerService, WebLoggerService>();
+            builder.Services.AddHttpClient("WebLogger", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(5);
+            });
+            builder.Services.AddSingleton<WebLoggerService>();
+            builder.Services.AddSingleton<IWebLoggerService>(provider => provider.GetRequiredService<WebLoggerService>());
+            builder.Services.AddHostedService(provider => provider.GetRequiredService<WebLoggerService>());
 
             // Подключает UI-компоненты Radzen.
             builder.Services.AddRadzenComponents();
