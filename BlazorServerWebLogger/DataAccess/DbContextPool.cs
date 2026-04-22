@@ -8,21 +8,22 @@ using SampleOnlineMall.WebLogger.DataAccess;
 
 public class DbContextPool
 {
+    private static readonly TimeSpan WaitForFreeContextTimeout = TimeSpan.FromSeconds(5);
     private readonly int _dbContextLifeTimeMs;
     private readonly DbContextOptions<WebLoggerDbContext> _options;
-    private readonly Action<WebLoggerDbContext> _freeUpFunc;
     private readonly DebugLogger _logger;
     private readonly SemaphoreSlim _semaphore;
     private readonly int _maxPoolSize;
+    private readonly string _poolName;
     public ConcurrentDictionary<Guid, DbContextPoolRecord> PoolRecords { get; } = new();
 
     private readonly Timer _cleanupTimer;
 
-    public DbContextPool(int dbContextLifeTimeMs, DbContextOptions<WebLoggerDbContext> options, Action<WebLoggerDbContext> freeUpFunc, DebugLogger logger, int maxPoolSize)
+    public DbContextPool(string poolName, int dbContextLifeTimeMs, DbContextOptions<WebLoggerDbContext> options, DebugLogger logger, int maxPoolSize)
     {
+        _poolName = poolName;
         _dbContextLifeTimeMs = dbContextLifeTimeMs;
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _freeUpFunc = freeUpFunc ?? throw new ArgumentNullException(nameof(freeUpFunc));
         _logger = logger;
         _semaphore = new SemaphoreSlim(maxPoolSize); // ограничение на количество одновременно выданных контекстов
         _maxPoolSize = maxPoolSize; // строгий лимит на общее число созданных DbContext
@@ -31,78 +32,39 @@ public class DbContextPool
 
     public DbContextWrap GetDbContext()
     {
-        _semaphore.Wait(); // ждём доступного слота в пуле
+        if (!_semaphore.Wait(WaitForFreeContextTimeout))
+        {
+            throw new TimeoutException($"Timed out waiting for a free DbContext in pool '{_poolName}'.");
+        }
+
         try
         {
+            CleanupExpiredRecordsInternal();
+
             // сначала пробуем переиспользовать свободный
-            foreach (var record in PoolRecords.Values)
+            var reusable = TryAcquireReusableRecord();
+            if (reusable != null)
             {
-                if (Monitor.TryEnter(record.SyncLock))
-                {
-                    try
-                    {
-                        if (!record.Busy && !record.Expired && !record.Disposed)
-                        {
-                            record.Busy = true;
-                            record.TimeStamp = DateTime.UtcNow;
-                            record.IssuedCount++;
-                            Console.WriteLine($"[ISSUED] Reusing existing DbContext: id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
-                            return new DbContextWrap(record.Context, _freeUpFunc, record);
-                        }
-                    }
-                    finally
-                    {
-                        Monitor.Exit(record.SyncLock);
-                    }
-                }
+                Console.WriteLine($"[ISSUED] Reusing existing DbContext: pool={_poolName}, id={reusable.Id}, busy={reusable.Busy}, issued={reusable.IssuedCount}");
+                return new DbContextWrap(reusable.Context, ReleaseRecord, reusable);
             }
 
-            // если нет свободных, проверяем лимит пула
-            if (PoolRecords.Count >= _maxPoolSize)
+            // если лимит еще не достигнут, создаем новый контекст
+            if (PoolRecords.Count < _maxPoolSize)
             {
-                // достигнут лимит по числу созданных контекстов — ждём освобождения существующего
-                while (true)
-                {
-                    foreach (var record in PoolRecords.Values)
-                    {
-                        if (Monitor.TryEnter(record.SyncLock))
-                        {
-                            try
-                            {
-                                if (!record.Busy && !record.Expired && !record.Disposed)
-                                {
-                                    record.Busy = true;
-                                    record.TimeStamp = DateTime.UtcNow;
-                                    record.IssuedCount++;
-                                    Console.WriteLine($"[ISSUED] Reusing existing DbContext (waited): id={record.Id}, busy={record.Busy}, issued={record.IssuedCount}");
-                                    return new DbContextWrap(record.Context, _freeUpFunc, record);
-                                }
-                            }
-                            finally
-                            {
-                                Monitor.Exit(record.SyncLock);
-                            }
-                        }
-                    }
-                    Thread.Sleep(10); // пауза и повтор
-                }
-            }
-            else
-            {
-                // можно создать новый контекст, лимит ещё не достигнут
                 var id = Guid.NewGuid();
                 try
                 {
-                    Console.WriteLine($"[DBPOOL] Создаю новый DbContext, ID: {id}");
+                    Console.WriteLine($"[DBPOOL] Создаю новый DbContext, pool={_poolName}, ID: {id}");
                     var newRecord = new DbContextPoolRecord(_dbContextLifeTimeMs, id)
                     {
-                        TimeStamp = DateTime.UtcNow,
                         Busy = true,
+                        BusySinceUtc = DateTime.UtcNow,
                         Context = new WebLoggerDbContext(_options)
                     };
                     PoolRecords.TryAdd(id, newRecord);
-                    Console.WriteLine($"[CREATED] ✓ New DbContext created successfully: id={newRecord.Id}, busy={newRecord.Busy}");
-                    return new DbContextWrap(newRecord.Context, _freeUpFunc, newRecord);
+                    Console.WriteLine($"[CREATED] ✓ New DbContext created successfully: pool={_poolName}, id={newRecord.Id}, busy={newRecord.Busy}");
+                    return new DbContextWrap(newRecord.Context, ReleaseRecord, newRecord);
                 }
                 catch (Exception ex)
                 {
@@ -118,6 +80,9 @@ public class DbContextPool
                     throw;
                 }
             }
+
+            // если слот семафора освободился, но свободный контекст так и не нашли — это ошибка координации пула
+            throw new TimeoutException($"No reusable DbContext was found in pool '{_poolName}' after acquiring a slot.");
         }
         catch
         {
@@ -132,7 +97,84 @@ public class DbContextPool
         _semaphore.Release(); // освобождаем слот для нового потока
     }
 
+    private DbContextPoolRecord? TryAcquireReusableRecord()
+    {
+        foreach (var record in PoolRecords.Values)
+        {
+            if (!Monitor.TryEnter(record.SyncLock))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (record.Disposed || record.Busy)
+                {
+                    continue;
+                }
+
+                if (record.Expired)
+                {
+                    DisposeRecordUnsafe(record);
+                    continue;
+                }
+
+                record.Busy = true;
+                record.BusySinceUtc = DateTime.UtcNow;
+                record.LastIssuedAtUtc = DateTime.UtcNow;
+                record.IssuedCount++;
+
+                return record;
+            }
+            finally
+            {
+                Monitor.Exit(record.SyncLock);
+            }
+        }
+
+        return null;
+    }
+
+    private void ReleaseRecord(DbContextPoolRecord record)
+    {
+        try
+        {
+            lock (record.SyncLock)
+            {
+                if (record.Disposed)
+                {
+                    return;
+                }
+
+                // Сбрасываем трекинг и соединение перед возвратом в пул.
+                record.Context.ChangeTracker.Clear();
+                record.Context.Database.CloseConnection();
+
+                record.Busy = false;
+                record.BusySinceUtc = null;
+
+                if (record.Expired)
+                {
+                    DisposeRecordUnsafe(record);
+                    Console.WriteLine($"[DISPOSED] Expired DbContext removed from pool: pool={_poolName}, id={record.Id}");
+                    return;
+                }
+
+                _logger.Write($"[RETURNED] DbContext returned to pool: pool={_poolName}, id={record.Id}, busy={record.Busy}");
+            }
+        }
+        finally
+        {
+            ReleaseThread();
+        }
+    }
+
     private void CleanupExpiredRecords(object? state)
+    {
+        CleanupExpiredRecordsInternal();
+    }
+
+    private void CleanupExpiredRecordsInternal()
     {
         var expiredRecords = PoolRecords
             .Values
@@ -143,14 +185,19 @@ public class DbContextPool
         {
             lock (record.SyncLock)
             {
-                if (!record.Disposed)
+                if (!record.Disposed && !record.Busy && record.Expired)
                 {
-                    record.Context.Dispose();
-                    record.Disposed = true;
-                    Console.WriteLine($"[DISPOSED] DbContext disposed: id={record.Id}");
-                    PoolRecords.TryRemove(record.Id, out _);
+                    DisposeRecordUnsafe(record);
+                    Console.WriteLine($"[DISPOSED] DbContext disposed: pool={_poolName}, id={record.Id}");
                 }
             }
         }
+    }
+
+    private void DisposeRecordUnsafe(DbContextPoolRecord record)
+    {
+        record.Context.Dispose();
+        record.Disposed = true;
+        PoolRecords.TryRemove(record.Id, out _);
     }
 }

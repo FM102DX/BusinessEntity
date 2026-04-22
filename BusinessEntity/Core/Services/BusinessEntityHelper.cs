@@ -37,7 +37,7 @@ namespace BusinessEntity.Core.Services
         public async Task<Classes.BusinessEntity> CreateBusinessEntity(BusinessEntityTypeEnum type, string name)
         {
             _webLogger?.Information($"CreateBusinessEntity: type={type}, name={name}");
-            var entity = _businessEntityFactory.Create(type, name);
+            var entity = CreateEntityForType(type, name);
 
             return await _dataProviderConnector.AddAsync(entity);
         }
@@ -226,7 +226,7 @@ namespace BusinessEntity.Core.Services
             var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Folder, ct);
 
             // Создаем новую сущность
-            var entity = _businessEntityFactory.Create(BusinessEntityTypeEnum.Folder, name);
+            var entity = CreateEntityForType(BusinessEntityTypeEnum.Folder, name);
 
             // Сохраняем сущность
             await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
@@ -274,8 +274,11 @@ namespace BusinessEntity.Core.Services
             // Генерируем уникальное имя документа
             var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Document, ct);
 
-            // Создаем базовую entity документа
-            var entity = _businessEntityFactory.Create(BusinessEntityTypeEnum.Document, name);
+            // Определяем текст для сохранения
+            var dataToSave = string.IsNullOrWhiteSpace(bodyText) ? new string('x', 100) : bodyText;
+
+            // Создаем runtime-объект документа через фабрику
+            var entity = CreateEntityForType(BusinessEntityTypeEnum.Document, name, dataToSave);
 
             // Сохраняем сущность
             await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
@@ -291,9 +294,6 @@ namespace BusinessEntity.Core.Services
             };
 
             await _dataProviderConnector.CreateRelationAsync(relation, cancellationToken: ct);
-
-            // Определяем текст для сохранения
-            var dataToSave = string.IsNullOrWhiteSpace(bodyText) ? new string('x', 100) : bodyText;
 
             // Создаем payload документа
             await _dataProviderConnector.UpdateDataAsync(entity.Id, dataToSave!, ct);
@@ -543,30 +543,7 @@ namespace BusinessEntity.Core.Services
             var rawData = await _dataProviderConnector.GetDataAsync<string>(entityData.Id);
             var chunks = string.IsNullOrEmpty(rawData)
                 ? Array.Empty<BusinessEntityData>()
-                : entityData.EntityType == BusinessEntityTypeEnum.Document
-                ? new BusinessEntityData[]
-                {
-                    new Document
-                    {
-                        Id = entityData.Id,
-                        Name = entityData.Name,
-                        CreatedDate = entityData.CreatedDate,
-                        LastModifiedDate = entityData.LastModifiedDate,
-                        EntityType = BusinessEntityTypeEnum.Document,
-                        Text = rawData
-                    }
-                }
-                : new BusinessEntityData[]
-                {
-                    new BusinessEntityData
-                    {
-                        Id = entityData.Id,
-                        Name = entityData.Name,
-                        CreatedDate = entityData.CreatedDate,
-                        LastModifiedDate = entityData.LastModifiedDate,
-                        EntityType = entityData.EntityType
-                    }
-                };
+                : new[] { CreateDataObject(entityData, rawData) };
 
             // Здесь можно расширять типовую пост-обработку
             switch (entityData.EntityType)
@@ -600,22 +577,23 @@ namespace BusinessEntity.Core.Services
 
             // Извлекаем сериализуемый payload
             var payload = ExtractPayload(data);
+            var entityToSave = CreatePersistenceEntity(entityData, data);
 
             _webLogger?.Information($"SaveEntity: entityId={entityData.Id}, name='{entityData.Name}', dataLen={payload?.Length ?? 0}");
 
             // Сохраняем саму entity
-            var existingEntity = await _dataProviderConnector.GetByIdAsync(entityData.Id);
+            var existingEntity = await _dataProviderConnector.GetByIdAsync(entityToSave.Id);
             if (existingEntity != null)
             {
-                await _dataProviderConnector.UpdateAsync(entityData);
+                await _dataProviderConnector.UpdateAsync(entityToSave);
             }
             else
             {
-                await _dataProviderConnector.AddAsync(entityData);
+                await _dataProviderConnector.AddAsync(entityToSave);
             }
 
             // Сохраняем payload сущности отдельно
-            await _dataProviderConnector.UpdateDataAsync(entityData.Id, payload);
+            await _dataProviderConnector.UpdateDataAsync(entityToSave.Id, payload);
 
             _webLogger?.Debug($"SaveEntity: saved entityData {entityData.Id} and data {data.Id}");
         }
@@ -628,6 +606,139 @@ namespace BusinessEntity.Core.Services
                 Document document => document.Text ?? string.Empty,
                 _ => string.Empty
             };
+        }
+
+        // Создает runtime-entity нужного типа через фабрику
+        private Classes.BusinessEntity CreateEntityForType(BusinessEntityTypeEnum type, string name, string? payload = null)
+        {
+            return type switch
+            {
+                BusinessEntityTypeEnum.Document => _businessEntityFactory.Create(
+                    type,
+                    new Document
+                    {
+                        Name = name,
+                        Text = payload ?? string.Empty
+                    },
+                    name),
+                BusinessEntityTypeEnum.Folder => _businessEntityFactory.Create<Folder>(type, name),
+                BusinessEntityTypeEnum.Space => _businessEntityFactory.Create<Space>(type, name),
+                _ => _businessEntityFactory.Create(type, name)
+            };
+        }
+
+        // Создает data-объект для runtime-работы по типу entity
+        private BusinessEntityData CreateDataObject(Classes.BusinessEntity entityData, string rawData)
+        {
+            if (entityData.EntityType == BusinessEntityTypeEnum.Document)
+            {
+                var typedEntity = _businessEntityFactory.Create(
+                    BusinessEntityTypeEnum.Document,
+                    new Document
+                    {
+                        Name = entityData.Name,
+                        Text = rawData
+                    },
+                    entityData.Name);
+
+                typedEntity.Id = entityData.Id;
+                typedEntity.CreatedDate = entityData.CreatedDate;
+                typedEntity.LastModifiedDate = entityData.LastModifiedDate;
+                typedEntity.Name = entityData.Name;
+                typedEntity.BusinessEntityType = entityData.BusinessEntityType;
+                typedEntity.EntityType = entityData.EntityType;
+                typedEntity.SynchronizeDataWithEntity();
+                typedEntity.Data.Text = rawData;
+
+                return typedEntity.Data;
+            }
+
+            return new BusinessEntityData
+            {
+                Id = entityData.Id,
+                Name = entityData.Name,
+                CreatedDate = entityData.CreatedDate,
+                LastModifiedDate = entityData.LastModifiedDate,
+                EntityType = entityData.EntityType
+            };
+        }
+
+        // Подготавливает entity к сохранению через connector
+        private Classes.BusinessEntity CreatePersistenceEntity(Classes.BusinessEntity entityData, BusinessEntityData data)
+        {
+            var entityType = ResolveEntityType(entityData, data);
+
+            return data switch
+            {
+                Document document => CreateDocumentPersistenceEntity(entityData, document, entityType),
+                Folder => CopyEntityState(entityData, _businessEntityFactory.Create<Folder>(entityType, entityData.Name)),
+                Space => CopyEntityState(entityData, _businessEntityFactory.Create<Space>(entityType, entityData.Name)),
+                _ => CopyEntityState(entityData, _businessEntityFactory.Create(entityType, entityData.Name))
+            };
+        }
+
+        // Создает entity документа для сохранения
+        private Classes.BusinessEntity CreateDocumentPersistenceEntity(Classes.BusinessEntity entityData, Document document, BusinessEntityTypeEnum entityType)
+        {
+            var typedEntity = _businessEntityFactory.Create(
+                entityType,
+                new Document
+                {
+                    Name = string.IsNullOrWhiteSpace(document.Name) ? entityData.Name : document.Name,
+                    Tag = document.Tag,
+                    Text = document.Text ?? string.Empty
+                },
+                entityData.Name);
+
+            typedEntity = CopyEntityState(entityData, typedEntity);
+            typedEntity.Data.Tag = document.Tag;
+            typedEntity.Data.Text = document.Text ?? string.Empty;
+
+            return typedEntity;
+        }
+
+        // Копирует метаданные существующей entity в новую runtime-entity
+        private static Classes.BusinessEntity CopyEntityState(Classes.BusinessEntity source, Classes.BusinessEntity target)
+        {
+            target.Id = source.Id;
+            target.CreatedDate = source.CreatedDate;
+            target.LastModifiedDate = source.LastModifiedDate;
+            target.Name = source.Name;
+            target.BusinessEntityType = source.BusinessEntityType;
+            target.EntityType = source.EntityType;
+
+            return target;
+        }
+
+        // Копирует метаданные существующей entity в typed runtime-entity
+        private static Classes.BusinessEntity<TData> CopyEntityState<TData>(Classes.BusinessEntity source, Classes.BusinessEntity<TData> target)
+            where TData : class, IBusinessEntityData
+        {
+            target.Id = source.Id;
+            target.CreatedDate = source.CreatedDate;
+            target.LastModifiedDate = source.LastModifiedDate;
+            target.Name = source.Name;
+            target.BusinessEntityType = source.BusinessEntityType;
+            target.EntityType = source.EntityType;
+            target.SynchronizeDataWithEntity();
+
+            return target;
+        }
+
+        // Выбирает итоговый тип entity для сохранения
+        private static BusinessEntityTypeEnum ResolveEntityType(Classes.BusinessEntity entityData, BusinessEntityData data)
+        {
+            if (entityData.EntityType != BusinessEntityTypeEnum.Undefined)
+            {
+                return entityData.EntityType;
+            }
+
+            if (data.EntityType != BusinessEntityTypeEnum.Undefined)
+            {
+                return data.EntityType;
+            }
+
+            return entityData.BusinessEntityType;
         }
     }
 }

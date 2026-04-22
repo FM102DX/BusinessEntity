@@ -8,6 +8,7 @@ FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["BlazorServerWebLogger/BlazorServerWebLogger.csproj", "BlazorServerWebLogger/"]
+COPY ["BusinessEntity/BusinessEntity.csproj", "BusinessEntity/"]
 RUN dotnet restore "./BlazorServerWebLogger/BlazorServerWebLogger.csproj"
 COPY . .
 WORKDIR "/src/BlazorServerWebLogger"
@@ -21,7 +22,6 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
-# ”станавливаем переменную окружени€ дл€ маркера Docker
 ENV IS_DOCKER=true
 
 ENTRYPOINT ["dotnet", "BlazorServerWebLogger.dll"]

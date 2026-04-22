@@ -3,9 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Services;
-using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.WebLogger.Services;
 
@@ -15,8 +13,6 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
     public class SampleDataService : ISampleDataService
     {
         private readonly BusinessEntityHelper _helper;
-        private readonly IDataProviderConnector _dataProviderConnector;
-        private readonly IPossibleEntityRelationTypesProvider _relations;
         private readonly IDataFillLineProvider _dataFill;
         private readonly IWebLoggerService? _webLogger;
         private static readonly object _syncLock = new();
@@ -25,14 +21,10 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
         // Получает зависимости, необходимые для построения демонстрационных данных.
         public SampleDataService(
             BusinessEntityHelper helper,
-            IDataProviderConnector dataProviderConnector,
-            IPossibleEntityRelationTypesProvider relations,
             IDataFillLineProvider dataFill,
             IWebLoggerService? webLogger)
         {
             _helper = helper ?? throw new ArgumentNullException(nameof(helper));
-            _dataProviderConnector = dataProviderConnector ?? throw new ArgumentNullException(nameof(dataProviderConnector));
-            _relations = relations ?? throw new ArgumentNullException(nameof(relations));
             _dataFill = dataFill ?? throw new ArgumentNullException(nameof(dataFill));
             _webLogger = webLogger;
         }
@@ -49,10 +41,10 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
             try
             {
                 _webLogger?.Information("[Seed] InitializeSampleDataAsync: start");
-                var existingEntities = await _dataProviderConnector.GetAllAsync(ct);
+                var existingEntities = await _helper.GetAllBusinessEntities();
                 var existingSpaces = existingEntities.Where(e => e.EntityType == BusinessEntityTypeEnum.Space).ToList();
 
-                var existingRelations = await _dataProviderConnector.GetAllRelationsAsync(ct);
+                var existingRelations = await _helper.GetAllRelations();
                 bool hasVisualRelations = existingRelations.Any(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
                 _webLogger?.Information($"[Seed] Existing: entities={existingEntities.Count}, spaces={existingSpaces.Count}, relations={existingRelations.Count}, visualRelations={existingRelations.Count(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())}");
                 if (existingSpaces.Any() && hasVisualRelations)
@@ -69,13 +61,6 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                 var newsSpace = existingSpaces.FirstOrDefault(s => s.Name == "Новости")
                                      ?? await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Space, "Новости");
                 _webLogger?.Information($"[Seed] Space 'Новости': {(newsExisted ? "reused" : "created")}, Id={newsSpace.Id}");
-
-                var relationTypes = _relations.GetPossibleRelations().ToList();
-                var spaceContainsFolder = relationTypes.FirstOrDefault(r => r.RelationName == "basic:space-contains-folder");
-                var spaceContainsPage = relationTypes.FirstOrDefault(r => r.RelationName == "basic:space-contains-page");
-                var folderContainsPage = relationTypes.FirstOrDefault(r => r.RelationName == "basic:folder-contains-page");
-                var folderContainsFolder = relationTypes.FirstOrDefault(r => r.RelationName == "basic:folder-contains-folder");
-                _webLogger?.Information($"[Seed] RelationTypes: spaceContainsFolder={(spaceContainsFolder != null)}, spaceContainsPage={(spaceContainsPage != null)}, folderContainsPage={(folderContainsPage != null)}, folderContainsFolder={(folderContainsFolder != null)}");
 
                 var docsHasChildren = (await _helper.GetContainedEntitiesAsync(documentsSpace.Id, ct)).Any();
                 var newsHasChildren = (await _helper.GetContainedEntitiesAsync(newsSpace.Id, ct)).Any();
@@ -108,18 +93,9 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                         try
                         {
                             _webLogger?.Information($"[Seed] Creating folder {i} in 'Документы'");
-                            var folder = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Folder, $"Folder {i}");
+                            var folder = await _helper.CreateSubFolderAsync(documentsSpace, ct);
+                            await _helper.RenameEntity(folder.Id, $"Folder {i}", ct);
                             _webLogger?.Information($"[Seed] Created folder {i}: Id={folder.Id}");
-
-                            if (spaceContainsFolder != null)
-                            {
-                                await _helper.CreateRelation(documentsSpace, folder, spaceContainsFolder, "");
-                                _webLogger?.Information($"[Seed] Linked Space -> Folder {i} via {spaceContainsFolder.RelationType}");
-                            }
-                            else
-                            {
-                                _webLogger?.Warning("[Seed] Relation type 'space-contains-folder' not found");
-                            }
 
                             int pageCount = i == 1 ? 2 : 3;
                             for (int j = 1; j <= pageCount; j++)
@@ -130,10 +106,10 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                                 _webLogger?.Information($"[Seed] Created document {i}-{j}: Id={page.Id}");
                             }
 
-                            if (i == 1 && folderContainsFolder != null)
+                            if (i == 1)
                             {
-                                var subFolder = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Folder, "Subfolder 1-1");
-                                await _helper.CreateRelation(folder, subFolder, folderContainsFolder, "");
+                                var subFolder = await _helper.CreateSubFolderAsync(folder, ct);
+                                await _helper.RenameEntity(subFolder.Id, "Subfolder 1-1", ct);
                                 _webLogger?.Information($"[Seed] Created subfolder under Folder 1: Id={subFolder.Id}");
 
                                 var subText = await _dataFill.GetNextLineAsync(ct);
@@ -177,16 +153,8 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                         try
                         {
                             _webLogger?.Information($"[Seed] Creating 'Рубрика {i}' in 'Новости'");
-                            var newsFolder = await _helper.CreateBusinessEntity(BusinessEntityTypeEnum.Folder, $"Рубрика {i}");
-                            if (spaceContainsFolder != null)
-                            {
-                                await _helper.CreateRelation(newsSpace, newsFolder, spaceContainsFolder, "");
-                                _webLogger?.Information($"[Seed] Linked 'Новости' -> 'Рубрика {i}' via {spaceContainsFolder.RelationType}");
-                            }
-                            else
-                            {
-                                _webLogger?.Warning("[Seed] Relation type 'space-contains-folder' not found (Новости)");
-                            }
+                            var newsFolder = await _helper.CreateSubFolderAsync(newsSpace, ct);
+                            await _helper.RenameEntity(newsFolder.Id, $"Рубрика {i}", ct);
 
                             for (int j = 1; j <= 2; j++)
                             {

@@ -23,14 +23,26 @@
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Radzen.Blazor" Version="5.7.2" />
-    <PackageReference Include="ReactiveUI" Version="20.1.63" />
+    <PackageReference Include="ReactiveUI" Version="20.3.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="6.0.22" />
     <PackageReference Include="Npgsql" Version="6.0.10" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BusinessEntity.DataAccess\BusinessEntity.DataAccess.csproj" />
+    <ProjectReference Include="..\BusinessEntity\BusinessEntity.csproj" />
   </ItemGroup>
+
+  <Target Name="RemoveReferencedBusinessEntityAppSettings"
+          AfterTargets="ComputeFilesToPublish"
+          BeforeTargets="_HandleFileConflictsForPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish
+        Remove="@(ResolvedFileToPublish)"
+        Condition="'%(ResolvedFileToPublish.RelativePath)' == 'appsettings.json'
+          and '%(ResolvedFileToPublish.Identity)' != '$(MSBuildProjectDirectory)\\appsettings.json'
+          and '%(ResolvedFileToPublish.Identity)' != '$(MSBuildProjectDirectory)/appsettings.json'" />
+    </ItemGroup>
+  </Target>
 
 </Project>

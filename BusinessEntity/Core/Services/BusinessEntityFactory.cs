@@ -17,15 +17,7 @@ namespace BusinessEntity.Core.Services
         // Создает простую entity без payload
         public global::BusinessEntity.Core.Classes.BusinessEntity Create(BusinessEntityTypeEnum type, string? name = null)
         {
-            return new global::BusinessEntity.Core.Classes.BusinessEntity
-            {
-                Id = Guid.NewGuid(),
-                CreatedDate = DateTime.UtcNow,
-                LastModifiedDate = DateTime.UtcNow,
-                Name = name ?? string.Empty,
-                BusinessEntityType = type,
-                EntityType = type
-            };
+            return CreateCoreEntity(type, name);
         }
 
         // Создает typed entity, выводя тип из нового payload
@@ -39,7 +31,18 @@ namespace BusinessEntity.Core.Services
         // Создает typed entity с явно заданным типом и новым payload
         public global::BusinessEntity.Core.Classes.BusinessEntity<TData> Create<TData>(BusinessEntityTypeEnum type, string? name = null) where TData : class, IBusinessEntityData, new()
         {
-            return Create(type, new TData(), name);
+            var data = new TData();
+            if (!string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(data.Name))
+            {
+                data.Name = name;
+            }
+
+            if (data.EntityType == BusinessEntityTypeEnum.Undefined)
+            {
+                data.EntityType = type;
+            }
+
+            return Create(type, data, name);
         }
 
         // Создает typed entity и сразу привязывает готовый payload
@@ -47,15 +50,19 @@ namespace BusinessEntity.Core.Services
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
 
-            var entity = new global::BusinessEntity.Core.Classes.BusinessEntity<TData>
-            {
-                Id = Guid.NewGuid(),
-                CreatedDate = DateTime.UtcNow,
-                LastModifiedDate = DateTime.UtcNow,
-                Name = string.IsNullOrWhiteSpace(name) ? data.Name : name!,
-                BusinessEntityType = type,
-                EntityType = type
-            };
+            var entityType = type == BusinessEntityTypeEnum.Undefined
+                ? ResolveType(data)
+                : type;
+            var entityName = string.IsNullOrWhiteSpace(name) ? data.Name : name!;
+
+            var entity = new global::BusinessEntity.Core.Classes.BusinessEntity<TData>();
+            var coreEntity = CreateCoreEntity(entityType, entityName);
+            entity.Id = coreEntity.Id;
+            entity.CreatedDate = coreEntity.CreatedDate;
+            entity.LastModifiedDate = coreEntity.LastModifiedDate;
+            entity.Name = coreEntity.Name;
+            entity.BusinessEntityType = coreEntity.BusinessEntityType;
+            entity.EntityType = coreEntity.EntityType;
 
             entity.AttachData(data);
             return entity;
@@ -89,6 +96,20 @@ namespace BusinessEntity.Core.Services
             }
 
             throw new InvalidOperationException($"Cannot resolve entity type for data object '{data.GetType().FullName}'.");
+        }
+
+        // Создает и инициализирует базовую entity общими полями
+        private static global::BusinessEntity.Core.Classes.BusinessEntity CreateCoreEntity(BusinessEntityTypeEnum type, string? name)
+        {
+            return new global::BusinessEntity.Core.Classes.BusinessEntity
+            {
+                Id = Guid.NewGuid(),
+                CreatedDate = DateTime.UtcNow,
+                LastModifiedDate = DateTime.UtcNow,
+                Name = name ?? string.Empty,
+                BusinessEntityType = type,
+                EntityType = type
+            };
         }
     }
 }

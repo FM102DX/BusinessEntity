@@ -32,7 +32,7 @@ public class ThreadSafeDbContextFactory
             //Console.WriteLine($"P1");
             // Получаем или создаем пул
             // ignore per-call maxPoolSize; enforce factory-wide cap
-            var pool = _pools.GetOrAdd(processedKey, _ => new DbContextPool(_dbContextLifeTimeMs, _options, FreeUpDbContext, _logger, _maxPoolSize));
+            var pool = _pools.GetOrAdd(processedKey, key => new DbContextPool(key, _dbContextLifeTimeMs, _options, _logger, _maxPoolSize));
             //Console.WriteLine($"P2");
             // Получаем контекст из пула
             var contextWrap = pool.GetDbContext();
@@ -63,31 +63,13 @@ public class ThreadSafeDbContextFactory
 
     private string ProcessPoolKey(string rawKey)
     {
-        // Unify all calls into a single shared pool
-        return "default";
-    }
-
-    private void FreeUpDbContext(WebLoggerDbContext context)
-    {
-        foreach (var pool in _pools.Values)
+        var normalized = (rawKey ?? string.Empty).ToLowerInvariant();
+        if (normalized.Contains("insert") || normalized.Contains("update") || normalized.Contains("delete"))
         {
-            var record = pool.PoolRecords.Values.FirstOrDefault(r => ReferenceEquals(r.Context, context));
-            if (record != null)
-            {
-                lock (record.SyncLock)
-                {
-                    if (!record.Disposed)
-                    {
-                        record.Busy = false;
-                        _logger.Write($"[RETURNED] DbContext returned to pool: id={record.Id}, busy={record.Busy}");
-                        pool.ReleaseThread(); // Освобождаем слот для нового потока в пуле
-
-                        LogPoolsState(); // Логирование состояния пулов после возврата DbContext
-                        return;
-                    }
-                }
-            }
+            return "write";
         }
+
+        return "read";
     }
 
     private void LogPoolsState()
