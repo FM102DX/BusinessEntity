@@ -108,6 +108,7 @@ namespace BusinessEntity
 
             // Регистрирует прикладные сервисы и message bus.
             builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
+            builder.Services.AddScoped<IBusinessEntityFactory, BusinessEntityFactory>();
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();

@@ -6,14 +6,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+// Поставщик допустимых правил визуальных связей
 namespace BusinessEntity.Core.Services
 {
+    // Хранит преднастроенные macro relation между типами entity
     public class PossibleEntityRelationTypesProvider : IPossibleEntityRelationTypesProvider
     {
+        // Внутренний список разрешенных связей
         private readonly List<MacroRelationType> _possibleRelations;
 
+        // Инициализирует стандартный набор разрешенных связей
         public PossibleEntityRelationTypesProvider()
         {
+            // Формируем стартовый список правил для дерева
             _possibleRelations = new List<MacroRelationType>
             {
                 // Дополнительные примеры отношений - используем VisuallyContains для визуального размещения
@@ -46,6 +51,7 @@ namespace BusinessEntity.Core.Services
             };
         }
 
+        // Возвращает список допустимых макро-связей
         public IEnumerable<MacroRelationType> GetPossibleRelations()
         {
             return _possibleRelations.AsReadOnly();

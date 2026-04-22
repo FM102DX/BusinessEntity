@@ -3,6 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
+using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.Services;
 using ReactiveUI;
 using BusinessEntity.WebLogger.Services;
@@ -24,7 +25,7 @@ namespace BusinessEntity.Components
         private string EditBody = string.Empty;
         private List<global::BusinessEntity.Core.Classes.BusinessEntityData> LocalData = new();
 
-        private string ViewText => LocalData != null && LocalData.Any() ? string.Join("\n\n", LocalData.Select(d => d.Data)) : string.Empty;
+        private string ViewText => LocalData != null && LocalData.Any() ? string.Join("\n\n", LocalData.Select(GetBodyText)) : string.Empty;
 
         protected override void OnParametersSet()
         {
@@ -63,25 +64,29 @@ namespace BusinessEntity.Components
 
                 // Take first chunk or create new
                 var data = (LocalData != null && LocalData.Count > 0)
-                    ? new global::BusinessEntity.Core.Classes.BusinessEntityData
+                    ? new global::BusinessEntity.Core.DomainEntities.Document
                     {
                         Id = LocalData[0].Id,
                         CreatedDate = LocalData[0].CreatedDate,
                         LastModifiedDate = DateTime.UtcNow,
-                        EntityId = Entity.Id,
-                        Data = EditBody ?? string.Empty
+                        Name = Entity.Name,
+                        EntityType = global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Document,
+                        Tag = LocalData[0].Tag,
+                        Text = EditBody ?? string.Empty
                     }
-                    : new global::BusinessEntity.Core.Classes.BusinessEntityData
+                    : new global::BusinessEntity.Core.DomainEntities.Document
                     {
-                        EntityId = Entity.Id,
-                        Data = EditBody ?? string.Empty
+                        Id = Entity.Id,
+                        Name = Entity.Name,
+                        EntityType = global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Document,
+                        Text = EditBody ?? string.Empty
                     };
 
                 await Helper.SaveEntity(Entity, data);
                 WebLogger?.Debug($"[Doc] SaveEntity OK: entityId={Entity.Id}, dataId={data.Id}");
 
                 // Update current view
-                EditBody = data.Data;
+                EditBody = GetBodyText(data);
                 if (LocalData.Count > 0)
                 {
                     LocalData[0] = data;
@@ -116,6 +121,15 @@ namespace BusinessEntity.Components
             {
                 IsSaving = false;
             }
+        }
+
+        private static string GetBodyText(global::BusinessEntity.Core.Classes.BusinessEntityData data)
+        {
+            return data switch
+            {
+                global::BusinessEntity.Core.DomainEntities.Document document => document.Text ?? string.Empty,
+                _ => string.Empty
+            };
         }
     }
 }

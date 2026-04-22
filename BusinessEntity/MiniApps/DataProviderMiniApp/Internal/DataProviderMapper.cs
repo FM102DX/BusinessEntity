@@ -71,8 +71,7 @@ internal static class DataProviderMapper
             Id = dto.Id,
             CreatedDate = dto.CreatedDate,
             LastModifiedDate = dto.LastModifiedDate,
-            EntityId = dto.BusinessEntityId,
-            Data = data
+            Tag = string.Empty
         };
     }
 }

@@ -1,5 +1,3 @@
-using BusinessEntity.Core.Classes;
-
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 
 /// <summary>

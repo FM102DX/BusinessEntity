@@ -6,10 +6,20 @@ using System.Threading.Tasks;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 
+// Typed data-объект пространства
 namespace BusinessEntity.Core.DomainEntities
 {
-    public class Space : BusinessEntityDataBase, IBusinessEntity
+    // Используется как корневая сущность дерева и как data-представление
+    public class Space : BusinessEntityData, IBusinessEntity
     {
-        public override BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Space;
+        // Пространство всегда имеет тип Space
+        public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Space;
+
+        // Совместимое свойство старого контракта IBusinessEntity
+        BusinessEntityTypeEnum IBusinessEntity.BusinessEntityType
+        {
+            get => EntityType;
+            set => EntityType = value;
+        }
     }
 }

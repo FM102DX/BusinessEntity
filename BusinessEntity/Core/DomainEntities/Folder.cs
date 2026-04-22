@@ -6,11 +6,21 @@ using System.Threading.Tasks;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 
+// Typed data-объект папки
 namespace BusinessEntity.Core.DomainEntities
 {
-    public class Folder : BusinessEntityDataBase,IBusinessEntity
+    // Используется как простая сущность и как data-представление папки
+    public class Folder : BusinessEntityData,IBusinessEntity
     {
-        public override BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Folder;
+        // Папка всегда имеет тип Folder
+        public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Folder;
+
+        // Совместимое свойство старого контракта IBusinessEntity
+        BusinessEntityTypeEnum IBusinessEntity.BusinessEntityType
+        {
+            get => EntityType;
+            set => EntityType = value;
+        }
         
     }
 }

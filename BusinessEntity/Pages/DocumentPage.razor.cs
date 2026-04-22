@@ -3,6 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
+using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.Services;
 
 namespace BusinessEntity.Pages
@@ -42,7 +43,7 @@ namespace BusinessEntity.Pages
                 DataList = list;
                 if (list != null && list.Any())
                 {
-                    DataText = string.Join("\n\n", list.Select(d => d.Data));
+                    DataText = string.Join("\n\n", list.Select(GetBodyText));
                 }
                 else
                 {
@@ -57,6 +58,15 @@ namespace BusinessEntity.Pages
             {
                 IsLoading = false;
             }
+        }
+
+        private static string GetBodyText(global::BusinessEntity.Core.Classes.BusinessEntityData data)
+        {
+            return data switch
+            {
+                global::BusinessEntity.Core.DomainEntities.Document document => document.Text ?? string.Empty,
+                _ => string.Empty
+            };
         }
     }
 }

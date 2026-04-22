@@ -4,42 +4,45 @@ using System.Threading;
 using System.Collections.Generic;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
+using BusinessEntity.Core.DomainEntities;
 using System.Linq;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.WebLogger.Services;
 
+// Основной сервис работы с сущностями, data и связями
 namespace BusinessEntity.Core.Services
 {
-    /// <summary>
-    /// Хелпер для работы с бизнес-сущностями
-    /// </summary>
+    // Содержит прикладные операции поверх DataProvider
     public class BusinessEntityHelper
     {
+        // Коннектор хранения entity, data и relations
         private readonly IDataProviderConnector _dataProviderConnector;
+        // Логгер бизнес-операций
         private readonly IWebLoggerService? _webLogger;
+        // Фабрика для создания entity и typed entity
+        private readonly IBusinessEntityFactory _businessEntityFactory;
 
+        // Подключает зависимости для работы с бизнес-сущностями
         public BusinessEntityHelper(
             IDataProviderConnector dataProviderConnector,
-            IWebLoggerService? webLogger)
+            IWebLoggerService? webLogger,
+            IBusinessEntityFactory businessEntityFactory)
         {
             _dataProviderConnector = dataProviderConnector ?? throw new ArgumentNullException(nameof(dataProviderConnector));
             _webLogger = webLogger; // Логгер может быть не настроен, поэтому допускаем null
+            _businessEntityFactory = businessEntityFactory ?? throw new ArgumentNullException(nameof(businessEntityFactory));
         }
 
+        // Создает простую сущность и сохраняет ее в хранилище
         public async Task<Classes.BusinessEntity> CreateBusinessEntity(BusinessEntityTypeEnum type, string name)
         {
             _webLogger?.Information($"CreateBusinessEntity: type={type}, name={name}");
-            var entity = new Classes.BusinessEntity
-            {
-                Id = Guid.NewGuid(),
-                Name = name,
-                EntityType = type,
-                BusinessEntityType = type
-            };
+            var entity = _businessEntityFactory.Create(type, name);
 
             return await _dataProviderConnector.AddAsync(entity);
         }
 
+        // Удаляет сущность вместе со всеми ее связями
         public async Task RemoveBusinessEntity(Guid id)
         {
             _webLogger?.Warning($"RemoveBusinessEntity: id={id}");
@@ -48,6 +51,7 @@ namespace BusinessEntity.Core.Services
                 .Where(r => r.ObjectAId == id || r.ObjectBId == id)
                 .ToList();
             
+            // Затем удаляем найденные связи
             foreach (var relation in relations)
             {
                 await _dataProviderConnector.DeleteRelationAsync(relation.Id);
@@ -57,6 +61,7 @@ namespace BusinessEntity.Core.Services
             await _dataProviderConnector.DeleteAsync(id);
         }
 
+        // Создает relation между двумя сущностями
         public async Task<BusinessEntityRelation> CreateRelation(IBusinessEntity entityA, IBusinessEntity entityB, MacroRelationType macroRelationType, string parameters = "")
         {
             _webLogger?.Information($"CreateRelation: {entityA?.Name} -> {entityB?.Name} relation={macroRelationType?.RelationType}");
@@ -76,13 +81,7 @@ namespace BusinessEntity.Core.Services
             return await _dataProviderConnector.CreateRelationAsync(relation);
         }
 
-        /// <summary>
-        /// Удаляет все связи определенного типа между двумя сущностями
-        /// </summary>
-        /// <param name="entityA">Первая сущность</param>
-        /// <param name="entityB">Вторая сущность</param>
-        /// <param name="macroRelationType">Тип отношения для удаления</param>
-        /// <returns>Количество удаленных связей</returns>
+        // Удаляет все связи выбранного типа между двумя сущностями
         public async Task<int> RemoveRelation(IBusinessEntity entityA, IBusinessEntity entityB, MacroRelationType macroRelationType)
         {
             _webLogger?.Information($"RemoveRelation: {entityA?.Name} -> {entityB?.Name} relation={macroRelationType?.RelationType}");
@@ -95,6 +94,7 @@ namespace BusinessEntity.Core.Services
                 .Where(r => r.RelationType == macroRelationType.RelationType.ToString())
                 .ToList();
 
+            // Поочередно удаляем найденные relation
             int removedCount = 0;
             foreach (var relation in relationsToRemove)
             {
@@ -107,23 +107,27 @@ namespace BusinessEntity.Core.Services
             return removedCount;
         }
 
+        // Возвращает entity по идентификатору
         public async Task<Classes.BusinessEntity?> GetBusinessEntityById(Guid id)
         {
             _webLogger?.Debug($"GetBusinessEntityById: id={id}");
             return await _dataProviderConnector.GetByIdAsync(id);
         }
 
+        // Возвращает relation по идентификатору
         public async Task<BusinessEntityRelation?> GetRelationById(Guid id)
         {
             return await _dataProviderConnector.GetRelationByIdAsync(id);
         }
 
+        // Возвращает все entity с необязательным ограничением по количеству
         public async Task<IReadOnlyList<Classes.BusinessEntity>> GetAllBusinessEntities(int? take = null)
         {
             var entities = await _dataProviderConnector.GetAllAsync();
             return take.HasValue ? entities.Take(take.Value).ToList() : entities;
         }
 
+        // Возвращает только пространства
         public async Task<IReadOnlyList<Classes.BusinessEntity>> GetSpacesAsync(int? take = null)
         {
             var spaces = (await _dataProviderConnector.GetAllAsync())
@@ -131,12 +135,14 @@ namespace BusinessEntity.Core.Services
             return take.HasValue ? spaces.Take(take.Value).ToList() : spaces.ToList();
         }
 
+        // Возвращает все relation с необязательным ограничением по количеству
         public async Task<IReadOnlyList<BusinessEntityRelation>> GetAllRelations(int? take = null)
         {
             var relations = await _dataProviderConnector.GetAllRelationsAsync();
             return take.HasValue ? relations.Take(take.Value).ToList() : relations;
         }
 
+        // Возвращает все relation, где участвует указанная entity
         public async Task<IReadOnlyList<BusinessEntityRelation>> GetRelationsByEntityIdAsync(Guid entityId, CancellationToken ct = default)
         {
             return (await _dataProviderConnector.GetAllRelationsAsync(ct))
@@ -144,16 +150,16 @@ namespace BusinessEntity.Core.Services
                 .ToList();
         }
 
-        /// <summary>
-        /// Получает все бизнес-сущности, содержащиеся в родительской сущности (визуально)
-        /// </summary>
+        // Возвращает дочерние entity по визуальной связи
         public async Task<IEnumerable<Classes.BusinessEntity>> GetContainedEntitiesAsync(Guid parentId, CancellationToken ct = default)
         {
+            // Ищем relation вида родитель -> ребенок
             var relations = (await _dataProviderConnector.GetAllRelationsAsync(ct))
                 .Where(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())
                 .ToList();
             var childIds = relations.Select(r => r.ObjectBId).ToList();
             
+            // Загружаем дочерние entity по найденным Id
             var children = new List<Classes.BusinessEntity>();
             foreach (var childId in childIds)
             {
@@ -168,6 +174,7 @@ namespace BusinessEntity.Core.Services
             return children.OrderBy(c => c.CreatedDate);
         }
 
+        // Возвращает корневые entity, у которых нет визуального родителя
         public async Task<IEnumerable<Classes.BusinessEntity>> GetRootEntitiesAsync()
         {
             // Находим все сущности, которые НЕ являются объектом B в отношении "VisuallyContains"
@@ -183,14 +190,13 @@ namespace BusinessEntity.Core.Services
             return rootEntities.OrderBy(e => e.CreatedDate);
         }
 
-        /// <summary>
-        /// Генерирует новое имя для элемента на основе типа и существующих элементов у родителя
-        /// </summary>
+        // Генерирует уникальное имя нового дочернего элемента
         private async Task<string> GetNewItemNameAsync(
             Classes.BusinessEntity parent,
             BusinessEntityTypeEnum newType,
             CancellationToken ct = default)
         {
+            // Формируем базовое имя по типу
             var baseName = $"New{newType}"; // "NewFolder"
             var children = await GetContainedEntitiesAsync(parent.Id, ct);
             var sameTypeChildren = children.Where(c => c.EntityType == newType)
@@ -206,9 +212,7 @@ namespace BusinessEntity.Core.Services
             }
         }
 
-        /// <summary>
-        /// Создает новую подпапку внутри родительской папки или пространства
-        /// </summary>
+        // Создает новую подпапку внутри папки или пространства
         public async Task<Classes.BusinessEntity> CreateSubFolderAsync(
             Classes.BusinessEntity parent,
             CancellationToken ct = default)
@@ -222,18 +226,12 @@ namespace BusinessEntity.Core.Services
             var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Folder, ct);
 
             // Создаем новую сущность
-            var entity = new Classes.BusinessEntity
-            {
-                Id = Guid.NewGuid(),
-                Name = name,
-                EntityType = BusinessEntityTypeEnum.Folder,
-                BusinessEntityType = BusinessEntityTypeEnum.Folder
-            };
+            var entity = _businessEntityFactory.Create(BusinessEntityTypeEnum.Folder, name);
 
             // Сохраняем сущность
             await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
 
-            // Создаем связь между родителем и дочерним элементом (визуальная связь)
+            // Создаем визуальную связь родитель -> дочерний элемент
             var relation = new BusinessEntityRelation
             {
                 Id = Guid.NewGuid(),
@@ -251,10 +249,9 @@ namespace BusinessEntity.Core.Services
             return entity;
         }
 
+        // Блок операций создания документа
         #region Document operations
-        /// <summary>
-        /// Создает новый документ внутри родительской папки или пространства
-        /// </summary>
+        // Создает новый документ с текстом по умолчанию
         public async Task<Classes.BusinessEntity> CreateDocumentAsync(
             Classes.BusinessEntity parent,
             CancellationToken ct = default)
@@ -263,9 +260,7 @@ namespace BusinessEntity.Core.Services
             return await CreateDocumentAsync(parent, null, ct);
         }
 
-        /// <summary>
-        /// Создает новый документ с указанным текстом внутри родительской папки или пространства
-        /// </summary>
+        // Создает новый документ с заданным текстом
         public async Task<Classes.BusinessEntity> CreateDocumentAsync(
             Classes.BusinessEntity parent,
             string? bodyText,
@@ -279,14 +274,8 @@ namespace BusinessEntity.Core.Services
             // Генерируем уникальное имя документа
             var name = await GetNewItemNameAsync(parent, BusinessEntityTypeEnum.Document, ct);
 
-            // Создаем документ как BusinessEntityData с типом Document
-            var entity = new Classes.BusinessEntity
-            {
-                Id = Guid.NewGuid(),
-                Name = name,
-                EntityType = BusinessEntityTypeEnum.Document,
-                BusinessEntityType = BusinessEntityTypeEnum.Document
-            };
+            // Создаем базовую entity документа
+            var entity = _businessEntityFactory.Create(BusinessEntityTypeEnum.Document, name);
 
             // Сохраняем сущность
             await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
@@ -303,10 +292,10 @@ namespace BusinessEntity.Core.Services
 
             await _dataProviderConnector.CreateRelationAsync(relation, cancellationToken: ct);
 
-            // Определяем текст для сохранения: используем переданный, иначе плейсхолдер из 100 символов
+            // Определяем текст для сохранения
             var dataToSave = string.IsNullOrWhiteSpace(bodyText) ? new string('x', 100) : bodyText;
 
-            // Создаем тело документа (BusinessEntityData)
+            // Создаем payload документа
             await _dataProviderConnector.UpdateDataAsync(entity.Id, dataToSave!, ct);
 
             _webLogger?.Debug($"Created BusinessEntityData for document '{name}' (DocID: {entity.Id}), DataLength={dataToSave?.Length ?? 0}");
@@ -317,11 +306,7 @@ namespace BusinessEntity.Core.Services
         }
         #endregion
 
-        /// <summary>
-        /// Изменяет визуального родителя для элемента в визуальном дереве
-        /// </summary>
-        /// <param name="child">Дочерняя сущность, для которой меняется родитель</param>
-        /// <param name="newVisualParent">Новый визуальный родитель</param>
+        // Меняет визуального родителя элемента в дереве
         public async Task ChangeVisualFolderParentForItem(Classes.BusinessEntity child, Classes.BusinessEntity newVisualParent)
         {
             _webLogger?.Information($"ChangeVisualFolderParentForItem: Moving '{child?.Name}' to new visual parent '{newVisualParent?.Name}'");
@@ -329,7 +314,7 @@ namespace BusinessEntity.Core.Services
             if (child == null) throw new ArgumentNullException(nameof(child));
             if (newVisualParent == null) throw new ArgumentNullException(nameof(newVisualParent));
 
-            // Проверяем, не создаст ли перемещение циклическую зависимость
+            // Проверяем, не создаст ли перемещение цикл
             if (await WouldCreateCyclicDependency(child.Id, newVisualParent.Id))
             {
                 var errorMessage = $"Cannot move '{child.Name}' to '{newVisualParent.Name}': this would create a cyclic dependency";
@@ -337,20 +322,20 @@ namespace BusinessEntity.Core.Services
                 throw new InvalidOperationException(errorMessage);
             }
 
-            // Находим текущего визуального родителя данного элемента
+            // Находим текущих визуальных родителей элемента
             var currentVisualParentRelations = (await _dataProviderConnector.GetAllRelationsAsync())
                 .Where(r =>
                     r.ObjectBId == child.Id &&
                     r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())
                 .ToList();
 
-            // Создаем MacroRelationType для VisuallyContains
+            // Создаем макро-описание нужной связи
             var visuallyContainsRelationType = new MacroRelationType
             {
                 RelationType = BusinessEntityRelationTypeEnum.VisuallyContains
             };
 
-            // Удаляем все существующие связи VisuallyContains для данного child
+            // Удаляем старые визуальные связи
             foreach (var currentRelation in currentVisualParentRelations)
             {
                 var currentParent = await _dataProviderConnector.GetByIdAsync(currentRelation.ObjectAId);
@@ -361,18 +346,13 @@ namespace BusinessEntity.Core.Services
                 }
             }
 
-            // Создаем новую связь VisuallyContains между новым родителем и child
+            // Создаем новую визуальную связь
             await CreateRelation(newVisualParent, child, visuallyContainsRelationType);
             
             _webLogger?.Information($"Successfully moved '{child.Name}' to new visual parent '{newVisualParent.Name}'");
         }
 
-        /// <summary>
-        /// Перманентно удаляет бизнес-энтити из системы вместе с рекурсивным удалением всех дочерних элементов
-        /// </summary>
-        /// <param name="entityId">ID бизнес-энтити для удаления</param>
-        /// <param name="ct">CancellationToken</param>
-        /// <returns>Кортеж (bool успех, List&lt;string&gt; сообщения)</returns>
+        // Полностью удаляет сущность и ее дочернее поддерево
         public async Task<(bool success, List<string> messages)> RemoveBusinessEntityPermanently(Guid entityId, CancellationToken ct = default)
         {
             var messages = new List<string>();
@@ -381,7 +361,7 @@ namespace BusinessEntity.Core.Services
             var entity = await _dataProviderConnector.GetByIdAsync(entityId);
             if (entity == null)
             {
-                // Если сущность не найдена, возвращаем true и пустой список (как указано в требованиях)
+                // Если сущность не найдена, считаем удаление успешным
                 return (true, new List<string>());
             }
             
@@ -410,17 +390,12 @@ namespace BusinessEntity.Core.Services
             return (true, new List<string>());
         }
         
-        /// <summary>
-        /// Рекурсивно удаляет всех потомков бизнес-энтити в визуальном дереве
-        /// </summary>
-        /// <param name="parentId">ID родительской сущности</param>
-        /// <param name="ct">CancellationToken</param>
-        /// <returns>Кортеж (bool успех, List&lt;string&gt; сообщения)</returns>
+        // Рекурсивно удаляет всех визуальных потомков сущности
         private async Task<(bool success, List<string> messages)> RemoveChildrenRecursively(Guid parentId, CancellationToken ct = default)
         {
             var allMessages = new List<string>();
             
-            // Получаем всех прямых потомков (связи типа VisuallyContains, где parentId является ObjectA)
+            // Получаем всех прямых потомков по визуальной связи
             var childRelations = (await _dataProviderConnector.GetAllRelationsAsync(ct))
                 .Where(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())
                 .ToList();
@@ -437,7 +412,7 @@ namespace BusinessEntity.Core.Services
                     continue;
                 }
                 
-                // Рекурсивно удаляем всех потомков этого ребенка
+                // Сначала удаляем потомков ребенка
                 var childrenResult = await RemoveChildrenRecursively(childId, ct);
                 if (!childrenResult.success)
                 {
@@ -464,25 +439,15 @@ namespace BusinessEntity.Core.Services
             return (true, allMessages);
         }
         
-        /// <summary>
-        /// Проверяет, можно ли удалить бизнес-энтити (пока заглушка, всегда возвращает true)
-        /// </summary>
-        /// <param name="entityId">ID бизнес-энтити</param>
-        /// <param name="ct">CancellationToken</param>
-        /// <returns>true, если сущность можно удалить</returns>
+        // Проверяет возможность удаления сущности
         private async Task<bool> CanDelete(Guid entityId, CancellationToken ct = default)
         {
-            // Заглушка - пока всегда возвращаем true
-            // В будущем здесь будет логика проверки возможности удаления
+            // Пока это заглушка для будущих бизнес-правил
             await Task.CompletedTask;
             return true;
         }
         
-        /// <summary>
-        /// Удаляет все связи бизнес-энтити (где сущность выступает как ObjectA или ObjectB)
-        /// </summary>
-        /// <param name="entityId">ID бизнес-энтити</param>
-        /// <param name="ct">CancellationToken</param>
+        // Удаляет все relation, в которых участвует сущность
         private async Task RemoveAllEntityRelations(Guid entityId, CancellationToken ct = default)
         {
             // Получаем все связи, где сущность является ObjectA
@@ -502,13 +467,7 @@ namespace BusinessEntity.Core.Services
             }
         }
 
-        /// <summary>
-        /// Переименовывает бизнес-энтити
-        /// </summary>
-        /// <param name="entityId">ID сущности для переименования</param>
-        /// <param name="newName">Новое имя сущности</param>
-        /// <param name="ct">CancellationToken</param>
-        /// <returns>Обновленная сущность или null, если сущность не найдена</returns>
+        // Переименовывает сущность и сохраняет изменение
         public async Task<Classes.BusinessEntity?> RenameEntity(Guid entityId, string newName, CancellationToken ct = default)
         {
             _webLogger?.Information($"RenameEntity: entityId={entityId}, newName='{newName}'");
@@ -537,12 +496,7 @@ namespace BusinessEntity.Core.Services
             return entity;
         }
 
-        /// <summary>
-        /// Проверяет, создаст ли перемещение элемента циклическую зависимость
-        /// </summary>
-        /// <param name="childId">ID элемента, который планируется переместить</param>
-        /// <param name="newParentId">ID нового родителя</param>
-        /// <returns>true, если создаст циклическую зависимость</returns>
+        // Проверяет, создаст ли перенос циклическую зависимость
         public async Task<bool> WouldCreateCyclicDependency(Guid childId, Guid newParentId)
         {
             // Если пытаемся переместить элемент в самого себя
@@ -553,12 +507,7 @@ namespace BusinessEntity.Core.Services
             return await IsDescendantInDatabase(newParentId, childId);
         }
 
-        /// <summary>
-        /// Проверяет, является ли потенциальный потомок (descendantId) потомком предка (ancestorId) в базе данных
-        /// </summary>
-        /// <param name="descendantId">ID потенциального потомка</param>
-        /// <param name="ancestorId">ID предка</param>
-        /// <returns>true, если descendant является потомком ancestor</returns>
+        // Проверяет, лежит ли один узел внутри поддерева другого
         private async Task<bool> IsDescendantInDatabase(Guid descendantId, Guid ancestorId)
         {
             // Получаем родителя descendantId
@@ -584,26 +533,42 @@ namespace BusinessEntity.Core.Services
             return false;
         }
 
+        // Загружает payload-объекты для сущности
         public async Task<IReadOnlyList<BusinessEntityData>> GetData(Classes.BusinessEntity entityData)
         {
             if (entityData == null) throw new ArgumentNullException(nameof(entityData));
             _webLogger?.Debug($"GetData: entityId={entityData.Id}, type={entityData.EntityType}");
 
-            // Базовая загрузка всех чанков по EntityId
+            // Базовая загрузка сырых данных по Id
             var rawData = await _dataProviderConnector.GetDataAsync<string>(entityData.Id);
             var chunks = string.IsNullOrEmpty(rawData)
                 ? Array.Empty<BusinessEntityData>()
-                : new[]
+                : entityData.EntityType == BusinessEntityTypeEnum.Document
+                ? new BusinessEntityData[]
+                {
+                    new Document
+                    {
+                        Id = entityData.Id,
+                        Name = entityData.Name,
+                        CreatedDate = entityData.CreatedDate,
+                        LastModifiedDate = entityData.LastModifiedDate,
+                        EntityType = BusinessEntityTypeEnum.Document,
+                        Text = rawData
+                    }
+                }
+                : new BusinessEntityData[]
                 {
                     new BusinessEntityData
                     {
                         Id = entityData.Id,
-                        EntityId = entityData.Id,
-                        Data = rawData
+                        Name = entityData.Name,
+                        CreatedDate = entityData.CreatedDate,
+                        LastModifiedDate = entityData.LastModifiedDate,
+                        EntityType = entityData.EntityType
                     }
                 };
 
-            // Возможность различать логику по типам сущностей
+            // Здесь можно расширять типовую пост-обработку
             switch (entityData.EntityType)
             {
                 case BusinessEntityTypeEnum.Space:
@@ -623,22 +588,22 @@ namespace BusinessEntity.Core.Services
             return chunks;
         }
 
-        /// <summary>
-        /// Сохраняет бизнес-энтити и связанный с ней блок данных
-        /// </summary>
-        /// <param name="entityData">Сущность (например, документ)</param>
-        /// <param name="data">Данные сущности</param>
+        // Сохраняет entity и ее payload в хранилище
         public async Task SaveEntity(Classes.BusinessEntity entityData, BusinessEntityData data)
         {
             if (entityData == null) throw new ArgumentNullException(nameof(entityData));
             if (data == null) throw new ArgumentNullException(nameof(data));
 
-            // Всегда удостоверяемся, что данные привязаны к текущей сущности
-            data.EntityId = entityData.Id;
+            // Всегда выравниваем identity и тип перед сохранением
+            data.Id = entityData.Id;
+            data.EntityType = entityData.EntityType;
 
-            _webLogger?.Information($"SaveEntity: entityId={entityData.Id}, name='{entityData.Name}', dataLen={data?.Data?.Length ?? 0}");
+            // Извлекаем сериализуемый payload
+            var payload = ExtractPayload(data);
 
-            // Сохраняем (добавляем или обновляем) саму сущность
+            _webLogger?.Information($"SaveEntity: entityId={entityData.Id}, name='{entityData.Name}', dataLen={payload?.Length ?? 0}");
+
+            // Сохраняем саму entity
             var existingEntity = await _dataProviderConnector.GetByIdAsync(entityData.Id);
             if (existingEntity != null)
             {
@@ -649,10 +614,20 @@ namespace BusinessEntity.Core.Services
                 await _dataProviderConnector.AddAsync(entityData);
             }
 
-            // Сохраняем данные сущности как сериализованный JSON payload
-            await _dataProviderConnector.UpdateDataAsync(entityData.Id, data.Data);
+            // Сохраняем payload сущности отдельно
+            await _dataProviderConnector.UpdateDataAsync(entityData.Id, payload);
 
             _webLogger?.Debug($"SaveEntity: saved entityData {entityData.Id} and data {data.Id}");
+        }
+
+        // Выделяет строковый payload из data-объекта
+        private static string ExtractPayload(BusinessEntityData data)
+        {
+            return data switch
+            {
+                Document document => document.Text ?? string.Empty,
+                _ => string.Empty
+            };
         }
     }
 }

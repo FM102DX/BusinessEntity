@@ -6,10 +6,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+// Typed data-объект документа
 namespace BusinessEntity.Core.DomainEntities
 {
-    public class Document : BusinessEntityDataBase, IBusinessEntity
+    // Хранит текст документа и общие поля data-объекта
+    public class Document : BusinessEntityData, IBusinessEntityData
     {
-        public override BusinessEntityTypeEnum BusinessEntityType { get; set; } = BusinessEntityTypeEnum.Document;
+        // Документ всегда имеет тип Document
+        public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Document;
+        // Основной текст документа
+        public string Text { get; set; } = string.Empty;
     }
 }

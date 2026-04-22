@@ -1,7 +1,7 @@
-using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using ReactiveUI;
+using BusinessEntity.Core.Classes;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 {

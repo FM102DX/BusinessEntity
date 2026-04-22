@@ -1,6 +1,6 @@
 using System;
 
-namespace BusinessEntity.Core.Contracts;
+namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 
 public interface IBaseEntity
 {

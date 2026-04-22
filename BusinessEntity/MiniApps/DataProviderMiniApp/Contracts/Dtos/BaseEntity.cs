@@ -1,7 +1,7 @@
 using System;
-using BusinessEntity.Core.Contracts;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 
-namespace BusinessEntity.Core.Classes;
+namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 
 public abstract class BaseEntity : IBaseEntity
 {
