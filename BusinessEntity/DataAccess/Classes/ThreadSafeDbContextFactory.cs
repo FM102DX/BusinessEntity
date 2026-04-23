@@ -39,6 +39,11 @@ public class ThreadSafeDbContextFactory
         }
     }
 
+    public KmsBusinessEntityDbContext CreateDbContext()
+    {
+        return new KmsBusinessEntityDbContext(_options);
+    }
+
     private string ProcessPoolKey(string rawKey)
     {
         var cleanedKey = Regex.Replace(rawKey ?? "default", "[^a-zA-Z0-9_]", "");

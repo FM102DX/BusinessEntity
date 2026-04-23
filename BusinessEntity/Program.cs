@@ -132,7 +132,7 @@ namespace BusinessEntity
 
 			using (var context = new KmsBusinessEntityDbContext(optionsBuilder.Options))
 			{
-				context.Database.EnsureCreated();
+				EnsureBusinessEntityStorageSchema(context);
 			}
 
 			// Подключает Swagger для диагностики API.
@@ -190,5 +190,48 @@ namespace BusinessEntity
 			app.MapFallbackToPage("/_Host");
 			app.Run();
 		}
+
+        // Явно создает DTO-таблицы mini-app в shared Postgres-базе, даже если в базе уже есть таблицы других сервисов.
+        private static void EnsureBusinessEntityStorageSchema(KmsBusinessEntityDbContext context)
+        {
+            context.Database.EnsureCreated();
+
+            context.Database.ExecuteSqlRaw(
+                @"
+                CREATE TABLE IF NOT EXISTS ""BusinessEntities"" (
+                    ""Id"" uuid NOT NULL,
+                    ""CreatedDate"" timestamp with time zone NOT NULL,
+                    ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""Name"" text NOT NULL,
+                    ""BusinessEntityType"" integer NOT NULL,
+                    ""EntityType"" integer NOT NULL,
+                    CONSTRAINT ""PK_BusinessEntities"" PRIMARY KEY (""Id"")
+                );
+
+                CREATE TABLE IF NOT EXISTS ""BusinessEntityRelations"" (
+                    ""Id"" uuid NOT NULL,
+                    ""CreatedDate"" timestamp with time zone NOT NULL,
+                    ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""ObjectAId"" uuid NOT NULL,
+                    ""ObjectBId"" uuid NOT NULL,
+                    ""RelationType"" text NOT NULL,
+                    ""RelationParams"" text NOT NULL,
+                    CONSTRAINT ""PK_BusinessEntityRelations"" PRIMARY KEY (""Id"")
+                );
+
+                CREATE TABLE IF NOT EXISTS ""BusinessEntityDataItems"" (
+                    ""Id"" uuid NOT NULL,
+                    ""CreatedDate"" timestamp with time zone NOT NULL,
+                    ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""BusinessEntityId"" uuid NOT NULL,
+                    ""Data"" bytea NOT NULL,
+                    CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"")
+                );
+
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectAId"" ON ""BusinessEntityRelations"" (""ObjectAId"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectBId"" ON ""BusinessEntityRelations"" (""ObjectBId"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataItems_BusinessEntityId"" ON ""BusinessEntityDataItems"" (""BusinessEntityId"");
+                ");
+        }
 	}
 }

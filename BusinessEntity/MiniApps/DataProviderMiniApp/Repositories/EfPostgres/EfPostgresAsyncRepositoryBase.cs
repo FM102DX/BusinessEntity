@@ -28,8 +28,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     // Читает список записей из таблицы текущего DTO-типа.
     public async Task<IReadOnlyList<T>> GetAllAsync(Expression<Func<T, bool>>? filter = null, int? take = null, CancellationToken ct = default)
     {
-        using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_read");
-        var context = contextWrap.Context;
+        await using var context = _dbContextFactory.CreateDbContext();
         context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
 
         IQueryable<T> query = context.Set<T>();
@@ -52,8 +51,9 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     // Читает одну запись текущего DTO-типа по id.
     public async Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_get");
-        return await contextWrap.Context.Set<T>().FirstOrDefaultAsync(e => e.Id == id, ct);
+        await using var context = _dbContextFactory.CreateDbContext();
+        context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        return await context.Set<T>().AsNoTracking().FirstOrDefaultAsync(e => e.Id == id, ct);
     }
 
     /// <summary>
@@ -62,9 +62,9 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     // Проверяет наличие записи в таблице по id.
     public async Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
     {
-        using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_exists");
-        contextWrap.Context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
-        return await contextWrap.Context.Set<T>().AnyAsync(e => e.Id == id, ct);
+        await using var context = _dbContextFactory.CreateDbContext();
+        context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        return await context.Set<T>().AnyAsync(e => e.Id == id, ct);
     }
 
     /// <summary>
@@ -78,9 +78,9 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
             throw new ArgumentNullException(nameof(entity));
         }
 
-        using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_add");
-        await contextWrap.Context.Set<T>().AddAsync(entity, ct);
-        await contextWrap.Context.SaveChangesAsync(ct);
+        await using var context = _dbContextFactory.CreateDbContext();
+        await context.Set<T>().AddAsync(entity, ct);
+        await context.SaveChangesAsync(ct);
         return entity;
     }
 
@@ -95,9 +95,9 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
             throw new ArgumentNullException(nameof(entity));
         }
 
-        using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_upd");
-        contextWrap.Context.Entry(entity).State = EntityState.Modified;
-        await contextWrap.Context.SaveChangesAsync(ct);
+        await using var context = _dbContextFactory.CreateDbContext();
+        context.Entry(entity).State = EntityState.Modified;
+        await context.SaveChangesAsync(ct);
     }
 
     /// <summary>
@@ -106,8 +106,8 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     // Находит DTO-запись по id и удаляет её из БД.
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_del");
-        var set = contextWrap.Context.Set<T>();
+        await using var context = _dbContextFactory.CreateDbContext();
+        var set = context.Set<T>();
         var entity = await set.FindAsync(new object?[] { id }, ct);
         if (entity == null)
         {
@@ -115,7 +115,7 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
         }
 
         set.Remove(entity);
-        await contextWrap.Context.SaveChangesAsync(ct);
+        await context.SaveChangesAsync(ct);
     }
 
     /// <summary>
@@ -124,9 +124,9 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     // Возвращает количество строк для текущего DTO-типа.
     public async Task<int> GetCountAsync(CancellationToken ct = default)
     {
-        using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_cnt");
-        contextWrap.Context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
-        return await contextWrap.Context.Set<T>().CountAsync(ct);
+        await using var context = _dbContextFactory.CreateDbContext();
+        context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        return await context.Set<T>().CountAsync(ct);
     }
 
     /// <summary>
@@ -135,9 +135,9 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     // Удаляет все записи текущего DTO-типа из таблицы.
     public async Task DeleteAllAsync(CancellationToken ct = default)
     {
-        using var contextWrap = _dbContextFactory.GetDbContextWrap($"dpm_{typeof(T).Name}_clr");
-        var set = contextWrap.Context.Set<T>();
+        await using var context = _dbContextFactory.CreateDbContext();
+        var set = context.Set<T>();
         set.RemoveRange(set);
-        await contextWrap.Context.SaveChangesAsync(ct);
+        await context.SaveChangesAsync(ct);
     }
 }

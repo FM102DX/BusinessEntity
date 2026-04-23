@@ -116,6 +116,7 @@ services:
       ASPNETCORE_URLS: http://*:80
       ASPNETCORE_ENVIRONMENT: Development
       IS_DOCKER: "true"
+      ConnectionStrings__DockerConnection: Host=postgres-production-db;Port=5432;Database=business_entity;Username=adm01;Password=adm01pwd
       # Inside the common Docker network, talk to the Authentik service directly via DNS name
       AUTHENTIK_BASE_URL: http://authentic_server:9000
       # What browsers should use to reach Authentik
@@ -146,6 +147,7 @@ services:
       ASPNETCORE_URLS: http://*:80
       ASPNETCORE_ENVIRONMENT: Development
       IS_DOCKER: "true"
+      ConnectionStrings__DockerConnection: Host=postgres-production-db;Port=5432;Database=web_logger;Username=adm01;Password=adm01pwd
     depends_on:
       postgres-production-db:
         condition: service_healthy

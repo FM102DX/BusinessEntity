@@ -18,10 +18,10 @@ public class KmsBusinessEntityDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<BusinessEntityDto>();
-        modelBuilder.Entity<BusinessEntityRelationDto>();
-        modelBuilder.Entity<BusinessEntityDataDto>();
+        modelBuilder.Entity<BusinessEntityDto>().ToTable("BusinessEntities");
+        modelBuilder.Entity<BusinessEntityRelationDto>().ToTable("BusinessEntityRelations");
+        modelBuilder.Entity<BusinessEntityDataDto>().ToTable("BusinessEntityDataItems");
 
-        // Конфигурация таблиц остается конвенционной, т.к. mini-app пока использует базовую схему DTO без кастомных маппингов.
+        // Явно фиксируем имена таблиц, чтобы shared Postgres-база не зависела от EF-конвенций.
     }
 } 
