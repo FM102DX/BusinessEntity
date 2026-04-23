@@ -4,6 +4,7 @@ using BusinessEntity.Models;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
+using BusinessEntity.Core.BaseClasses.Relations;
 
 namespace BusinessEntity.Pages
 {    public partial class Index : ComponentBase

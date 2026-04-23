@@ -7,6 +7,7 @@ using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.WebLogger.Services;
+using BusinessEntity.Core.BaseClasses.Relations;
 
 namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
 {
@@ -53,11 +54,11 @@ namespace BusinessEntity.MiniApps.SampleDataMiniApp.Internal
                 var existingSpaces = existingEntities.Where(e => e.EntityType == BusinessEntityTypeEnum.Space).ToList();
 
                 var existingRelations = await _helper.GetAllRelations();
-                bool hasVisualRelations = existingRelations.Any(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString());
-                // _webLogger?.Information($"[Seed] Existing: entities={existingEntities.Count}, spaces={existingSpaces.Count}, relations={existingRelations.Count}, visualRelations={existingRelations.Count(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())}");
-                if (existingSpaces.Any() && hasVisualRelations)
+                bool hasContainsRelations = existingRelations.Any(r => r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString());
+                // _webLogger?.Information($"[Seed] Existing: entities={existingEntities.Count}, spaces={existingSpaces.Count}, relations={existingRelations.Count}, containsRelations={existingRelations.Count(r => r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())}");
+                if (existingSpaces.Any() && hasContainsRelations)
                 {
-                    // _webLogger?.Information("[Seed] Skip: spaces already exist and visual relations present");
+                    // _webLogger?.Information("[Seed] Skip: spaces already exist and contains relations present");
                     return;
                 }
 

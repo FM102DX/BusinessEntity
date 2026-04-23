@@ -1,3 +1,4 @@
+using BusinessEntity.Core.Classes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -5,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 // Макро-описание допустимой связи между типами сущностей
-namespace BusinessEntity.Core.Classes
+namespace BusinessEntity.Core.BaseClasses.Relations
 {
     // Используется как шаблон для создания relation
     public class MacroRelationType

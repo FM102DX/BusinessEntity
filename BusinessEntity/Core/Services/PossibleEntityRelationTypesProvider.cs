@@ -1,3 +1,4 @@
+using BusinessEntity.Core.BaseClasses.Relations;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using System;
@@ -6,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-// Поставщик допустимых правил визуальных связей
+// Поставщик допустимых правил связей Contains
 namespace BusinessEntity.Core.Services
 {
     // Хранит преднастроенные macro relation между типами entity
@@ -21,32 +22,32 @@ namespace BusinessEntity.Core.Services
             // Формируем стартовый список правил для дерева
             _possibleRelations = new List<MacroRelationType>
             {
-                // Дополнительные примеры отношений - используем VisuallyContains для визуального размещения
+                // Базовые правила дерева строятся на связи Contains
                 new MacroRelationType(
                     relationName: "basic:space-contains-folder",
                     typeA: BusinessEntityTypeEnum.Space,
                     typeB: BusinessEntityTypeEnum.Folder,
-                    relationType: BusinessEntityRelationTypeEnum.VisuallyContains
+                    relationType: BusinessEntityRelationTypeEnum.Contains
                 ),
                 // Space может содержать Document напрямую
                 new MacroRelationType(
                     relationName: "basic:space-contains-page",
                     typeA: BusinessEntityTypeEnum.Space,
                     typeB: BusinessEntityTypeEnum.Document,
-                    relationType: BusinessEntityRelationTypeEnum.VisuallyContains
+                    relationType: BusinessEntityRelationTypeEnum.Contains
                 ),
                 // Тестовый объект: Папка содержит страницу
                 new MacroRelationType(
                     relationName: "basic:folder-contains-page",
                     typeA: BusinessEntityTypeEnum.Folder,
                     typeB: BusinessEntityTypeEnum.Document,
-                    relationType: BusinessEntityRelationTypeEnum.VisuallyContains
+                    relationType: BusinessEntityRelationTypeEnum.Contains
                 ),
                 new MacroRelationType(
                     relationName: "basic:folder-contains-folder",
                     typeA: BusinessEntityTypeEnum.Folder,
                     typeB: BusinessEntityTypeEnum.Folder,
-                    relationType: BusinessEntityRelationTypeEnum.VisuallyContains
+                    relationType: BusinessEntityRelationTypeEnum.Contains
                 )
             };
         }

@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 // Набор допустимых типов связей между сущностями
-namespace BusinessEntity.Core.Classes
+namespace BusinessEntity.Core.BaseClasses.Relations
 {
     // Используется в relation-слое и в макро-описании связей
     public enum BusinessEntityRelationTypeEnum
@@ -20,9 +20,6 @@ namespace BusinessEntity.Core.Classes
         // Базовое содержимое одного объекта другим
         Contains = 1000,
         
-        // Визуальное содержание в дереве UI
-        VisuallyContains = 1100,
-
         // Неопределенный тип связи
         Undefined = 9999
     }

@@ -8,6 +8,7 @@ using BusinessEntity.Core.DomainEntities;
 using System.Linq;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.WebLogger.Services;
+using BusinessEntity.Core.BaseClasses.Relations;
 
 // Основной сервис работы с сущностями, data и связями
 namespace BusinessEntity.Core.Services
@@ -151,12 +152,12 @@ namespace BusinessEntity.Core.Services
                 .ToList();
         }
 
-        // Возвращает дочерние entity по визуальной связи
+        // Возвращает дочерние entity по связи Contains
         public async Task<IEnumerable<Classes.BusinessEntity>> GetContainedEntitiesAsync(Guid parentId, CancellationToken ct = default)
         {
             // Ищем relation вида родитель -> ребенок
             var relations = (await _dataProviderConnector.GetAllRelationsAsync(ct))
-                .Where(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())
+                .Where(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
                 .ToList();
             var childIds = relations.Select(r => r.ObjectBId).ToList();
             
@@ -175,15 +176,15 @@ namespace BusinessEntity.Core.Services
             return children.OrderBy(c => c.CreatedDate);
         }
 
-        // Возвращает корневые entity, у которых нет визуального родителя
+        // Возвращает корневые entity, у которых нет родителя по Contains
         public async Task<IEnumerable<Classes.BusinessEntity>> GetRootEntitiesAsync()
         {
-            // Находим все сущности, которые НЕ являются объектом B в отношении "VisuallyContains"
+            // Находим все сущности, которые НЕ являются объектом B в отношении "Contains"
             var allEntities = await _dataProviderConnector.GetAllAsync();
-            var visuallyContainsRelations = (await _dataProviderConnector.GetAllRelationsAsync())
-                .Where(r => r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())
+            var containsRelations = (await _dataProviderConnector.GetAllRelationsAsync())
+                .Where(r => r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
                 .ToList();
-            var childIds = visuallyContainsRelations.Select(r => r.ObjectBId).ToHashSet();
+            var childIds = containsRelations.Select(r => r.ObjectBId).ToHashSet();
             
             var rootEntities = allEntities.Where(e => !childIds.Contains(e.Id));
             
@@ -233,13 +234,13 @@ namespace BusinessEntity.Core.Services
             // _webLogger?.Information($"[мини-апп:business-entity-helper] [entity:create] [folder] Создаем folder id={entity.Id} name='{name}' parentId={parent.Id} parentName='{parent.Name}'");
             await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
 
-            // Создаем визуальную связь родитель -> дочерний элемент
+            // Создаем связь Contains родитель -> дочерний элемент
             var relation = new BusinessEntityRelation
             {
                 Id = Guid.NewGuid(),
                 ObjectAId = parent.Id,
                 ObjectBId = entity.Id,
-                RelationType = BusinessEntityRelationTypeEnum.VisuallyContains.ToString(),
+                RelationType = BusinessEntityRelationTypeEnum.Contains.ToString(),
                 RelationParams = ""
             };
 
@@ -287,13 +288,13 @@ namespace BusinessEntity.Core.Services
             // Сохраняем сущность
             await _dataProviderConnector.AddAsync(entity, cancellationToken: ct);
 
-            // Создаем визуальную связь с родителем
+            // Создаем связь Contains с родителем
             var relation = new BusinessEntityRelation
             {
                 Id = Guid.NewGuid(),
                 ObjectAId = parent.Id,
                 ObjectBId = entity.Id,
-                RelationType = BusinessEntityRelationTypeEnum.VisuallyContains.ToString(),
+                RelationType = BusinessEntityRelationTypeEnum.Contains.ToString(),
                 RelationParams = string.Empty
             };
 
@@ -312,7 +313,7 @@ namespace BusinessEntity.Core.Services
         }
         #endregion
 
-        // Меняет визуального родителя элемента в дереве
+        // Меняет родителя элемента в дереве по связи Contains
         public async Task ChangeVisualFolderParentForItem(Classes.BusinessEntity child, Classes.BusinessEntity newVisualParent)
         {
             _webLogger?.Information($"ChangeVisualFolderParentForItem: Moving '{child?.Name}' to new visual parent '{newVisualParent?.Name}'");
@@ -328,32 +329,32 @@ namespace BusinessEntity.Core.Services
                 throw new InvalidOperationException(errorMessage);
             }
 
-            // Находим текущих визуальных родителей элемента
+            // Находим текущих родителей элемента по связи Contains
             var currentVisualParentRelations = (await _dataProviderConnector.GetAllRelationsAsync())
                 .Where(r =>
                     r.ObjectBId == child.Id &&
-                    r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())
+                    r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
                 .ToList();
 
             // Создаем макро-описание нужной связи
-            var visuallyContainsRelationType = new MacroRelationType
+            var containsRelationType = new MacroRelationType
             {
-                RelationType = BusinessEntityRelationTypeEnum.VisuallyContains
+                RelationType = BusinessEntityRelationTypeEnum.Contains
             };
 
-            // Удаляем старые визуальные связи
+            // Удаляем старые связи Contains
             foreach (var currentRelation in currentVisualParentRelations)
             {
                 var currentParent = await _dataProviderConnector.GetByIdAsync(currentRelation.ObjectAId);
                 if (currentParent != null)
                 {
-                    _webLogger?.Debug($"Removing visual relation between '{currentParent.Name}' and '{child.Name}'");
-                    await RemoveRelation(currentParent, child, visuallyContainsRelationType);
+                    _webLogger?.Debug($"Removing contains relation between '{currentParent.Name}' and '{child.Name}'");
+                    await RemoveRelation(currentParent, child, containsRelationType);
                 }
             }
 
-            // Создаем новую визуальную связь
-            await CreateRelation(newVisualParent, child, visuallyContainsRelationType);
+            // Создаем новую связь Contains
+            await CreateRelation(newVisualParent, child, containsRelationType);
             
             _webLogger?.Information($"Successfully moved '{child.Name}' to new visual parent '{newVisualParent.Name}'");
         }
@@ -396,14 +397,14 @@ namespace BusinessEntity.Core.Services
             return (true, new List<string>());
         }
         
-        // Рекурсивно удаляет всех визуальных потомков сущности
+        // Рекурсивно удаляет всех потомков сущности по связи Contains
         private async Task<(bool success, List<string> messages)> RemoveChildrenRecursively(Guid parentId, CancellationToken ct = default)
         {
             var allMessages = new List<string>();
             
-            // Получаем всех прямых потомков по визуальной связи
+            // Получаем всех прямых потомков по связи Contains
             var childRelations = (await _dataProviderConnector.GetAllRelationsAsync(ct))
-                .Where(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())
+                .Where(r => r.ObjectAId == parentId && r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
                 .ToList();
             
             foreach (var relation in childRelations)
@@ -520,7 +521,7 @@ namespace BusinessEntity.Core.Services
             var parentRelations = (await _dataProviderConnector.GetAllRelationsAsync())
                 .Where(r =>
                     r.ObjectBId == descendantId &&
-                    r.RelationType == BusinessEntityRelationTypeEnum.VisuallyContains.ToString())
+                    r.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
                 .ToList();
 
             foreach (var relation in parentRelations)
