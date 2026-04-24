@@ -1,4 +1,5 @@
 using BusinessEntity.Contracts;
+using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System;
@@ -11,10 +12,15 @@ namespace BusinessEntity.Services
         public const string CookieSpaceName = "be_selected_space_name";
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<UserContextService>? _logger;
-        public UserContextService(IHttpContextAccessor httpContextAccessor, ILogger<UserContextService>? logger = null)
+        private readonly IWebLoggerService? _webLogger;
+        public UserContextService(
+            IHttpContextAccessor httpContextAccessor,
+            ILogger<UserContextService>? logger = null,
+            IWebLoggerService? webLogger = null)
         {
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
+            _webLogger = webLogger;
             try
             {
                 var ctx = _httpContextAccessor.HttpContext;
@@ -28,6 +34,9 @@ namespace BusinessEntity.Services
                         CurrentSpaceName = sname;
                     }
                 }
+
+                _ = LogInfoAsync(
+                    $"[space-selection] [user-context:ctor] requestPath={ctx?.Request?.Path.Value ?? "null"} hasCookieSpaceId={reqCookies?.ContainsKey(CookieSpaceId) == true} cookieSpaceId='{reqCookies?[CookieSpaceId] ?? string.Empty}' cookieSpaceName='{reqCookies?[CookieSpaceName] ?? string.Empty}' restoredSpaceId={CurrentSpaceId?.ToString() ?? "null"} restoredSpaceName='{CurrentSpaceName ?? string.Empty}'");
             }
             catch (Exception ex)
             {
@@ -52,6 +61,17 @@ namespace BusinessEntity.Services
                 var ctx = _httpContextAccessor.HttpContext;
                 if (ctx != null)
                 {
+                    _ = LogInfoAsync(
+                        $"[space-selection] [user-context:set-enter] requestPath={ctx.Request.Path.Value ?? "null"} responseHasStarted={ctx.Response.HasStarted} targetSpaceId={id} targetSpaceName='{name}'");
+
+                    if (ctx.Response.HasStarted)
+                    {
+                        _logger?.LogDebug("Skipping selected space cookie write because response has already started.");
+                        _ = LogInfoAsync(
+                            $"[space-selection] [user-context:set-skip-write] reason=response-started targetSpaceId={id}");
+                        return;
+                    }
+
                     var opts = new CookieOptions
                     {
                         Expires = DateTimeOffset.UtcNow.AddDays(30),
@@ -62,6 +82,8 @@ namespace BusinessEntity.Services
                     };
                     ctx.Response.Cookies.Append(CookieSpaceId, id.ToString(), opts);
                     ctx.Response.Cookies.Append(CookieSpaceName, name ?? string.Empty, opts);
+                    _ = LogInfoAsync(
+                        $"[space-selection] [user-context:set-written] cookieSpaceId='{id}' cookieSpaceName='{name ?? string.Empty}'");
                 }
             }
             catch (Exception ex)
@@ -72,6 +94,8 @@ namespace BusinessEntity.Services
 
         public void ClearSpace()
         {
+            var previousSpaceId = CurrentSpaceId;
+            var previousSpaceName = CurrentSpaceName;
             CurrentSpaceId = null;
             CurrentSpaceName = null;
             SelectedSpaceChanged?.Invoke(null);
@@ -81,13 +105,34 @@ namespace BusinessEntity.Services
                 var ctx = _httpContextAccessor.HttpContext;
                 if (ctx != null)
                 {
+                    _ = LogInfoAsync(
+                        $"[space-selection] [user-context:clear-enter] requestPath={ctx.Request.Path.Value ?? "null"} responseHasStarted={ctx.Response.HasStarted} previousSpaceId={previousSpaceId?.ToString() ?? "null"} previousSpaceName='{previousSpaceName ?? string.Empty}'");
+
+                    if (ctx.Response.HasStarted)
+                    {
+                        _logger?.LogDebug("Skipping selected space cookie delete because response has already started.");
+                        _ = LogInfoAsync(
+                            $"[space-selection] [user-context:clear-skip-delete] reason=response-started previousSpaceId={previousSpaceId?.ToString() ?? "null"}");
+                        return;
+                    }
+
                     ctx.Response.Cookies.Delete(CookieSpaceId);
                     ctx.Response.Cookies.Delete(CookieSpaceName);
+                    _ = LogInfoAsync(
+                        $"[space-selection] [user-context:clear-deleted] deletedCookieSpaceId=true deletedCookieSpaceName=true");
                 }
             }
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to delete selected space cookies");
+            }
+        }
+
+        private async Task LogInfoAsync(string message)
+        {
+            if (_webLogger != null)
+            {
+                await _webLogger.Information(message);
             }
         }
     }

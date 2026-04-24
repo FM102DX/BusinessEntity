@@ -1,0 +1,285 @@
+@using BusinessEntity.Core.Classes
+@using BusinessEntityEntity = BusinessEntity.Core.Classes.BusinessEntity
+@using BusinessEntity.Services
+@inject SpaceHelper SpaceHelper
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Пространства</h5>
+        <p class="card-text">
+            Создание, переименование и удаление пространств.
+        </p>
+
+        <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Новое пространство</label>
+                <input class="form-control"
+                       @bind="NewSpaceName"
+                       @bind:event="oninput"
+                       placeholder="Введите имя пространства" />
+            </div>
+            <div class="col-md-auto">
+                <button class="btn btn-primary"
+                        @onclick="CreateSpaceAsync"
+                        disabled="@IsBusy">
+                    Создать
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert alert-success py-2" role="alert">@StatusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <div class="alert alert-danger py-2" role="alert">@ErrorMessage</div>
+        }
+
+        @if (IsLoading)
+        {
+            <div class="text-muted">Загружаем пространства...</div>
+        }
+        else if (Spaces.Count == 0)
+        {
+            <div class="text-muted">Пространства пока не созданы.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Имя</th>
+                            <th>Создано</th>
+                            <th class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var space in Spaces)
+                        {
+                            <tr>
+                                <td>
+                                    @if (EditingSpaceId == space.Id)
+                                    {
+                                        <input class="form-control"
+                                               @bind="EditingSpaceName"
+                                               @bind:event="oninput" />
+                                    }
+                                    else
+                                    {
+                                        <span>@space.Name</span>
+                                    }
+                                </td>
+                                <td>@space.CreatedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td class="text-end">
+                                    @if (DeleteCandidateId == space.Id)
+                                    {
+                                        <button class="btn btn-sm btn-danger me-2"
+                                                @onclick="() => ConfirmDeleteAsync(space.Id)"
+                                                disabled="@IsBusy">
+                                            Подтвердить удаление
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                @onclick="CancelDelete"
+                                                disabled="@IsBusy">
+                                            Отмена
+                                        </button>
+                                    }
+                                    else if (EditingSpaceId == space.Id)
+                                    {
+                                        <button class="btn btn-sm btn-primary me-2"
+                                                @onclick="() => SaveRenameAsync(space.Id)"
+                                                disabled="@IsBusy">
+                                            Сохранить
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                @onclick="CancelEdit"
+                                                disabled="@IsBusy">
+                                            Отмена
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary me-2"
+                                                @onclick="() => StartEdit(space)"
+                                                disabled="@IsBusy">
+                                            Переименовать
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => StartDelete(space.Id)"
+                                                disabled="@IsBusy">
+                                            Удалить
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private readonly List<BusinessEntityEntity> Spaces = new();
+    private bool IsLoading;
+    private bool IsBusy;
+    private string NewSpaceName { get; set; } = string.Empty;
+    private string EditingSpaceName { get; set; } = string.Empty;
+    private Guid? EditingSpaceId { get; set; }
+    private Guid? DeleteCandidateId { get; set; }
+    private string? StatusMessage { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// Загружает список пространств при инициализации компонента.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadSpacesAsync();
+    }
+
+    /// <summary>
+    /// Создает новое пространство и обновляет список.
+    /// </summary>
+    private async Task CreateSpaceAsync()
+    {
+        await RunBusyActionAsync(
+            async () =>
+            {
+                var createdSpace = await SpaceHelper.CreateSpaceAsync(NewSpaceName);
+                NewSpaceName = string.Empty;
+                StatusMessage = $"Пространство '{createdSpace.Name}' создано.";
+                await ReloadSpacesAsync();
+            });
+    }
+
+    /// <summary>
+    /// Переводит строку списка в режим редактирования.
+    /// </summary>
+    private void StartEdit(BusinessEntityEntity space)
+    {
+        ResetMessages();
+        DeleteCandidateId = null;
+        EditingSpaceId = space.Id;
+        EditingSpaceName = space.Name;
+    }
+
+    /// <summary>
+    /// Сохраняет новое имя пространства.
+    /// </summary>
+    private async Task SaveRenameAsync(Guid spaceId)
+    {
+        await RunBusyActionAsync(
+            async () =>
+            {
+                var renamedSpace = await SpaceHelper.RenameSpaceAsync(spaceId, EditingSpaceName);
+                EditingSpaceId = null;
+                EditingSpaceName = string.Empty;
+                StatusMessage = $"Пространство '{renamedSpace?.Name}' переименовано.";
+                await ReloadSpacesAsync();
+            });
+    }
+
+    /// <summary>
+    /// Отменяет режим редактирования.
+    /// </summary>
+    private void CancelEdit()
+    {
+        EditingSpaceId = null;
+        EditingSpaceName = string.Empty;
+        ResetMessages();
+    }
+
+    /// <summary>
+    /// Помечает пространство кандидатом на удаление.
+    /// </summary>
+    private void StartDelete(Guid spaceId)
+    {
+        ResetMessages();
+        EditingSpaceId = null;
+        EditingSpaceName = string.Empty;
+        DeleteCandidateId = spaceId;
+    }
+
+    /// <summary>
+    /// Подтверждает удаление пространства.
+    /// </summary>
+    private async Task ConfirmDeleteAsync(Guid spaceId)
+    {
+        await RunBusyActionAsync(
+            async () =>
+            {
+                var deletedSpace = Spaces.FirstOrDefault(x => x.Id == spaceId);
+                await SpaceHelper.DeleteSpaceAsync(spaceId);
+                DeleteCandidateId = null;
+                StatusMessage = $"Пространство '{deletedSpace?.Name ?? spaceId.ToString()}' удалено.";
+                await ReloadSpacesAsync();
+            });
+    }
+
+    /// <summary>
+    /// Отменяет удаление пространства.
+    /// </summary>
+    private void CancelDelete()
+    {
+        DeleteCandidateId = null;
+        ResetMessages();
+    }
+
+    /// <summary>
+    /// Перезагружает список пространств.
+    /// </summary>
+    private async Task ReloadSpacesAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            var spaces = await SpaceHelper.GetSpacesAsync();
+            Spaces.Clear();
+            Spaces.AddRange(spaces);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Выполняет UI-действие с общей обработкой busy/error состояния.
+    /// </summary>
+    private async Task RunBusyActionAsync(Func<Task> action)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            ResetMessages();
+            await action();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Сбрасывает пользовательские сообщения компонента.
+    /// </summary>
+    private void ResetMessages()
+    {
+        StatusMessage = null;
+        ErrorMessage = null;
+    }
+}

@@ -1,10 +1,9 @@
 @page "/space-selection"
 @attribute [Authorize]
 @inject BusinessEntity.Contracts.IUserContextService UserContext
-@inject global::BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper
 @inject global::BusinessEntity.Services.SpaceHelper SpaceHelper
 @inject NavigationManager NavManager
-@inject Microsoft.JSInterop.IJSRuntime JS
+@inject BusinessEntity.WebLogger.Services.IWebLoggerService? WebLogger
 
 <h3>Выбор пространства</h3>
 
@@ -23,7 +22,7 @@ else
         {
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 @space.Name
-                <button class="btn btn-sm btn-primary" @onclick="() => SelectSpace(space)">Выбрать</button>
+                <button class="btn btn-sm btn-primary" @onclick="() => SelectSpace(space.Id)">Выбрать</button>
             </li>
         }
     </ul>
@@ -34,30 +33,52 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // Если пространство восстановилось из cookies и реально существует в текущем storage,
-        // страница выбора больше не нужна.
+        if (WebLogger != null)
+        {
+            await WebLogger.Information(
+                $"[space-selection] [page:init] path=/space-selection hasSelectedSpace={UserContext.HasSelectedSpace} currentSpaceId={UserContext.CurrentSpaceId?.ToString() ?? "null"} currentSpaceName='{UserContext.CurrentSpaceName ?? string.Empty}'");
+        }
+
+        // На явной странице выбора не делаем автопереход на главную:
+        // пользователь мог открыть ее намеренно, чтобы сменить текущее пространство.
+        // Проверяем только случай "протухшего" выбранного пространства.
         if (UserContext.HasSelectedSpace && UserContext.CurrentSpaceId.HasValue)
         {
             var existingSpace = await SpaceHelper.GetSpaceByIdAsync(UserContext.CurrentSpaceId.Value);
-            if (existingSpace != null)
+            if (existingSpace == null)
             {
-                NavManager.NavigateTo("/");
-                return;
+                // После рестартов storage старый space из cookies может исчезнуть.
+                // В этом случае очищаем контекст и даём пользователю выбрать пространство заново.
+                if (WebLogger != null)
+                {
+                    await WebLogger.Warning(
+                        $"[space-selection] [page:clear-stale-space] staleSpaceId={UserContext.CurrentSpaceId.Value}");
+                }
+                UserContext.ClearSpace();
             }
-
-            // После рестартов in-memory storage старый space из cookies может исчезнуть.
-            // В этом случае очищаем контекст и даём пользователю выбрать пространство заново.
-            UserContext.ClearSpace();
+            else if (WebLogger != null)
+            {
+                await WebLogger.Information(
+                    $"[space-selection] [page:current-space-present] currentSpaceId={existingSpace.Id} currentSpaceName='{existingSpace.Name}' action=show-selection-page");
+            }
         }
 
-        var list = await BusinessEntityHelper.GetSpacesAsync();
+        var list = await SpaceHelper.GetSpacesAsync();
         spaces = list.ToList();
+        if (WebLogger != null)
+        {
+            await WebLogger.Information(
+                $"[space-selection] [page:spaces-loaded] count={spaces.Count}");
+        }
     }
 
-    private async Task SelectSpace(global::BusinessEntity.Core.Classes.BusinessEntity space)
+    private async Task SelectSpace(Guid spaceId)
     {
-        UserContext.SetSpace(space.Id, space.Name);
-        try { await JS.InvokeVoidAsync("beSpace.setSelected", space.Id.ToString(), space.Name); } catch { }
-        NavManager.NavigateTo("/");
+        if (WebLogger != null)
+        {
+            await WebLogger.Information(
+                $"[space-selection] [page:select-click] targetSpaceId={spaceId}");
+        }
+        NavManager.NavigateTo($"/api/space/select/{spaceId}", forceLoad: true);
     }
 }
