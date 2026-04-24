@@ -12,8 +12,8 @@ public interface IDataProviderCrudService
     Task<BusinessEntity.Core.Classes.BusinessEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<T?> GetDataAsync<T>(Guid id, CancellationToken cancellationToken = default);
     Task UpdateDataAsync<T>(Guid id, T data, CancellationToken cancellationToken = default);
-    Task<byte[]?> GetDataPayloadAsync(Guid id, CancellationToken cancellationToken = default);
-    Task UpdateDataPayloadAsync(Guid id, byte[] payload, CancellationToken cancellationToken = default);
+    Task<string?> GetDataPayloadAsync(Guid id, CancellationToken cancellationToken = default);
+    Task UpdateDataPayloadAsync(Guid id, string payloadJson, CancellationToken cancellationToken = default);
     Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default);
     Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default);
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);

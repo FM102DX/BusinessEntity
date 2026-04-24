@@ -21,6 +21,7 @@ public class KmsBusinessEntityDbContext : DbContext
         modelBuilder.Entity<BusinessEntityDto>().ToTable("BusinessEntities");
         modelBuilder.Entity<BusinessEntityRelationDto>().ToTable("BusinessEntityRelations");
         modelBuilder.Entity<BusinessEntityDataDto>().ToTable("BusinessEntityDataItems");
+        modelBuilder.Entity<BusinessEntityDataDto>().Property(x => x.Data).HasColumnType("text");
 
         // Явно фиксируем имена таблиц, чтобы shared Postgres-база не зависела от EF-конвенций.
     }

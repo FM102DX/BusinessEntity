@@ -11,7 +11,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
     /// </summary>
     internal sealed class DataProviderService : IDataProviderCrudService
     {
-        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
         private readonly IAsyncRepository<BusinessEntityDataDto> _businessEntityDataRepository;
         private readonly IAsyncRepository<BusinessEntityRelationDto> _businessEntityRelationRepository;
@@ -44,34 +43,34 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             return entity == null ? null : DataProviderMapper.ToBusinessEntity(entity);
         }
 
-        // Читает бинарный payload и десериализует его в нужный тип.
+        // Читает JSON-envelope payload и десериализует его в нужный тип.
         public async Task<T?> GetDataAsync<T>(Guid id, CancellationToken cancellationToken = default)
         {
             var payload = await GetDataPayloadAsync(id, cancellationToken);
-            if (payload == null || payload.Length == 0)
+            if (string.IsNullOrWhiteSpace(payload))
             {
                 return default;
             }
 
-            return JsonSerializer.Deserialize<T>(payload, JsonOptions);
+            return DataPayloadEnvelopeSerializer.DeserializePayload<T>(payload);
         }
 
-        // Сериализует типизированный payload и сохраняет его как byte[].
+        // Сериализует типизированный payload в raw JSON и сохраняет его как versioned envelope.
         public async Task UpdateDataAsync<T>(Guid id, T data, CancellationToken cancellationToken = default)
         {
-            var payload = JsonSerializer.SerializeToUtf8Bytes(data, JsonOptions);
+            var payload = JsonSerializer.Serialize(data, StorageJsonOptions.Default);
             await UpdateDataPayloadAsync(id, payload, cancellationToken);
         }
 
-        // Возвращает сырые байты payload без десериализации.
-        public async Task<byte[]?> GetDataPayloadAsync(Guid id, CancellationToken cancellationToken = default)
+        // Возвращает канонический JSON-envelope payload без десериализации.
+        public async Task<string?> GetDataPayloadAsync(Guid id, CancellationToken cancellationToken = default)
         {
             var dto = await FindDataDtoAsync(id, cancellationToken);
             return dto?.Data;
         }
 
-        // Создаёт или обновляет raw payload для сущности.
-        public async Task UpdateDataPayloadAsync(Guid id, byte[] payload, CancellationToken cancellationToken = default)
+        // Создаёт или обновляет envelope payload для сущности.
+        public async Task UpdateDataPayloadAsync(Guid id, string payloadJson, CancellationToken cancellationToken = default)
         {
             var entity = await _businessEntityRepository.GetByIdAsync(id, cancellationToken);
             if (entity == null)
@@ -79,6 +78,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 throw new KeyNotFoundException($"BusinessEntityData with id '{id}' was not found.");
             }
 
+            var envelopeJson = DataPayloadEnvelopeSerializer.CreateEnvelopeJson(entity, payloadJson);
             var dto = await FindDataDtoAsync(id, cancellationToken);
 
             if (dto == null)
@@ -87,20 +87,20 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 {
                     Id = id,
                     BusinessEntityId = id,
-                    Data = payload
+                    Data = envelopeJson
                 };
 
-                // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-data-dto] Создан DTO payload entityId={id} dtoId={dto.Id} payloadLength={payload.Length}");
+                // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-data-dto] Создан DTO payload entityId={id} dtoId={dto.Id} payloadLength={DataPayloadEnvelopeSerializer.GetJsonLength(envelopeJson)}");
                 await _businessEntityDataRepository.AddAsync(dto, cancellationToken);
-                // _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-data-dto] DTO payload записан в хранилище entityId={id} dtoId={dto.Id} payloadLength={payload.Length}");
+                // _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-data-dto] DTO payload записан в хранилище entityId={id} dtoId={dto.Id} payloadLength={DataPayloadEnvelopeSerializer.GetJsonLength(envelopeJson)}");
                 return;
             }
 
-            dto.Data = payload;
+            dto.Data = envelopeJson;
             dto.LastModifiedDate = DateTime.UtcNow;
-            // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-data-dto] Обновляем DTO payload entityId={id} dtoId={dto.Id} payloadLength={payload.Length}");
+            // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-data-dto] Обновляем DTO payload entityId={id} dtoId={dto.Id} payloadLength={DataPayloadEnvelopeSerializer.GetJsonLength(envelopeJson)}");
             await _businessEntityDataRepository.UpdateAsync(dto, cancellationToken);
-            // _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-data-dto] DTO payload обновлен в хранилище entityId={id} dtoId={dto.Id} payloadLength={payload.Length}");
+            // _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-data-dto] DTO payload обновлен в хранилище entityId={id} dtoId={dto.Id} payloadLength={DataPayloadEnvelopeSerializer.GetJsonLength(envelopeJson)}");
         }
 
         // Преобразует runtime сущность в DTO и сохраняет её.

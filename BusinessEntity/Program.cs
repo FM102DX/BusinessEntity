@@ -224,7 +224,7 @@ namespace BusinessEntity
                     ""CreatedDate"" timestamp with time zone NOT NULL,
                     ""LastModifiedDate"" timestamp with time zone NOT NULL,
                     ""BusinessEntityId"" uuid NOT NULL,
-                    ""Data"" bytea NOT NULL,
+                    ""Data"" text NOT NULL,
                     CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"")
                 );
 

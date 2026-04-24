@@ -2,6 +2,7 @@ using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
 using ReactiveUI;
 using System.Text.Json;
 
@@ -13,7 +14,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
     /// </summary>
     public sealed class DataProviderConnector : IDataProviderConnector
     {
-        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         private readonly IMessageBus _messageBus;
 
         /// <summary>
@@ -65,19 +65,19 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
                 cancellationToken);
 
             EnsureNoError(response.ErrorMessage);
-            if (response.Data == null || response.Data.Length == 0)
+            if (string.IsNullOrWhiteSpace(response.Data))
             {
                 return default;
             }
 
-            return JsonSerializer.Deserialize<T>(response.Data, JsonOptions);
+            return DataPayloadEnvelopeSerializer.DeserializePayload<T>(response.Data);
         }
 
-        // Сериализует payload и отправляет команду на его сохранение.
+        // Сериализует payload в raw JSON и отправляет команду на сохранение envelope.
         public async Task UpdateDataAsync<T>(Guid id, T data, CancellationToken cancellationToken = default)
         {
             var requestId = Guid.NewGuid();
-            var payload = JsonSerializer.SerializeToUtf8Bytes(data, JsonOptions);
+            var payload = JsonSerializer.Serialize(data, StorageJsonOptions.Default);
             var response = await SendAndReceiveAsync<UpdateBusinessEntityDataRequest, UpdateBusinessEntityDataResponse>(
                 new UpdateBusinessEntityDataRequest(requestId, id, payload),
                 static result => result.RequestId,

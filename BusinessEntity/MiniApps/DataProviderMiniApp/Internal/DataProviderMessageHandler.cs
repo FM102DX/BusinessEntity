@@ -103,7 +103,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
         }
 
-        // Обрабатывает запрос на чтение бинарного payload сущности.
+        // Обрабатывает запрос на чтение JSON-envelope payload сущности.
         private async Task HandleGetDataAsync(GetBusinessEntityDataRequest request)
         {
             try
@@ -179,7 +179,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
         }
 
-        // Обрабатывает команду на сохранение бинарного payload сущности.
+        // Обрабатывает команду на сохранение JSON payload сущности.
         private async Task HandleUpdateDataAsync(UpdateBusinessEntityDataRequest request)
         {
             try

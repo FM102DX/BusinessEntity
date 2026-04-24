@@ -2,25 +2,24 @@
 
 ## 1. Назначение документа
 
-Этот документ фиксирует базовые постулаты хранения данных в системе `BusinessEntity`.
+Этот документ фиксирует фактическую модель хранения бизнес-объектов в системе `BusinessEntity`.
 
-Он описывает:
+Документ описывает:
 
-- какие runtime-сущности считаются базовыми
-- как они соотносятся с DTO-слоем хранения
-- когда используется `BusinessEntity`
-- когда используется `BusinessEntityData`
-- как работает `BusinessEntity<T>`
-- где должна жить фабрика создания сущностей
-- где должен жить конвертер между runtime-моделью и DTO
+- базовые runtime-сущности
+- DTO-слой хранения
+- физическое хранение в Postgres
+- канонический формат payload `BusinessEntityData`
+- цепочку записи документа
+- разделение основной базы и базы логгера
 
-Документ считается нормативным для дальнейшей разработки. Новые изменения модели хранения должны ему соответствовать.
+Документ является нормативным описанием текущего storage-контура. При изменении модели хранения он должен обновляться.
 
 ---
 
 ## 2. Базовые runtime-сущности
 
-Базовый контур бизнес-логики представлен тремя сущностями:
+В текущей бизнес-модели есть три базовые runtime-сущности:
 
 1. `BusinessEntity`
 2. `BusinessEntityData`
@@ -32,18 +31,26 @@
 
 Это:
 
-- узел дерева и графа
-- минимальная идентичность объекта
+- узел дерева
+- identity объекта
 - объект, участвующий в связях
-- сущность, которая отображается в дереве
-- сущность, которая хранится как `BusinessEntityDto`
+- runtime-модель, которая хранится как `BusinessEntityDto`
 
-`BusinessEntity`:
+`BusinessEntity` содержит:
 
-- не является тяжеловесным доменным объектом
-- не должен нести в себе сложную payload-модель
-- может существовать без `BusinessEntityData`
-- используется для папок, групп, пространств и других простых объектов
+- `Id`
+- `CreatedDate`
+- `LastModifiedDate`
+- `Name`
+- `BusinessEntityType`
+- `EntityType`
+
+`BusinessEntity` может существовать без payload.
+
+Примеры:
+
+- `Space`
+- `Folder`
 
 ### `BusinessEntityData`
 
@@ -52,33 +59,66 @@
 Это:
 
 - подчиненный объект по отношению к `BusinessEntity`
-- расширенное содержимое объекта
-- тяжеловесный бизнес-объект
-- объект, который хранится как `BusinessEntityDataDto`
+- runtime-модель содержимого data-backed сущности
+- базовый тип для тяжеловесных бизнес-объектов
 
-Все специализированные тяжелые бизнес-объекты должны наследоваться от `BusinessEntityData`.
+Он содержит:
 
-Пример:
+- `Id`
+- `CreatedDate`
+- `LastModifiedDate`
+- `Name`
+- `EntityType`
+- `Tag`
 
-- `Document : BusinessEntityData`
+`BusinessEntityData` не является самостоятельным корневым объектом.
 
 ### `BusinessEntityRelation`
 
 `BusinessEntityRelation` представляет связь между двумя `BusinessEntity`.
 
-Это:
+Она содержит:
 
-- отдельная runtime-сущность
-- отдельная запись хранения
-- модель ребра графа
-
-Она хранится как отдельный DTO-тип:
-
-- `BusinessEntityRelationDto`
+- `Id`
+- `CreatedDate`
+- `LastModifiedDate`
+- `ObjectAId`
+- `ObjectBId`
+- `RelationType`
+- `RelationParams`
 
 ---
 
-## 3. Правила хранения
+## 3. Специализированные runtime-типы
+
+### `Document`
+
+`Document` является наследником `BusinessEntityData`.
+
+В текущей модели документ содержит:
+
+- `Text`
+- `Tag`
+- базовые поля `BusinessEntityData`
+
+### `BusinessEntity<T>`
+
+В системе существует обобщенный runtime-агрегат:
+
+- `BusinessEntity<T> where T : IBusinessEntityData`
+
+Его назначение:
+
+- держать рядом базовую entity и typed payload
+- упростить runtime-работу с data-backed объектами
+
+Пример:
+
+- `BusinessEntity<Document>`
+
+---
+
+## 4. DTO-слой хранения
 
 В storage-слое используются ровно три DTO:
 
@@ -86,255 +126,439 @@
 2. `BusinessEntityDataDto`
 3. `BusinessEntityRelationDto`
 
-Соответствие такое:
+Соответствие runtime -> storage:
 
 - `BusinessEntity` <-> `BusinessEntityDto`
 - `BusinessEntityData` <-> `BusinessEntityDataDto`
 - `BusinessEntityRelation` <-> `BusinessEntityRelationDto`
 
-Никакой новый базовый тип хранения не должен вводиться без отдельной архитектурной причины.
+### `BusinessEntityDto`
 
----
+Хранит метаданные сущности:
 
-## 4. Постулаты хранения
-
-### 4.1. Идентичность объекта хранится отдельно от payload
-
-Идентичность объекта живет в `BusinessEntity`.
-
-Payload живет в `BusinessEntityData`.
-
-Связи живут в `BusinessEntityRelation`.
-
-Эти три ответственности не должны смешиваться в одной runtime-модели и не должны храниться в одной DTO-записи.
-
-### 4.2. `BusinessEntityData` подчинен `BusinessEntity`
-
-`BusinessEntityData` не является самостоятельным корневым объектом.
-
-Он всегда относится к конкретному `BusinessEntity`.
-
-Обязательное правило:
-
-- `BusinessEntityData.Id == BusinessEntity.Id`
-
-Это означает:
-
-- data-объект разделяет identity родительской сущности
-- data-объект не создает свою собственную отдельную identity
-- data-объект представляет расширенное состояние уже существующего `BusinessEntity`
-
-### 4.3. Не каждый `BusinessEntity` обязан иметь data-объект
-
-Простые объекты могут существовать как чистый `BusinessEntity`.
-
-Примеры:
-
-- папка
-- группа
-- пространство
-- служебный контейнер
-
-Для таких объектов отсутствие `BusinessEntityData` считается нормальным.
-
-### 4.4. Data-backed объекты создаются в два шага
-
-Если создается тяжелый объект, например документ, создание происходит логически так:
-
-1. создается `BusinessEntity` нужного типа
-2. создается соответствующий наследник `BusinessEntityData`
-3. data-объект получает тот же `Id`, что и `BusinessEntity`
-4. при необходимости создаются связи через `BusinessEntityRelation`
-
----
-
-## 5. Обобщенная runtime-модель `BusinessEntity<T>`
-
-Для удобства работы вводится обобщенная runtime-модель:
-
-- `BusinessEntity<T> where T : IBusinessEntityData`
-
-Назначение:
-
-- хранить обычную `BusinessEntity`
-- одновременно держать рядом typed payload
-- явно показывать, что данная сущность data-backed
-
-Пример:
-
-- `BusinessEntity<Document>`
-
-означает:
-
-- есть базовая сущность `BusinessEntity`
-- есть payload-объект `Document`
-- объект `Document` лежит в поле `Data`
-
-### Правила для `BusinessEntity<T>`
-
-`BusinessEntity<T>`:
-
-- наследуется от `BusinessEntity`
-- содержит свойство `T Data`
-- используется только для сущностей, у которых есть typed payload
-- не заменяет обычный `BusinessEntity`, а дополняет его
-
-При присвоении `Data` должны синхронизироваться как минимум:
-
-- `Data.Id`
-- `Data.EntityId`
-
-Допустимо также синхронизировать:
-
+- `Id`
 - `CreatedDate`
 - `LastModifiedDate`
 - `Name`
 - `BusinessEntityType`
 - `EntityType`
 
-Но identity-sync по `Id` обязателен всегда.
+### `BusinessEntityDataDto`
+
+Хранит payload сущности:
+
+- `Id`
+- `CreatedDate`
+- `LastModifiedDate`
+- `BusinessEntityId`
+- `Data : string`
+
+Важно:
+
+- `BusinessEntityDataDto.Data` хранит не raw text и не `byte[]`
+- `Data` хранит minified JSON string
+- JSON string обязан иметь форму versioned envelope
+
+Канонический формат:
+
+```json
+{"schemaVersion":1,"kind":"Document","payload":{"text":"Документ","tag":"Document"}}
+```
+
+### `BusinessEntityRelationDto`
+
+Хранит связь между сущностями:
+
+- `Id`
+- `CreatedDate`
+- `LastModifiedDate`
+- `ObjectAId`
+- `ObjectBId`
+- `RelationType`
+- `RelationParams`
 
 ---
 
-## 6. Фабрика создания сущностей
+## 5. Физическое хранение в Postgres
 
-Для создания runtime-объектов используется `BusinessEntityFactory`.
+### Разделение баз данных
 
-Фабрика является стандартной точкой создания:
+Основное приложение и веб-логгер используют один Postgres-сервер, но разные базы данных.
 
-- простых `BusinessEntity`
-- typed-сущностей `BusinessEntity<T>`
+Текущее разделение:
 
-### Требования к фабрике
+- `business_entity` — основная база приложения `BusinessEntity`
+- `web_logger` — отдельная база `BlazorServerWebLogger`
 
-Фабрика должна:
+Это обязательное правило архитектуры:
 
-- принимать тип создаваемого объекта
-- уметь создать обычный `BusinessEntity`
-- уметь создать `BusinessEntity<T>`
-- при создании data-backed сущности обеспечивать совпадение `Id` у сущности и data-объекта
-- не допускать расхождения identity между `BusinessEntity` и `BusinessEntityData`
+- бизнес-объекты не должны храниться в базе логгера
+- таблицы логгера не должны смешиваться с таблицами `BusinessEntity`
 
-### Обязательное правило
+### Таблицы основной базы `business_entity`
 
-Если фабрика создает `BusinessEntity<T>`, то после создания должно быть истинно:
+В основной базе используются три таблицы:
 
-- `entity.Data.Id == entity.Id`
-- `entity.Data.EntityId == entity.Id`
+1. `BusinessEntities`
+2. `BusinessEntityRelations`
+3. `BusinessEntityDataItems`
 
----
+Соответствие:
 
-## 7. Где должна жить логика конвертации
+- `BusinessEntities` <- `BusinessEntityDto`
+- `BusinessEntityRelations` <- `BusinessEntityRelationDto`
+- `BusinessEntityDataItems` <- `BusinessEntityDataDto`
 
-Конвертация между runtime-сущностями и DTO не должна жить в UI, в helper-классах или в доменных сущностях.
+### Таблицы базы логгера `web_logger`
 
-Ее место:
+В базе логгера живут только таблицы логгера.
 
-- внутри `DataProviderMiniApp`
+Например:
 
-Это правильный слой, потому что именно он отвечает за:
+- `LogEntries`
+- `AppSettingsDbStorable`
 
-- storage DTO
-- загрузку из репозиториев
-- запись в репозитории
-- hydration runtime-модели
-- serialization/deserialization payload
-
-### Предпочтительный вариант
-
-Предпочтительно выделить отдельный блок конвертации внутри `DataProviderMiniApp`, например:
-
-- `MiniApps/DataProviderMiniApp/Internal/Mappers/`
-
-и разнести ответственность на три класса:
-
-1. `BusinessEntityStorageMapper`
-2. `BusinessEntityDataStorageMapper`
-3. `BusinessEntityRelationStorageMapper`
-
-Плюс при необходимости:
-
-4. `BusinessEntityHydrator`
-
-### Что должен делать `BusinessEntityHydrator`
-
-`BusinessEntityHydrator` нужен, если система начинает собирать не только разрозненные runtime-объекты, но и агрегаты вида:
-
-- `BusinessEntity<T>`
-
-Его ответственность:
-
-- взять `BusinessEntityDto`
-- взять `BusinessEntityDataDto`
-- десериализовать payload
-- создать runtime `BusinessEntity<T>`
-- синхронизировать identity
-- вернуть готовый typed агрегат
-
-### Допустимый упрощенный вариант
-
-Если пока не хочется заводить отдельный hydrator, допустимо временно держать это в существующем `DataProviderMapper`.
-
-Но в этом случае mapper должен быть разделен хотя бы логически на зоны:
-
-- mapping entity
-- mapping relation
-- mapping data
-- hydration typed aggregate
-
-### Нежелательный вариант
-
-Нежелательно:
-
-- держать конвертацию в `BusinessEntityHelper`
-- держать конвертацию в Blazor-компонентах
-- держать конвертацию в доменных типах `Document`, `Folder`, `Space`
-- смешивать storage mapping и UI projection в одном классе
+Они не относятся к storage-контуру бизнес-объектов.
 
 ---
 
-## 8. Что считать правильным созданием документа
+## 6. Идентичность и подчиненность data-объекта
 
-Документ в системе считается data-backed объектом.
+`BusinessEntityData` подчинен `BusinessEntity`.
 
-Правильная модель:
+Фактические правила текущей системы:
+
+- `BusinessEntityData.Id == BusinessEntity.Id`
+- `BusinessEntityDataDto.Id == BusinessEntity.Id`
+- `BusinessEntityDataDto.BusinessEntityId == BusinessEntity.Id`
+
+Payload-объект не имеет собственной независимой identity.
+
+---
+
+## 7. Канонический формат payload
+
+### Общее правило
+
+Payload хранится отдельно от `BusinessEntity` в `BusinessEntityDataDto.Data`.
+
+Payload не лежит в `BusinessEntityDto`.
+
+Payload не хранится как `byte[]`.
+
+### Канонический формат
+
+Канонический формат хранения payload — **Versioned JSON Envelope**.
+
+Обязательная структура:
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "<LogicalPayloadKind>",
+  "payload": { ... }
+}
+```
+
+Где:
+
+- `schemaVersion` — версия схемы хранимого payload
+- `kind` — логический discriminator, независимый от CLR type name
+- `payload` — сам сериализованный бизнес-объект
+
+### Требования к формату
+
+Нужно обеспечивать:
+
+- minified JSON без форматирования
+- читаемый Unicode в БД без принудительного `\uXXXX` escaping для кириллицы и другого non-ASCII текста
+- стабильные ключи `schemaVersion`, `kind`, `payload`
+- отсутствие double-encoding
+- отсутствие зависимости от полного CLR type name
+- готовность к повышению `schemaVersion`
+
+### Централизованная JSON-сериализация
+
+Storage-контур использует единые `StorageJsonOptions`.
+
+Фактические правила текущей реализации:
+
+- envelope сериализуется через `JsonSerializer.Serialize(..., StorageJsonOptions.Default)`
+- raw payload сериализуется через `JsonSerializer.Serialize(..., StorageJsonOptions.Default)`
+- envelope десериализуется через `JsonSerializer.Deserialize(..., StorageJsonOptions.Default)`
+- payload десериализуется через `JsonSerializer.Deserialize(..., StorageJsonOptions.Default)`
+
+`StorageJsonOptions.Default` задает:
+
+- `Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)`
+- `WriteIndented = false`
+- `PropertyNamingPolicy = JsonNamingPolicy.CamelCase`
+- `DefaultIgnoreCondition = JsonIgnoreCondition.Never`
+
+Это обязательная часть текущего storage-формата, потому что JSON в БД должен оставаться одновременно:
+
+- minified
+- валидным
+- читаемым глазами
+- независимым от `byte[]`-pipeline
+
+### Как трактуется `kind`
+
+`kind` — это не полное имя .NET-типа.
+
+Правильно:
+
+- `Document`
+- `FolderData`
+- `WikiPage`
+
+Неправильно:
+
+- `My.Namespace.Document, MyAssembly`
+
+---
+
+## 8. Как сейчас выполняется запись payload
+
+### Общий принцип
+
+Новый канонический pipeline:
+
+```text
+runtime object -> raw JSON -> versioned JSON envelope string -> DB
+```
+
+Payload сохраняется через `DataProviderMiniApp`.
+
+### Порядок записи
+
+1. `BusinessEntityHelper` вызывает `IDataProviderConnector.UpdateDataAsync(id, data)`
+2. `DataProviderConnector` сериализует runtime-данные через `JsonSerializer.Serialize(...)`
+3. `DataProviderMessageHandler` передает raw JSON в `DataProviderService`
+4. `DataProviderService` читает `BusinessEntityDto`, определяет логический `kind`
+5. `DataProviderService` заворачивает raw JSON в versioned envelope
+6. строка envelope сохраняется в `BusinessEntityDataDto.Data`
+
+Во всех шагах JSON-serialization используется `StorageJsonOptions.Default`.
+
+### Специальный случай документа
+
+Сейчас документ выше по стеку по-прежнему приходит как `string`.
+
+Поэтому внутри `DataProviderMiniApp` при записи документа raw JSON-строка преобразуется в object-payload вида:
+
+```json
+{"text":"Документ","tag":"Document"}
+```
+
+После этого payload заворачивается в envelope:
+
+```json
+{"schemaVersion":1,"kind":"Document","payload":{"text":"Документ","tag":"Document"}}
+```
+
+---
+
+## 9. Как сейчас выполняется чтение payload
+
+Чтение идет в две стадии:
+
+1. из `BusinessEntityDataDto.Data` читается JSON-envelope строка
+2. envelope десериализуется в raw-model
+3. проверяется `schemaVersion`
+4. проверяется наличие `kind`
+5. из поля `payload` выполняется десериализация в нужный runtime-тип
+
+### Специальный случай документа
+
+Для вызова `GetDataAsync<string>(id)` у документа storage-слой извлекает `payload.text`.
+
+То есть runtime-код выше по стеку продолжает получать текст документа как `string`, хотя в БД уже лежит object-payload внутри envelope.
+
+Чтение envelope и payload также использует те же `StorageJsonOptions.Default`, что и запись.
+
+---
+
+## 10. Как сейчас создается документ
+
+Документ в текущей системе создается как три независимые storage-записи.
+
+Алгоритм:
 
 1. создается `BusinessEntity` типа `Document`
-2. создается `Document : BusinessEntityData`
-3. оба объекта получают один и тот же `Id`
-4. при runtime-агрегации они могут быть представлены как `BusinessEntity<Document>`
-5. storage-слой сохраняет их раздельно:
-   `BusinessEntityDto` и `BusinessEntityDataDto`
+2. создается `BusinessEntityRelation` типа `Contains` между родителем и документом
+3. сохраняется payload документа в `BusinessEntityDataDto`
+
+### Runtime-порядок вызовов
+
+Упрощенная цепочка:
+
+`SampleDataService -> BusinessEntityHelper -> DataProviderConnector -> DataProviderMessageHandler -> DataProviderService -> EF/Postgres repository -> Postgres`
+
+### Что записывается в БД
+
+Для документа появляются:
+
+1. запись в `BusinessEntities`
+2. запись в `BusinessEntityRelations`
+3. запись в `BusinessEntityDataItems`
+
+Для папки:
+
+1. запись в `BusinessEntities`
+2. запись в `BusinessEntityRelations`
+
+Для пространства:
+
+1. запись только в `BusinessEntities`
 
 ---
 
-## 9. Ограничения и запреты
+## 11. Где живет storage-логика
+
+Вся storage-логика живет внутри `DataProviderMiniApp`.
+
+Это включает:
+
+- `DataProviderConnector`
+- `DataProviderMessageHandler`
+- `DataProviderService`
+- `DataPayloadEnvelopeSerializer`
+- `DataProviderMapper`
+- репозитории DTO
+
+Слои разделены так:
+
+- `BusinessEntityHelper` — бизнес-операции
+- `DataProviderConnector` — bus request/response facade
+- `DataProviderMessageHandler` — подписка на storage messages
+- `DataProviderService` — прикладной CRUD DTO-слоя
+- `IAsyncRepository<T>` — абстракция репозитория
+- `EfPostgresAsyncRepositoryBase<T>` — текущая Postgres-реализация
+
+---
+
+## 12. Текущая реализация репозиториев
+
+На текущий момент `DataProviderMiniApp` использует Postgres-репозитории.
+
+В DI зарегистрированы:
+
+- `BusinessEntityDtoEfPostgresRepository`
+- `BusinessEntityDataDtoEfPostgresRepository`
+- `BusinessEntityRelationDtoEfPostgresRepository`
+
+Для CRUD-операций используется свежий `KmsBusinessEntityDbContext` на каждую операцию.
+
+Это сделано для того, чтобы:
+
+- не накапливать tracked entities между вызовами
+- избегать конфликтов EF tracking при сидировании и runtime-операциях
+
+---
+
+## 13. Инициализация схемы
+
+При старте `BusinessEntity` приложение явно гарантирует наличие таблиц:
+
+- `BusinessEntities`
+- `BusinessEntityRelations`
+- `BusinessEntityDataItems`
+
+Для `BusinessEntityDataItems.Data` используется текстовое поле `text`.
+
+Причина:
+
+- payload хранится как JSON string
+- схема должна соответствовать string-based envelope storage
+
+---
+
+## 14. Текущая семантика связей
+
+В дереве используется базовый тип связи:
+
+- `Contains`
+
+Тип `VisuallyContains` выведен из системы.
+
+Следствие:
+
+- дерево документов и папок строится на `Contains`
+- удаление поддерева идет по `Contains`
+- поиск детей идет по `Contains`
+- смена родителя идет по `Contains`
+
+---
+
+## 15. Что считается правильным storage-повторением объекта
+
+### Простая сущность
+
+Пример:
+
+- `Space`
+
+Хранение:
+
+- только `BusinessEntityDto`
+
+### Контейнерная сущность
+
+Пример:
+
+- `Folder`
+
+Хранение:
+
+- `BusinessEntityDto`
+- `BusinessEntityRelationDto`
+
+### Data-backed сущность
+
+Пример:
+
+- `Document`
+
+Хранение:
+
+- `BusinessEntityDto`
+- `BusinessEntityRelationDto`
+- `BusinessEntityDataDto`
+
+---
+
+## 16. Ограничения и правила
 
 Запрещено:
 
-- использовать `BusinessEntityData` как самостоятельную корневую identity
-- создавать новый `BusinessEntityData` с новым `Id`, не совпадающим с `BusinessEntity`
-- хранить связь между объектами внутри payload вместо `BusinessEntityRelation`
-- превращать `BusinessEntity` в тяжеловесный доменный объект
-- плодить отдельные DTO под каждый доменный тип без крайней причины
+- хранить payload внутри `BusinessEntityDto`
+- хранить payload как `byte[]` как канонический формат
+- сериализовать payload в UTF-8 bytes как основной storage pipeline
+- смешивать таблицы логгера и бизнес-объектов в одной базе данных
+- использовать `BusinessEntityData` как независимую identity
+- хранить связи внутри payload вместо `BusinessEntityRelation`
 
 Допустимо:
 
-- иметь чистый `BusinessEntity` без `BusinessEntityData`
-- иметь `BusinessEntity<T>` для data-backed сущностей
-- развивать typed payload-модель поверх `BusinessEntityData`
+- иметь `BusinessEntity` без `BusinessEntityData`
+- хранить payload как minified JSON string
+- расширять payload новыми typed-наследниками `BusinessEntityData`
+- повышать `schemaVersion` и вводить адаптеры старых версий
 
 ---
 
-## 10. Целевое направление развития
+## 17. Практический итог
 
-Система должна двигаться в сторону следующей модели:
+На текущий момент система хранения устроена так:
 
-- `BusinessEntity` отвечает за узел дерева и identity
-- `BusinessEntityData` отвечает за typed payload
-- `BusinessEntityRelation` отвечает за граф
-- `BusinessEntity<T>` отвечает за удобную runtime-агрегацию сущности и typed payload
-- `BusinessEntityFactory` отвечает за корректное создание объектов
-- `DataProviderMiniApp` отвечает за сохранение и восстановление runtime-модели из DTO
+- runtime-модель разделена на `BusinessEntity`, `BusinessEntityData`, `BusinessEntityRelation`
+- storage-модель разделена на `BusinessEntityDto`, `BusinessEntityDataDto`, `BusinessEntityRelationDto`
+- основное приложение хранит данные в базе `business_entity`
+- веб-логгер хранит данные в базе `web_logger`
+- payload `BusinessEntityData` хранится как minified JSON string
+- канонический формат payload — versioned JSON envelope
+- дерево и граф документов строятся через relation типа `Contains`
+- запись и чтение идут через `DataProviderMiniApp`
 
-Это и есть базовый канонический контур хранения данных для проекта.
+Это и есть текущий канонический контур хранения бизнес-объектов в проекте.
