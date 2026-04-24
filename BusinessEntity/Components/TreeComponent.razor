@@ -3,16 +3,39 @@
 @using Radzen.Blazor
 
 <style>
+    .tree-node-content {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        margin: 1px 0;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        color: inherit;
+        transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .tree-node-content:hover {
+        color: #a100ff !important;
+        background-color: transparent !important;
+        font-weight: 400 !important;
+    }
+
     .tree-node-selected {
-        background-color: #0078d4 !important;
-        color: white !important;
-        /* Убираем все изменения размеров */
-        border-radius: 0;
-        padding: 0;
-        margin: 0;
-        font-weight: inherit; /* Не меняем толщину шрифта */
-        border: none;
+        background-color: #f4eeff !important;
+        color: #4b1f73 !important;
+        border-radius: 7px;
+        padding: 2px 8px;
+        margin: 1px 0;
+        font-weight: inherit;
+        border: 1px solid #ddd0ff;
         outline: none;
+    }
+
+    .tree-node-selected:hover {
+        background-color: #f4eeff !important;
+        color: #a100ff !important;
+        border-color: #d3c0ff !important;
+        font-weight: 400 !important;
     }
     
     .tree-node-dragging {
@@ -36,13 +59,36 @@
         cursor: pointer;
     }
 
-    .rz-treeview-item:hover {
-        background-color: #f5f5f5;
+    #main-tree-container .rz-treeview-item:hover,
+    #main-tree-container .rz-treeview-item:active,
+    #main-tree-container .rz-treeview-item:focus,
+    #main-tree-container .rz-treeview-item.rz-state-highlight,
+    #main-tree-container .rz-treeview-item-content:hover,
+    #main-tree-container .rz-treeview-item-content:active,
+    #main-tree-container .rz-treeview-item-content:focus,
+    #main-tree-container .rz-treenode-content:hover,
+    #main-tree-container .rz-treenode-content:active,
+    #main-tree-container .rz-treenode-content:focus,
+    #main-tree-container .rz-treenode-content.rz-state-highlight {
+        background: transparent !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
     }
 
-    /* Убираем стандартное выделение Radzen */
-    .rz-treeview-item.rz-state-highlight {
-        background: none !important;
+    #main-tree-container .rz-treenode-content:not(.rz-treenode-content-selected):hover .rz-treenode-label {
+        background-color: transparent !important;
+        color: #a100ff !important;
+        font-weight: 400 !important;
+    }
+
+    #main-tree-container .rz-treenode-content:hover .rz-treenode-label {
+        color: #a100ff !important;
+        font-weight: 400 !important;
+    }
+
+    #main-tree-container .rz-treenode-content-selected .rz-treenode-label {
+        background-color: transparent !important;
+        color: inherit !important;
     }
     
     /* Убираем фокус outline */
@@ -70,6 +116,11 @@
     /* Основной контейнер дерева */
     #main-tree-container {
         overflow: hidden;
+        --rz-tree-node-hover-background-color: transparent;
+        --rz-tree-node-hover-color: #4b1f73;
+        --rz-tree-node-selected-background-color: transparent;
+        --rz-tree-node-selected-color: inherit;
+        --rz-tree-node-selected-border-radius: 7px;
     }
 
     /* Card-body должен показывать скролл только при необходимости */
@@ -167,7 +218,7 @@
                             }
                             else
                             {
-                                <span class="@cssClass"
+                                <span class="tree-node-content @cssClass"
                                       draggable="true"
                                       @onclick="async () => await OnNodeClicked(node)"
                                       @onclick:stopPropagation="true"

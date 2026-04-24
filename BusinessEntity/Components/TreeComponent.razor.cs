@@ -41,6 +41,7 @@ namespace BusinessEntity.Components
         // Состояние мульти-селекта
         private List<TreeNodeItemViewModelBase> SelectedNodes { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsMultiSelectMode { get; set; } = false;
+        private bool IsCtrlGroupSelectionActive { get; set; } = false;
         
         // Состояние inline-редактирования
         private TreeNodeItemViewModelBase? EditingNode { get; set; } = null;
@@ -368,24 +369,44 @@ namespace BusinessEntity.Components
 
             if (isCtrlPressed)
             {
-                // Ctrl+click: добавить/убрать из выделения
-                if (clickedNode.IsSelected)
+                // Первый Ctrl+click начинает новую групповую сессию:
+                // текущее выделение по дереву снимаем, но если до этого уже был
+                // выбран узел обычным кликом, сохраняем его в новой групповой сессии.
+                if (!IsCtrlGroupSelectionActive)
                 {
-                    clickedNode.SetSelected(false);
-                    SelectedNodes.Remove(clickedNode);
+                    var previouslySelectedNodes = GetSelectedNodesFromTree();
+
+                    await ClearAllSelectionsCoreAsync(refreshUi: false);
+
+                    foreach (var previouslySelectedNode in previouslySelectedNodes)
+                    {
+                        previouslySelectedNode.SetSelected(true);
+                    }
+
+                    clickedNode.SetSelected(true);
+                    IsCtrlGroupSelectionActive = true;
                 }
                 else
                 {
-                    clickedNode.SetSelected(true);
-                    SelectedNodes.Add(clickedNode);
+                    // Последующие Ctrl+click в той же сессии работают как toggle.
+                    clickedNode.SetSelected(!clickedNode.IsSelected);
                 }
             }
             else
             {
                 // Обычный click: полностью очистить все выделения и выделить только текущий узел
-                await ClearAllSelections();
+                await ClearAllSelectionsCoreAsync(refreshUi: false);
                 clickedNode.SetSelected(true);
-                SelectedNodes.Add(clickedNode);
+                IsCtrlGroupSelectionActive = false;
+            }
+
+            // Синхронизируем список выбранных узлов с реальным состоянием дерева,
+            // чтобы в сервис всегда попадал фактический набор выделенных элементов.
+            SyncSelectedNodesFromTree();
+
+            if (!SelectedNodes.Any())
+            {
+                IsCtrlGroupSelectionActive = false;
             }
 
             // Обновляем состояние мульти-селекта
@@ -401,9 +422,15 @@ namespace BusinessEntity.Components
         // Новый метод для полной очистки всех выделений
         public async Task ClearAllSelections()
         {
+            await ClearAllSelectionsCoreAsync(refreshUi: true);
+        }
+
+        private async Task ClearAllSelectionsCoreAsync(bool refreshUi)
+        {
             //WebLogger?.Information($"[ClearAllSelections]--Enter. Current SelectedNodes count: {SelectedNodes.Count} They are: {String.Join(", ",SelectedNodes.Select(x=>x.Title).ToList())}");
             Console.WriteLine($"[ClearAllSelections]--Enter. Current SelectedNodes count: {SelectedNodes.Count} They are: {String.Join(", ", SelectedNodes.Select(x => x.Title).ToList())}");
             SelectedNodes.Clear();
+            IsCtrlGroupSelectionActive = false;
 
             // Затем рекурсивно проходим по всему дереву и принудительно снимаем выделение
             if (TreeData != null)
@@ -415,9 +442,13 @@ namespace BusinessEntity.Components
             }
             IsMultiSelectMode = false;
             TreeSelectionService.ClearSelection();
-            await InvokeAsync(StateHasChanged);
-            // Принудительно обновляем CSS-классы через JavaScript
-            await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
+
+            if (refreshUi)
+            {
+                await InvokeAsync(StateHasChanged);
+                // Принудительно обновляем CSS-классы через JavaScript
+                await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
+            }
         }
 
         // Принудительная очистка выделения для всех узлов
@@ -454,6 +485,32 @@ namespace BusinessEntity.Components
                     FindSelectedNodesRecursive(child, selectedNodes);
                 }
             }
+        }
+
+        private void SyncSelectedNodesFromTree()
+        {
+            SelectedNodes = GetSelectedNodesFromTree()
+                .GroupBy(node => node.Entity?.Id ?? Guid.Empty)
+                .Select(group => group.First())
+                .ToList();
+        }
+
+        private List<TreeNodeItemViewModelBase> GetSelectedNodesFromTree()
+        {
+            var actualSelectedNodes = new List<TreeNodeItemViewModelBase>();
+
+            if (TreeData != null)
+            {
+                foreach (var rootNode in TreeData)
+                {
+                    FindSelectedNodesRecursive(rootNode, actualSelectedNodes);
+                }
+            }
+
+            return actualSelectedNodes
+                .GroupBy(node => node.Entity?.Id ?? Guid.Empty)
+                .Select(group => group.First())
+                .ToList();
         }
 
         private void SelectAllNodesRecursive(IEnumerable<TreeNodeItemViewModelBase> nodes)
