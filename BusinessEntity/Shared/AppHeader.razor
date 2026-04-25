@@ -1,0 +1,41 @@
+@using BusinessEntity.Core.Classes
+@using BusinessEntity.Core.DomainEntities
+@using BusinessEntity.Core.Services
+@using BusinessEntity.Contracts
+@inject IUserContextService UserContext
+@inject BusinessEntityHelper BusinessEntityHelper
+
+<div class="app-header">
+    @if (!string.IsNullOrWhiteSpace(CompanyName))
+    {
+        <div class="app-header__company">@CompanyName</div>
+    }
+
+    <div class="app-header__actions">
+        @if (UserContext.HasSelectedSpace)
+        {
+            <span class="app-header__space">Текущее пространство: @UserContext.CurrentSpaceName</span>
+        }
+        <a class="app-header__link" href="/space-selection">Выбрать пространство</a>
+    </div>
+</div>
+
+@code {
+    private string CompanyName { get; set; } = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var sysParametersEntity = await BusinessEntityHelper.GetOrCreateSingletonEntityAsync<SysParameters>(
+                BusinessEntityTypeEnum.SysParametersTp,
+                "SysParameters");
+
+            CompanyName = sysParametersEntity.Data.CompanyName?.Trim() ?? string.Empty;
+        }
+        catch
+        {
+            CompanyName = string.Empty;
+        }
+    }
+}

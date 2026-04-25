@@ -1,0 +1,114 @@
+@using BusinessEntity.Core.Classes
+@using BusinessEntity.Core.DomainEntities
+@using BusinessEntity.Core.Services
+@inject BusinessEntityHelper BusinessEntityHelper
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Общие параметры системы</h5>
+        <p class="card-text">
+            Настройки сохраняются в отдельный business-объект <code>SysParameters</code> без связей.
+        </p>
+
+        @if (IsLoading)
+        {
+            <div class="text-muted">Загружаем параметры...</div>
+        }
+        else
+        {
+            <div class="row g-2 align-items-end">
+                <div class="col-md-8">
+                    <label class="form-label">Название компании</label>
+                    <input class="form-control"
+                           @bind="CompanyName"
+                           @bind:event="oninput"
+                           placeholder="Введите название компании" />
+                </div>
+                <div class="col-md-auto">
+                    <button class="btn btn-primary"
+                            @onclick="SaveSysParametersAsync"
+                            disabled="@IsBusy">
+                        Сохранить
+                    </button>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert alert-success py-2 mt-3" role="alert">@StatusMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <div class="alert alert-danger py-2 mt-3" role="alert">@ErrorMessage</div>
+        }
+    </div>
+</div>
+
+@code {
+    private BusinessEntity<SysParameters>? SysParametersEntity { get; set; }
+    private bool IsLoading { get; set; }
+    private bool IsBusy { get; set; }
+    private string CompanyName { get; set; } = string.Empty;
+    private string? StatusMessage { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSysParametersAsync();
+    }
+
+    private async Task LoadSysParametersAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            ErrorMessage = null;
+            SysParametersEntity = await BusinessEntityHelper.GetOrCreateSingletonEntityAsync<SysParameters>(
+                BusinessEntityTypeEnum.SysParametersTp,
+                "SysParameters");
+
+            CompanyName = SysParametersEntity.Data.CompanyName ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task SaveSysParametersAsync()
+    {
+        if (IsBusy || SysParametersEntity == null)
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            StatusMessage = null;
+            ErrorMessage = null;
+
+            SysParametersEntity.Name = "SysParameters";
+            SysParametersEntity.Data.Name = "SysParameters";
+            SysParametersEntity.Data.Tag = BusinessEntityTypeEnum.SysParametersTp.ToString();
+            SysParametersEntity.Data.CompanyName = CompanyName?.Trim() ?? string.Empty;
+
+            await BusinessEntityHelper.SaveEntityAsync(SysParametersEntity);
+            StatusMessage = "Параметры системы сохранены.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+}

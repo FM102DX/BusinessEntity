@@ -1,5 +1,4 @@
 @inherits LayoutComponentBase
-@inject BusinessEntity.Contracts.IUserContextService UserContext
 
 <PageTitle>Business EntityData Engine</PageTitle>
 
@@ -10,11 +9,7 @@
 
     <div class="center-area">
         <div class="top-row px-4">
-            @if (UserContext.HasSelectedSpace)
-            {
-                <span>Текущее пространство: @UserContext.CurrentSpaceName</span>
-            }
-            <a class="ms-3" href="/space-selection">Выбрать пространство</a>
+            <AppHeader />
         </div>
 
         <div class="main-row">

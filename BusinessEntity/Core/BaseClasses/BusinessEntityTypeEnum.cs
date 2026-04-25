@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
-// Набор базовых типов бизнес-сущностей
+/// Внимание! 
+/// Номера типов не менять. Они сохраняются в БД как integer. 
+/// Любое изменение чисел сломает соответствие данных.
+/// 
+/// Набор базовых типов бизнес-сущностей
 namespace BusinessEntity.Core.Classes
 {
     // Используется и для entity, и для data-объектов
@@ -16,6 +19,8 @@ namespace BusinessEntity.Core.Classes
         Folder = 200,
         // Текстовый документ
         Document = 300,
+        // Системные параметры приложения
+        SysParametersTp = 400,
 
         // Неопределенный тип
         Undefined = 9999

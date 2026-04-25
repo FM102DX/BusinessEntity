@@ -94,21 +94,48 @@ main {
 .top-row {
     background-color: #f7f7f7;
     border-bottom: 1px solid #d6d5d5;
-    justify-content: flex-end;
     height: 56px;
     display: flex;
     align-items: center;
 }
 
-    .top-row ::deep a, .top-row .btn-link {
-        white-space: nowrap;
-        margin-left: 24px;
-    }
+.top-row ::deep .app-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-width: 0;
+}
 
-    .top-row a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+.top-row ::deep .app-header__company {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #4b1f73;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.top-row ::deep .app-header__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 24px;
+    min-width: 0;
+    margin-left: auto;
+}
+
+.top-row ::deep .app-header__space {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.top-row ::deep .app-header__link,
+.top-row .btn-link {
+    white-space: nowrap;
+}
 
 @media (max-width: 640.98px) {
     .top-row:not(.auth) {
@@ -119,8 +146,16 @@ main {
         justify-content: space-between;
     }
 
-    .top-row a, .top-row .btn-link {
-        margin-left: 0;
+    .top-row ::deep .app-header {
+        justify-content: flex-end;
+    }
+
+    .top-row ::deep .app-header__company {
+        display: none;
+    }
+
+    .top-row ::deep .app-header__actions {
+        gap: 12px;
     }
 }
 

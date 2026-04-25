@@ -572,6 +572,121 @@ namespace BusinessEntity.Core.Services
             return chunks;
         }
 
+        // Загружает typed-сущность вместе с ее payload-объектом
+        public async Task<Classes.BusinessEntity<TData>?> GetEntityWithDataAsync<TData>(Guid entityId, CancellationToken ct = default)
+            where TData : class, IBusinessEntityData, new()
+        {
+            var entity = await _dataProviderConnector.GetByIdAsync(entityId, cancellationToken: ct);
+            if (entity == null)
+            {
+                return null;
+            }
+
+            var data = await _dataProviderConnector.GetDataAsync<TData>(entity.Id, ct) ?? new TData();
+            var typedEntity = _businessEntityFactory.Create(entity.EntityType, data, entity.Name);
+            typedEntity = CopyEntityState(entity, typedEntity);
+
+            if (string.IsNullOrWhiteSpace(typedEntity.Data.Name))
+            {
+                typedEntity.Data.Name = typedEntity.Name;
+            }
+
+            if (typedEntity.Data.EntityType == BusinessEntityTypeEnum.Undefined)
+            {
+                typedEntity.Data.EntityType = typedEntity.EntityType;
+            }
+
+            if (string.IsNullOrWhiteSpace(typedEntity.Data.Tag))
+            {
+                typedEntity.Data.Tag = typedEntity.EntityType.ToString();
+            }
+
+            return typedEntity;
+        }
+
+        // Возвращает singleton-объект указанного типа; если его нет — создает и сохраняет
+        public async Task<Classes.BusinessEntity<TData>> GetOrCreateSingletonEntityAsync<TData>(
+            BusinessEntityTypeEnum type,
+            string name,
+            CancellationToken ct = default)
+            where TData : class, IBusinessEntityData, new()
+        {
+            var existingEntity = (await GetAllBusinessEntities())
+                .Where(x => x.EntityType == type && string.Equals(x.Name, name, StringComparison.Ordinal))
+                .OrderBy(x => x.CreatedDate)
+                .FirstOrDefault();
+
+            if (existingEntity != null)
+            {
+                var typedExistingEntity = await GetEntityWithDataAsync<TData>(existingEntity.Id, ct);
+                if (typedExistingEntity != null)
+                {
+                    return typedExistingEntity;
+                }
+            }
+
+            var createdEntity = _businessEntityFactory.Create<TData>(type, name);
+            createdEntity.Name = name;
+            createdEntity.Data.Name = name;
+            createdEntity.Data.Tag = type.ToString();
+
+            return await SaveEntityAsync(createdEntity, ct);
+        }
+
+        // Сохраняет typed business-объект как entity + payload без relation
+        public async Task<Classes.BusinessEntity<TData>> SaveEntityAsync<TData>(
+            Classes.BusinessEntity<TData> entity,
+            CancellationToken ct = default)
+            where TData : class, IBusinessEntityData
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            if (entity.Data == null) throw new ArgumentNullException(nameof(entity.Data));
+
+            if (entity.Id == Guid.Empty)
+            {
+                entity.Id = Guid.NewGuid();
+            }
+
+            if (entity.CreatedDate == default)
+            {
+                entity.CreatedDate = DateTime.UtcNow;
+            }
+
+            entity.LastModifiedDate = DateTime.UtcNow;
+
+            if (string.IsNullOrWhiteSpace(entity.Data.Name))
+            {
+                entity.Data.Name = entity.Name;
+            }
+
+            if (entity.Data.EntityType == BusinessEntityTypeEnum.Undefined)
+            {
+                entity.Data.EntityType = entity.EntityType;
+            }
+
+            if (string.IsNullOrWhiteSpace(entity.Data.Tag))
+            {
+                entity.Data.Tag = entity.EntityType.ToString();
+            }
+
+            entity.SynchronizeDataWithEntity();
+
+            var persistenceEntity = CopyEntityState(entity, _businessEntityFactory.Create(entity.EntityType, entity.Name));
+            var existingEntity = await _dataProviderConnector.GetByIdAsync(entity.Id, cancellationToken: ct);
+
+            if (existingEntity != null)
+            {
+                await _dataProviderConnector.UpdateAsync(persistenceEntity, cancellationToken: ct);
+            }
+            else
+            {
+                await _dataProviderConnector.AddAsync(persistenceEntity, cancellationToken: ct);
+            }
+
+            await _dataProviderConnector.UpdateDataAsync(entity.Id, entity.Data, ct);
+            return entity;
+        }
+
         // Сохраняет entity и ее payload в хранилище
         public async Task SaveEntity(Classes.BusinessEntity entityData, BusinessEntityData data)
         {
@@ -630,6 +745,7 @@ namespace BusinessEntity.Core.Services
                     name),
                 BusinessEntityTypeEnum.Folder => _businessEntityFactory.Create<Folder>(type, name),
                 BusinessEntityTypeEnum.Space => _businessEntityFactory.Create<Space>(type, name),
+                BusinessEntityTypeEnum.SysParametersTp => _businessEntityFactory.Create<SysParameters>(type, name),
                 _ => _businessEntityFactory.Create(type, name)
             };
         }
