@@ -3,6 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Routing;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.Services;
 
@@ -13,11 +14,15 @@ namespace BusinessEntity.Pages
         [Parameter]
         public Guid Id { get; set; }
 
+        [SupplyParameterFromQuery(Name = "edit")]
+        public string? EditQuery { get; set; }
+
         private global::BusinessEntity.Core.Classes.BusinessEntity? Entity;
         private IReadOnlyList<global::BusinessEntity.Core.Classes.BusinessEntityData>? DataList;
         private string? DataText;
         private bool IsLoading = true;
         private string? Error;
+        private bool StartInEditMode => string.Equals(EditQuery, "1", StringComparison.OrdinalIgnoreCase) || string.Equals(EditQuery, "true", StringComparison.OrdinalIgnoreCase);
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
 

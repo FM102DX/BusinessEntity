@@ -14,6 +14,7 @@ namespace BusinessEntity.Components
     {
         [Parameter] public global::BusinessEntity.Core.Classes.BusinessEntity? Entity { get; set; }
         [Parameter] public IReadOnlyList<global::BusinessEntity.Core.Classes.BusinessEntityData>? DataList { get; set; }
+        [Parameter] public bool StartInEditMode { get; set; }
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
@@ -35,6 +36,11 @@ namespace BusinessEntity.Components
             }
             LocalData = DataList?.ToList() ?? new List<global::BusinessEntity.Core.Classes.BusinessEntityData>();
             EditBody = ViewText;
+
+            if (StartInEditMode)
+            {
+                IsEditing = true;
+            }
         }
 
         private void EnterEditMode()

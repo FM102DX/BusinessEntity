@@ -6,6 +6,8 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Registration;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Registration;
+using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
+using BusinessEntity.MiniApps.TreeMiniApp.Registration;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Registration;
 using BusinessEntity.Service;
@@ -111,6 +113,7 @@ namespace BusinessEntity
             // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddDataProviderMiniApp();
             builder.Services.AddSampleDataMiniApp();
+            builder.Services.AddTreeMiniApp();
             builder.Services.AddUserMiniApp();
 
             // Регистрирует прикладные сервисы и message bus.
@@ -152,6 +155,13 @@ namespace BusinessEntity
             {
                 var userMiniApp = scope.ServiceProvider.GetRequiredService<IUserMiniApp>();
                 userMiniApp.EnsureInitialized();
+            }
+
+            // Явно поднимает TreeMiniApp при старте приложения.
+            using (var scope = app.Services.CreateScope())
+            {
+                var treeMiniApp = scope.ServiceProvider.GetRequiredService<ITreeMiniApp>();
+                treeMiniApp.EnsureInitialized();
             }
 
             // Инициализирует тестовые данные при старте приложения.

@@ -15,6 +15,18 @@ namespace BusinessEntity.Models
         {
             return new List<ContextMenuItem>()
             {
+                new ContextMenuItem()
+                {
+                    Text = "Открыть",
+                    Value = "Open",
+                    Icon = "open_in_new"
+                },
+                new ContextMenuItem()
+                {
+                    Text = "Редактировать",
+                    Value = "Edit",
+                    Icon = "edit"
+                },
                 new ContextMenuItem() 
                 { 
                     Text = "Удалить", 
@@ -27,6 +39,12 @@ namespace BusinessEntity.Models
         {
             switch (action)
             {
+                case "Open":
+                    await OnOpenAsync();
+                    break;
+                case "Edit":
+                    await OnEditAsync();
+                    break;
                 case "Delete":
                     await OnDeleteAsync();
                     break;
@@ -38,7 +56,23 @@ namespace BusinessEntity.Models
             }
         }
 
-        // Заглушки-обработчики для действий с документами
+        private async Task OnOpenAsync()
+        {
+            if (_webLogger != null)
+                await _webLogger.Information($"Открытие документа: {Title}");
+
+            if (OnEntityOpenRequested != null)
+                await OnEntityOpenRequested(this);
+        }
+
+        private async Task OnEditAsync()
+        {
+            if (_webLogger != null)
+                await _webLogger.Information($"Открытие документа в режиме редактирования: {Title}");
+
+            if (OnEntityOpenForEditRequested != null)
+                await OnEntityOpenForEditRequested(this);
+        }
 
 
         private async Task OnDeleteAsync()
