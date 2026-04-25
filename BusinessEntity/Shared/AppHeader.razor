@@ -2,6 +2,8 @@
 @using BusinessEntity.Core.DomainEntities
 @using BusinessEntity.Core.Services
 @using BusinessEntity.Contracts
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject IUserContextService UserContext
 @inject BusinessEntityHelper BusinessEntityHelper
 
@@ -12,16 +14,30 @@
     }
 
     <div class="app-header__actions">
-        @if (UserContext.HasSelectedSpace)
+        @if (IsAuthenticated)
         {
-            <span class="app-header__space">Текущее пространство: @UserContext.CurrentSpaceName</span>
+            <details class="app-header__user-menu">
+                <summary class="app-header__avatar" title="@UserName">
+                    @UserInitials
+                </summary>
+
+                <div class="app-header__dropdown">
+                    <a class="app-header__dropdown-item" href="/space-selection">Пространства</a>
+                    <a class="app-header__dropdown-item" href="/auth/logout">Выход</a>
+                </div>
+            </details>
         }
-        <a class="app-header__link" href="/space-selection">Выбрать пространство</a>
     </div>
 </div>
 
 @code {
     private string CompanyName { get; set; } = string.Empty;
+    private bool IsAuthenticated { get; set; }
+    private string UserName { get; set; } = string.Empty;
+    private string UserInitials { get; set; } = string.Empty;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -37,5 +53,48 @@
         {
             CompanyName = string.Empty;
         }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthenticationStateTask == null)
+        {
+            IsAuthenticated = false;
+            UserName = string.Empty;
+            UserInitials = string.Empty;
+            return;
+        }
+
+        var authState = await AuthenticationStateTask;
+        var user = authState.User;
+
+        IsAuthenticated = user.Identity?.IsAuthenticated == true;
+        if (!IsAuthenticated)
+        {
+            UserName = string.Empty;
+            UserInitials = string.Empty;
+            return;
+        }
+
+        UserName =
+            user.Identity?.Name
+            ?? user.FindFirst("preferred_username")?.Value
+            ?? user.FindFirst(ClaimTypes.Name)?.Value
+            ?? string.Empty;
+
+        UserInitials = BuildInitials(UserName);
+    }
+
+    private static string BuildInitials(string userName)
+    {
+        if (string.IsNullOrWhiteSpace(userName))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = userName.Trim();
+        return trimmed.Length >= 2
+            ? trimmed[..2].ToUpperInvariant()
+            : trimmed.ToUpperInvariant();
     }
 }
