@@ -1,4 +1,5 @@
 using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.Contracts;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
 {
@@ -10,8 +11,10 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
     {
         Task<IReadOnlyList<BusinessEntity.Core.Classes.BusinessEntity>> GetAllAsync(CancellationToken cancellationToken = default);
         Task<BusinessEntity.Core.Classes.BusinessEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-        Task<T?> GetDataAsync<T>(Guid id, CancellationToken cancellationToken = default);
-        Task UpdateDataAsync<T>(Guid id, T data, CancellationToken cancellationToken = default);
+        Task<TData?> GetDataAsync<TData>(Guid id, CancellationToken cancellationToken = default)
+            where TData : class, IBusinessEntityData;
+        Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
+            where TData : class, IBusinessEntityData;
         Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default);
         Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default);
         Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);

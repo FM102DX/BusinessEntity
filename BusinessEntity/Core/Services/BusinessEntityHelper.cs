@@ -280,6 +280,12 @@ namespace BusinessEntity.Core.Services
 
             // Определяем текст для сохранения
             var dataToSave = string.IsNullOrWhiteSpace(bodyText) ? new string('x', 100) : bodyText;
+            var documentData = new Document
+            {
+                Name = name,
+                Tag = BusinessEntityTypeEnum.Document.ToString(),
+                Text = dataToSave
+            };
 
             // Создаем runtime-объект документа через фабрику
             var entity = CreateEntityForType(BusinessEntityTypeEnum.Document, name, dataToSave);
@@ -303,7 +309,7 @@ namespace BusinessEntity.Core.Services
 
             // Создаем payload документа
             // _webLogger?.Information($"[мини-апп:business-entity-helper] [entity-data:create] [dispatch:update-data] Создаем payload для document entityId={entity.Id} length={dataToSave.Length}");
-            await _dataProviderConnector.UpdateDataAsync(entity.Id, dataToSave!, ct);
+            await _dataProviderConnector.UpdateDataAsync(entity.Id, documentData, ct);
 
             _webLogger?.Debug($"Created BusinessEntityData for document '{name}' (DocID: {entity.Id}), DataLength={dataToSave?.Length ?? 0}");
 
@@ -546,30 +552,19 @@ namespace BusinessEntity.Core.Services
             if (entityData == null) throw new ArgumentNullException(nameof(entityData));
             _webLogger?.Debug($"GetData: entityId={entityData.Id}, type={entityData.EntityType}");
 
-            // Базовая загрузка сырых данных по Id
-            var rawData = await _dataProviderConnector.GetDataAsync<string>(entityData.Id);
-            var chunks = string.IsNullOrEmpty(rawData)
-                ? Array.Empty<BusinessEntityData>()
-                : new[] { CreateDataObject(entityData, rawData) };
-
-            // Здесь можно расширять типовую пост-обработку
             switch (entityData.EntityType)
             {
                 case BusinessEntityTypeEnum.Space:
-                    // Специфическая обработка для Space (при необходимости)
-                    break;
+                    return await LoadTypedDataListAsync<Space>(entityData);
                 case BusinessEntityTypeEnum.Folder:
-                    // Специфическая обработка для Folder
-                    break;
+                    return await LoadTypedDataListAsync<Folder>(entityData);
                 case BusinessEntityTypeEnum.Document:
-                    // Специфическая обработка для Document
-                    break;
+                    return await LoadTypedDataListAsync<Document>(entityData);
+                case BusinessEntityTypeEnum.SysParametersTp:
+                    return await LoadTypedDataListAsync<SysParameters>(entityData);
                 default:
-                    // По умолчанию — без дополнительной обработки
-                    break;
+                    return Array.Empty<BusinessEntityData>();
             }
-
-            return chunks;
         }
 
         // Загружает typed-сущность вместе с ее payload-объектом
@@ -697,11 +692,9 @@ namespace BusinessEntity.Core.Services
             data.Id = entityData.Id;
             data.EntityType = entityData.EntityType;
 
-            // Извлекаем сериализуемый payload
-            var payload = ExtractPayload(data);
             var entityToSave = CreatePersistenceEntity(entityData, data);
 
-            _webLogger?.Information($"SaveEntity: entityId={entityData.Id}, name='{entityData.Name}', dataLen={payload?.Length ?? 0}");
+            _webLogger?.Information($"SaveEntity: entityId={entityData.Id}, name='{entityData.Name}', dataType='{data.GetType().Name}'");
 
             // Сохраняем саму entity
             var existingEntity = await _dataProviderConnector.GetByIdAsync(entityToSave.Id);
@@ -714,20 +707,10 @@ namespace BusinessEntity.Core.Services
                 await _dataProviderConnector.AddAsync(entityToSave);
             }
 
-            // Сохраняем payload сущности отдельно
-            await _dataProviderConnector.UpdateDataAsync(entityToSave.Id, payload);
+            // Сохраняем typed payload сущности отдельно через формализованный converter-path mini-app.
+            await SaveTypedDataAsync(entityToSave.Id, data);
 
             _webLogger?.Debug($"SaveEntity: saved entityData {entityData.Id} and data {data.Id}");
-        }
-
-        // Выделяет строковый payload из data-объекта
-        private static string ExtractPayload(BusinessEntityData data)
-        {
-            return data switch
-            {
-                Document document => document.Text ?? string.Empty,
-                _ => string.Empty
-            };
         }
 
         // Создает runtime-entity нужного типа через фабрику
@@ -750,42 +733,6 @@ namespace BusinessEntity.Core.Services
             };
         }
 
-        // Создает data-объект для runtime-работы по типу entity
-        private BusinessEntityData CreateDataObject(Classes.BusinessEntity entityData, string rawData)
-        {
-            if (entityData.EntityType == BusinessEntityTypeEnum.Document)
-            {
-                var typedEntity = _businessEntityFactory.Create(
-                    BusinessEntityTypeEnum.Document,
-                    new Document
-                    {
-                        Name = entityData.Name,
-                        Text = rawData
-                    },
-                    entityData.Name);
-
-                typedEntity.Id = entityData.Id;
-                typedEntity.CreatedDate = entityData.CreatedDate;
-                typedEntity.LastModifiedDate = entityData.LastModifiedDate;
-                typedEntity.Name = entityData.Name;
-                typedEntity.BusinessEntityType = entityData.BusinessEntityType;
-                typedEntity.EntityType = entityData.EntityType;
-                typedEntity.SynchronizeDataWithEntity();
-                typedEntity.Data.Text = rawData;
-
-                return typedEntity.Data;
-            }
-
-            return new BusinessEntityData
-            {
-                Id = entityData.Id,
-                Name = entityData.Name,
-                CreatedDate = entityData.CreatedDate,
-                LastModifiedDate = entityData.LastModifiedDate,
-                EntityType = entityData.EntityType
-            };
-        }
-
         // Подготавливает entity к сохранению через connector
         private Classes.BusinessEntity CreatePersistenceEntity(Classes.BusinessEntity entityData, BusinessEntityData data)
         {
@@ -794,6 +741,7 @@ namespace BusinessEntity.Core.Services
             return data switch
             {
                 Document document => CreateDocumentPersistenceEntity(entityData, document, entityType),
+                SysParameters sysParameters => CreateSysParametersPersistenceEntity(entityData, sysParameters, entityType),
                 Folder => CopyEntityState(entityData, _businessEntityFactory.Create<Folder>(entityType, entityData.Name)),
                 Space => CopyEntityState(entityData, _businessEntityFactory.Create<Space>(entityType, entityData.Name)),
                 _ => CopyEntityState(entityData, _businessEntityFactory.Create(entityType, entityData.Name))
@@ -816,6 +764,26 @@ namespace BusinessEntity.Core.Services
             typedEntity = CopyEntityState(entityData, typedEntity);
             typedEntity.Data.Tag = document.Tag;
             typedEntity.Data.Text = document.Text ?? string.Empty;
+
+            return typedEntity;
+        }
+
+        // Создает entity системных параметров для сохранения typed payload без потери прикладных полей.
+        private Classes.BusinessEntity CreateSysParametersPersistenceEntity(Classes.BusinessEntity entityData, SysParameters sysParameters, BusinessEntityTypeEnum entityType)
+        {
+            var typedEntity = _businessEntityFactory.Create(
+                entityType,
+                new SysParameters
+                {
+                    Name = string.IsNullOrWhiteSpace(sysParameters.Name) ? entityData.Name : sysParameters.Name,
+                    Tag = sysParameters.Tag,
+                    CompanyName = sysParameters.CompanyName ?? string.Empty
+                },
+                entityData.Name);
+
+            typedEntity = CopyEntityState(entityData, typedEntity);
+            typedEntity.Data.Tag = sysParameters.Tag;
+            typedEntity.Data.CompanyName = sysParameters.CompanyName ?? string.Empty;
 
             return typedEntity;
         }
@@ -862,6 +830,49 @@ namespace BusinessEntity.Core.Services
             }
 
             return entityData.BusinessEntityType;
+        }
+
+        // Загружает typed payload конкретного типа и возвращает его как единичный data-список для старого API helper-а.
+        private async Task<IReadOnlyList<BusinessEntityData>> LoadTypedDataListAsync<TData>(Classes.BusinessEntity entityData)
+            where TData : BusinessEntityData, IBusinessEntityData, new()
+        {
+            var data = await _dataProviderConnector.GetDataAsync<TData>(entityData.Id);
+            if (data == null)
+            {
+                return Array.Empty<BusinessEntityData>();
+            }
+
+            ApplyEntityMetadata(entityData, data);
+            return new BusinessEntityData[] { data };
+        }
+
+        // Сохраняет runtime data-объект через typed payload-путь data-provider mini-app.
+        private Task SaveTypedDataAsync(Guid entityId, BusinessEntityData data)
+        {
+            return data switch
+            {
+                Document document => _dataProviderConnector.UpdateDataAsync(entityId, document),
+                Folder folder => _dataProviderConnector.UpdateDataAsync(entityId, folder),
+                Space space => _dataProviderConnector.UpdateDataAsync(entityId, space),
+                SysParameters sysParameters => _dataProviderConnector.UpdateDataAsync(entityId, sysParameters),
+                _ => throw new InvalidOperationException(
+                    $"No typed data-provider save path is defined for payload runtime type '{data.GetType().Name}'.")
+            };
+        }
+
+        // Накладывает общие entity-метаданные поверх typed payload, полученного из data-provider.
+        private static void ApplyEntityMetadata(Classes.BusinessEntity entityData, BusinessEntityData data)
+        {
+            data.Id = entityData.Id;
+            data.Name = entityData.Name;
+            data.CreatedDate = entityData.CreatedDate;
+            data.LastModifiedDate = entityData.LastModifiedDate;
+            data.EntityType = entityData.EntityType;
+
+            if (string.IsNullOrWhiteSpace(data.Tag))
+            {
+                data.Tag = entityData.EntityType.ToString();
+            }
         }
     }
 }

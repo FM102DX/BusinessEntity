@@ -1,10 +1,11 @@
 using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Conversion;
 using ReactiveUI;
-using System.Text.Json;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
 {
@@ -15,14 +16,19 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
     public sealed class DataProviderConnector : IDataProviderConnector
     {
         private readonly IMessageBus _messageBus;
+        private readonly EntityDataStorageCodec _entityDataStorageCodec;
 
         /// <summary>
         /// Инициализирует connector и гарантирует материализацию mini-app перед первым запросом.
         /// </summary>
         // Поднимает инициализацию mini-app и сохраняет bus для request/response обмена.
-        public DataProviderConnector(IMessageBus messageBus, IDataProviderMiniApp dataProviderMiniApp)
+        public DataProviderConnector(
+            IMessageBus messageBus,
+            IDataProviderMiniApp dataProviderMiniApp,
+            EntityDataStorageCodec entityDataStorageCodec)
         {
             _messageBus = messageBus;
+            _entityDataStorageCodec = entityDataStorageCodec;
             dataProviderMiniApp.EnsureInitialized();
         }
 
@@ -55,7 +61,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
         }
 
         // Получает payload сущности и десериализует его в нужный тип.
-        public async Task<T?> GetDataAsync<T>(Guid id, CancellationToken cancellationToken = default)
+        public async Task<TData?> GetDataAsync<TData>(Guid id, CancellationToken cancellationToken = default)
+            where TData : class, IBusinessEntityData
         {
             var requestId = Guid.NewGuid();
             var response = await SendAndReceiveAsync<GetBusinessEntityDataRequest, GetBusinessEntityDataResponse>(
@@ -70,14 +77,15 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
                 return default;
             }
 
-            return DataPayloadEnvelopeSerializer.DeserializePayload<T>(response.Data);
+            return _entityDataStorageCodec.DeserializeEnvelope<TData>(response.Data);
         }
 
         // Сериализует payload в raw JSON и отправляет команду на сохранение envelope.
-        public async Task UpdateDataAsync<T>(Guid id, T data, CancellationToken cancellationToken = default)
+        public async Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
+            where TData : class, IBusinessEntityData
         {
             var requestId = Guid.NewGuid();
-            var payload = JsonSerializer.Serialize(data, StorageJsonOptions.Default);
+            var payload = _entityDataStorageCodec.SerializePayload(data);
             var response = await SendAndReceiveAsync<UpdateBusinessEntityDataRequest, UpdateBusinessEntityDataResponse>(
                 new UpdateBusinessEntityDataRequest(requestId, id, payload),
                 static result => result.RequestId,

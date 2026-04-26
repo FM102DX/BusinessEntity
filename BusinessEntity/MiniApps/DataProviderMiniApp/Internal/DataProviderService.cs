@@ -1,7 +1,8 @@
-using System.Text.Json;
 using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Conversion;
 using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
@@ -14,6 +15,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
         private readonly IAsyncRepository<BusinessEntityDataDto> _businessEntityDataRepository;
         private readonly IAsyncRepository<BusinessEntityRelationDto> _businessEntityRelationRepository;
+        private readonly EntityDataStorageCodec _entityDataStorageCodec;
         private readonly IWebLoggerService? _webLogger;
 
         // Получает typed-репозитории mini-app напрямую из DI-контейнера.
@@ -21,11 +23,13 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             IAsyncRepository<BusinessEntityDto> businessEntityRepository,
             IAsyncRepository<BusinessEntityDataDto> businessEntityDataRepository,
             IAsyncRepository<BusinessEntityRelationDto> businessEntityRelationRepository,
+            EntityDataStorageCodec entityDataStorageCodec,
             IWebLoggerService? webLogger)
         {
             _businessEntityRepository = businessEntityRepository;
             _businessEntityDataRepository = businessEntityDataRepository;
             _businessEntityRelationRepository = businessEntityRelationRepository;
+            _entityDataStorageCodec = entityDataStorageCodec;
             _webLogger = webLogger;
         }
 
@@ -44,21 +48,32 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         }
 
         // Читает JSON-envelope payload и десериализует его в нужный тип.
-        public async Task<T?> GetDataAsync<T>(Guid id, CancellationToken cancellationToken = default)
+        public async Task<TData?> GetDataAsync<TData>(Guid id, CancellationToken cancellationToken = default)
+            where TData : class, IBusinessEntityData
         {
+            var entity = await _businessEntityRepository.GetByIdAsync(id, cancellationToken);
+            if (entity == null)
+            {
+                return default;
+            }
+
             var payload = await GetDataPayloadAsync(id, cancellationToken);
             if (string.IsNullOrWhiteSpace(payload))
             {
                 return default;
             }
 
-            return DataPayloadEnvelopeSerializer.DeserializePayload<T>(payload);
+            var envelope = DataPayloadEnvelopeSerializer.ReadEnvelope(payload);
+            var data = _entityDataStorageCodec.DeserializePayloadBody<TData>(entity.EntityType, envelope.PayloadJson);
+            ApplyEntityMetadata(entity, data);
+            return data;
         }
 
         // Сериализует типизированный payload в raw JSON и сохраняет его как versioned envelope.
-        public async Task UpdateDataAsync<T>(Guid id, T data, CancellationToken cancellationToken = default)
+        public async Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
+            where TData : class, IBusinessEntityData
         {
-            var payload = JsonSerializer.Serialize(data, StorageJsonOptions.Default);
+            var payload = _entityDataStorageCodec.SerializePayload(data);
             await UpdateDataPayloadAsync(id, payload, cancellationToken);
         }
 
@@ -201,6 +216,21 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         {
             var dataItems = await _businessEntityDataRepository.GetAllAsync(d => d.BusinessEntityId == businessEntityId, 1, cancellationToken);
             return dataItems.FirstOrDefault();
+        }
+
+        // Накладывает общие entity-метаданные поверх typed payload после чтения из storage.
+        private static void ApplyEntityMetadata(BusinessEntityDto entity, IBusinessEntityData data)
+        {
+            data.Id = entity.Id;
+            data.CreatedDate = entity.CreatedDate;
+            data.LastModifiedDate = entity.LastModifiedDate;
+            data.Name = entity.Name;
+            data.EntityType = entity.EntityType;
+
+            if (string.IsNullOrWhiteSpace(data.Tag))
+            {
+                data.Tag = DataPayloadEnvelopeSerializer.GetStorageKind(entity.EntityType);
+            }
         }
     }
 }
