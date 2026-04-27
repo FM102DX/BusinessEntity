@@ -1,5 +1,6 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
+using BusinessEntity.Core.RichText;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
@@ -253,6 +254,93 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             if (!response.Success)
             {
                 throw new InvalidOperationException($"DataProvider failed to delete relation '{id}'.");
+            }
+        }
+
+        // Возвращает весь chunk-набор rich-text документа.
+        public async Task<IReadOnlyList<RichTextDocumentChunk>> GetRichTextChunksAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<GetRichTextChunksRequest, GetRichTextChunksResponse>(
+                new GetRichTextChunksRequest(requestId, businessEntityId),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            return response.Records;
+        }
+
+        // Полностью заменяет chunk-набор rich-text документа.
+        public async Task ReplaceRichTextChunksAsync(Guid businessEntityId, IReadOnlyList<RichTextDocumentChunk> chunks, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<ReplaceRichTextChunksRequest, ReplaceRichTextChunksResponse>(
+                new ReplaceRichTextChunksRequest(requestId, businessEntityId, chunks),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            if (!response.Success)
+            {
+                throw new InvalidOperationException($"DataProvider failed to replace rich-text chunks for business entity '{businessEntityId}'.");
+            }
+        }
+
+        // Сохраняет embedded-файлы rich-text документа.
+        public async Task SaveRichTextEmbeddedFilesAsync(
+            Guid businessEntityId,
+            IReadOnlyList<RichTextEmbeddedFile> files,
+            bool replaceExistingFiles,
+            CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<SaveRichTextEmbeddedFilesRequest, SaveRichTextEmbeddedFilesResponse>(
+                new SaveRichTextEmbeddedFilesRequest(requestId, businessEntityId, files, replaceExistingFiles),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            if (!response.Success)
+            {
+                throw new InvalidOperationException($"DataProvider failed to save rich-text embedded files for business entity '{businessEntityId}'.");
+            }
+        }
+
+        // Читает embedded-файл rich-text документа.
+        public async Task<RichTextEmbeddedFileContent?> GetRichTextEmbeddedFileAsync(
+            Guid businessEntityId,
+            string imageId,
+            string variant,
+            CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<GetRichTextEmbeddedFileRequest, GetRichTextEmbeddedFileResponse>(
+                new GetRichTextEmbeddedFileRequest(requestId, businessEntityId, imageId, variant),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            return response.Record;
+        }
+
+        // Полностью удаляет техническое rich-text storage документа.
+        public async Task DeleteRichTextStorageAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<DeleteRichTextStorageRequest, DeleteRichTextStorageResponse>(
+                new DeleteRichTextStorageRequest(requestId, businessEntityId),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            if (!response.Success)
+            {
+                throw new InvalidOperationException($"DataProvider failed to delete rich-text storage for business entity '{businessEntityId}'.");
             }
         }
 

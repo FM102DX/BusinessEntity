@@ -16,6 +16,17 @@ internal static class DataPayloadEnvelopeSerializer
         ArgumentNullException.ThrowIfNull(entity);
 
         var kind = GetStorageKind(entity.EntityType);
+        return CreateEnvelopeJson(kind, payloadJson);
+    }
+
+    // Заворачивает raw payload JSON в технический storage-envelope по явному kind.
+    public static string CreateEnvelopeJson(string kind, string payloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(kind))
+        {
+            throw new InvalidOperationException("Storage kind cannot be empty.");
+        }
+
         var payload = CreateEnvelopePayload(payloadJson);
         var envelope = new DataPayloadEnvelopeRaw
         {

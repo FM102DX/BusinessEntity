@@ -121,6 +121,8 @@ namespace BusinessEntity
             builder.Services.AddScoped<IBusinessEntityFactory, BusinessEntityFactory>();
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
+            builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentHelper>();
+            builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentImportService>();
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
             builder.Services.AddScoped<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
@@ -238,9 +240,27 @@ namespace BusinessEntity
                     CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"")
                 );
 
+                CREATE TABLE IF NOT EXISTS ""BusinessEntityDataChunks"" (
+                    ""Id"" uuid NOT NULL,
+                    ""CreatedDate"" timestamp with time zone NOT NULL,
+                    ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""BusinessEntityId"" uuid NOT NULL,
+                    ""SortOrder"" bigint NOT NULL,
+                    ""Data"" text NOT NULL,
+                    ""PlainText"" text NULL,
+                    ""HtmlCache"" text NULL,
+                    ""BlockCount"" integer NOT NULL DEFAULT 0,
+                    ""CharCount"" integer NOT NULL DEFAULT 0,
+                    ""DataSizeBytes"" integer NOT NULL DEFAULT 0,
+                    ""Version"" integer NOT NULL DEFAULT 1,
+                    ""Checksum"" text NULL,
+                    CONSTRAINT ""PK_BusinessEntityDataChunks"" PRIMARY KEY (""Id"")
+                );
+
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectAId"" ON ""BusinessEntityRelations"" (""ObjectAId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectBId"" ON ""BusinessEntityRelations"" (""ObjectBId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataItems_BusinessEntityId"" ON ""BusinessEntityDataItems"" (""BusinessEntityId"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunks_BusinessEntityId_SortOrder"" ON ""BusinessEntityDataChunks"" (""BusinessEntityId"", ""SortOrder"");
                 ");
         }
 	}

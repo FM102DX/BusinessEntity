@@ -23,14 +23,17 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             // Подключаем Postgres-репозитории для всех DTO-хранилищ mini-app.
             services.AddSingleton<IAsyncRepository<BusinessEntityDto>, BusinessEntityDtoEfPostgresRepository>();
             services.AddSingleton<IAsyncRepository<BusinessEntityDataDto>, BusinessEntityDataDtoEfPostgresRepository>();
+            services.AddSingleton<IAsyncRepository<BusinessEntityDataChunkDto>, BusinessEntityDataChunkDtoEfPostgresRepository>();
             services.AddSingleton<IAsyncRepository<BusinessEntityRelationDto>, BusinessEntityRelationDtoEfPostgresRepository>();
             // Регистрируем поэкземплярные payload-конвертеры для всех поддерживаемых typed business-data объектов.
             services.AddSingleton<IEntityDataStorageConverter, DocumentEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, FolderEntityDataStorageConverter>();
+            services.AddSingleton<IEntityDataStorageConverter, RichTextDocumentEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, SpaceEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, SysParametersEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverterFactory, EntityDataStorageConverterFactory>();
             services.AddSingleton<EntityDataStorageCodec>();
+            services.AddSingleton<RichTextDocumentFileStorageService>();
             services.AddScoped<IDataProviderCrudService, DataProviderService>();
             services.AddScoped<DataProviderMessageHandler>();
             services.AddScoped<IDataProviderMiniApp, Facade.DataProviderMiniApp>();

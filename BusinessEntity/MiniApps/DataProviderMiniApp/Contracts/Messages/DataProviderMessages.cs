@@ -1,4 +1,5 @@
 using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.RichText;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 
@@ -43,3 +44,22 @@ public sealed record UpdateRelationResponse(Guid RequestId, bool Success, string
 
 public sealed record DeleteRelationRequest(Guid RequestId, Guid Id);
 public sealed record DeleteRelationResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
+
+public sealed record GetRichTextChunksRequest(Guid RequestId, Guid BusinessEntityId);
+public sealed record GetRichTextChunksResponse(Guid RequestId, IReadOnlyList<RichTextDocumentChunk> Records, string? ErrorMessage = null);
+
+public sealed record ReplaceRichTextChunksRequest(Guid RequestId, Guid BusinessEntityId, IReadOnlyList<RichTextDocumentChunk> Records);
+public sealed record ReplaceRichTextChunksResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
+
+public sealed record SaveRichTextEmbeddedFilesRequest(
+    Guid RequestId,
+    Guid BusinessEntityId,
+    IReadOnlyList<RichTextEmbeddedFile> Files,
+    bool ReplaceExistingFiles);
+public sealed record SaveRichTextEmbeddedFilesResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
+
+public sealed record GetRichTextEmbeddedFileRequest(Guid RequestId, Guid BusinessEntityId, string ImageId, string Variant);
+public sealed record GetRichTextEmbeddedFileResponse(Guid RequestId, RichTextEmbeddedFileContent? Record, string? ErrorMessage = null);
+
+public sealed record DeleteRichTextStorageRequest(Guid RequestId, Guid BusinessEntityId);
+public sealed record DeleteRichTextStorageResponse(Guid RequestId, bool Success, string? ErrorMessage = null);

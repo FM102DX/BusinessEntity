@@ -64,7 +64,9 @@ namespace BusinessEntity
                 if (path == "/" || string.IsNullOrEmpty(path))
                 {
                     var last = await JS.InvokeAsync<string>("beRoutes.getLastRoute");
-                    if (!string.IsNullOrWhiteSpace(last) && last.StartsWith("/document/", StringComparison.OrdinalIgnoreCase))
+                    if (!string.IsNullOrWhiteSpace(last) && (
+                        last.StartsWith("/document/", StringComparison.OrdinalIgnoreCase)
+                        || last.StartsWith("/rich-document/", StringComparison.OrdinalIgnoreCase)))
                     {
                         _routeRestoreAttempted = true;
                         Navigation.NavigateTo(last, forceLoad: true);

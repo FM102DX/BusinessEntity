@@ -229,6 +229,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             {
                 "Folder" => new FolderTreeNodeItemViewModel(entityData, WebLogger),
                 "Document" => new DocumentTreeNodeItemViewModel(WebLogger),
+                "RichTextDocument" => new RichTextDocumentTreeNodeItemViewModel(WebLogger),
                 "Page" => new DocumentTreeNodeItemViewModel(WebLogger),
                 _ => new FolderTreeNodeItemViewModel(entityData, WebLogger) // По умолчанию используем Folder
             };
@@ -280,6 +281,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 "Space" => "dashboard",            // or "account_tree" / "layers"
                 "Folder" => "folder",
                 "Document" => "description",       // alternatively: "insert_drive_file" / "article"
+                "RichTextDocument" => "article",
                 "Page" => "insert_drive_file",
                 _ => "insert_drive_file"
             };
@@ -332,9 +334,9 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
             await HandleNodeSelection(node, ctrlPressed, shiftPressed);
 
-            if (!ctrlPressed && !shiftPressed && node.Entity?.EntityType == BusinessEntityTypeEnum.Document)
+            if (!ctrlPressed && !shiftPressed && IsOpenableDocumentType(node.Entity?.EntityType))
             {
-                ScheduleOpenDocument(node);
+                ScheduleOpenDocumentPage(node);
             }
         }
 
@@ -350,12 +352,15 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
                 var entity = node.Entity;
                 WebLogger?.Information($"DoubleClick on '{entity.Name}' ({entity.EntityType}), ID={entity.Id}");
-                CancelPendingOpenDocument();
+                CancelPendingOpenEntityOpen();
 
                 switch (entity.EntityType)
                 {
                     case BusinessEntityTypeEnum.Document:
-                        OpenDocument(entity.Id, editMode: true);
+                        OpenEntityPage(entity.Id, entity.EntityType, editMode: true);
+                        break;
+                    case BusinessEntityTypeEnum.RichTextDocument:
+                        OpenEntityPage(entity.Id, entity.EntityType, editMode: false);
                         break;
                     // В будущем можно добавить другие типы
 
@@ -371,9 +376,9 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             await Task.CompletedTask;
         }
 
-        private void ScheduleOpenDocument(TreeNodeItemViewModelBase node)
+        private void ScheduleOpenDocumentPage(TreeNodeItemViewModelBase node)
         {
-            CancelPendingOpenDocument();
+            CancelPendingOpenEntityOpen();
 
             if (node.Entity == null)
             {
@@ -383,13 +388,14 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             var cts = new CancellationTokenSource();
             _pendingOpenDocumentCts = cts;
             var entityId = node.Entity.Id;
+            var entityType = node.Entity.EntityType;
 
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await Task.Delay(SingleClickOpenDelayMs, cts.Token);
-                    await InvokeAsync(() => OpenDocument(entityId, editMode: false));
+                    await InvokeAsync(() => OpenEntityPage(entityId, entityType, editMode: false));
                 }
                 catch (TaskCanceledException)
                 {
@@ -397,7 +403,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             });
         }
 
-        private void CancelPendingOpenDocument()
+        private void CancelPendingOpenEntityOpen()
         {
             if (_pendingOpenDocumentCts == null)
             {
@@ -409,10 +415,21 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             _pendingOpenDocumentCts = null;
         }
 
-        private void OpenDocument(Guid entityId, bool editMode)
+        private void OpenEntityPage(Guid entityId, BusinessEntityTypeEnum entityType, bool editMode)
         {
-            var uri = editMode ? $"/document/{entityId}?edit=1" : $"/document/{entityId}";
+            var uri = entityType switch
+            {
+                BusinessEntityTypeEnum.Document => editMode ? $"/document/{entityId}?edit=1" : $"/document/{entityId}",
+                BusinessEntityTypeEnum.RichTextDocument => $"/rich-document/{entityId}",
+                _ => $"/document/{entityId}"
+            };
             NavigationManager.NavigateTo(uri);
+        }
+
+        // Проверяет, является ли тип открываемым документным узлом дерева.
+        private static bool IsOpenableDocumentType(BusinessEntityTypeEnum? entityType)
+        {
+            return entityType == BusinessEntityTypeEnum.Document || entityType == BusinessEntityTypeEnum.RichTextDocument;
         }
 
         // Обработка выбора узла с учетом модификаторов клавиш
@@ -638,7 +655,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         }        
        public void Dispose()
        {
-            CancelPendingOpenDocument();
+            CancelPendingOpenEntityOpen();
             // Отписываемся от события при уничтожении компонента
             if (UserContextService != null)
             {
@@ -649,10 +666,10 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
         private Task OnEntityOpenRequestedAsync(TreeNodeItemViewModelBase node)
         {
-            if (node.Entity?.EntityType == BusinessEntityTypeEnum.Document)
+            if (node.Entity?.EntityType != null && IsOpenableDocumentType(node.Entity.EntityType))
             {
-                CancelPendingOpenDocument();
-                OpenDocument(node.Entity.Id, editMode: false);
+                CancelPendingOpenEntityOpen();
+                OpenEntityPage(node.Entity.Id, node.Entity.EntityType, editMode: false);
             }
 
             return Task.CompletedTask;
@@ -662,8 +679,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         {
             if (node.Entity?.EntityType == BusinessEntityTypeEnum.Document)
             {
-                CancelPendingOpenDocument();
-                OpenDocument(node.Entity.Id, editMode: true);
+                CancelPendingOpenEntityOpen();
+                OpenEntityPage(node.Entity.Id, node.Entity.EntityType, editMode: true);
             }
 
             return Task.CompletedTask;
@@ -725,7 +742,9 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                                 Entity = newDoc,
                                 EntityType = newDoc.EntityType.ToString(),
                                 Parent = parentNode,
-                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync
+                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
+                                OnEntityOpenRequested = OnEntityOpenRequestedAsync,
+                                OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync
                             };
 
                             // Добавляем в дерево и разворачиваем родителя
@@ -735,6 +754,30 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                             _nodeById[newDoc.Id] = docNode;
 
                             WebLogger?.Information($"Successfully created document '{newDoc.Name}' under '{parentNode.Entity.Name}'");
+                        }
+                        break;
+                    case "RichTextDocument":
+                        {
+                            var newRichDocument = await TreeMiniAppService.CreateEntityAsync(
+                                parentNode.Entity.Id,
+                                BusinessEntityTypeEnum.RichTextDocument);
+
+                            var richDocNode = new RichTextDocumentTreeNodeItemViewModel(WebLogger)
+                            {
+                                Title = newRichDocument.Name,
+                                Icon = GetEntityIcon(newRichDocument.EntityType),
+                                Entity = newRichDocument,
+                                EntityType = newRichDocument.EntityType.ToString(),
+                                Parent = parentNode,
+                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
+                                OnEntityOpenRequested = OnEntityOpenRequestedAsync
+                            };
+
+                            parentNode.Children.Add(richDocNode);
+                            parentNode.Expanded = true;
+                            _nodeById[newRichDocument.Id] = richDocNode;
+
+                            WebLogger?.Information($"Successfully created rich-text document '{newRichDocument.Name}' under '{parentNode.Entity.Name}'");
                         }
                         break;
                         

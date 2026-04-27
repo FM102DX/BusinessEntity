@@ -1,6 +1,7 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
+using BusinessEntity.Services;
 using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
@@ -9,13 +10,16 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
     internal sealed class TreeMiniAppService
     {
         private readonly BusinessEntityHelper _businessEntityHelper;
+        private readonly RichTextDocumentHelper _richTextDocumentHelper;
         private readonly IWebLoggerService? _webLogger;
 
         public TreeMiniAppService(
             BusinessEntityHelper businessEntityHelper,
+            RichTextDocumentHelper richTextDocumentHelper,
             IWebLoggerService? webLogger)
         {
             _businessEntityHelper = businessEntityHelper;
+            _richTextDocumentHelper = richTextDocumentHelper;
             _webLogger = webLogger;
         }
 
@@ -42,6 +46,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             {
                 BusinessEntityTypeEnum.Folder => await _businessEntityHelper.CreateSubFolderAsync(parent, cancellationToken),
                 BusinessEntityTypeEnum.Document => await _businessEntityHelper.CreateDocumentAsync(parent, cancellationToken),
+                BusinessEntityTypeEnum.RichTextDocument => await _richTextDocumentHelper.CreateRichTextDocumentAsync(parent, cancellationToken),
                 _ => throw new InvalidOperationException($"Tree create is not supported for entity type '{entityType}'.")
             };
         }

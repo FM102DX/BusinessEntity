@@ -15,6 +15,7 @@ public class KmsBusinessEntityDbContext : DbContext
     public DbSet<BusinessEntityDto> BusinessEntities => Set<BusinessEntityDto>();
     public DbSet<BusinessEntityRelationDto> BusinessEntityRelations => Set<BusinessEntityRelationDto>();
     public DbSet<BusinessEntityDataDto> BusinessEntityDataItems => Set<BusinessEntityDataDto>();
+    public DbSet<BusinessEntityDataChunkDto> BusinessEntityDataChunks => Set<BusinessEntityDataChunkDto>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,11 @@ public class KmsBusinessEntityDbContext : DbContext
         modelBuilder.Entity<BusinessEntityRelationDto>().ToTable("BusinessEntityRelations");
         modelBuilder.Entity<BusinessEntityDataDto>().ToTable("BusinessEntityDataItems");
         modelBuilder.Entity<BusinessEntityDataDto>().Property(x => x.Data).HasColumnType("text");
+        modelBuilder.Entity<BusinessEntityDataChunkDto>().ToTable("BusinessEntityDataChunks");
+        modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.Data).HasColumnType("text");
+        modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.PlainText).HasColumnType("text");
+        modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.HtmlCache).HasColumnType("text");
+        modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.Checksum).HasColumnType("text");
 
         // Явно фиксируем имена таблиц, чтобы shared Postgres-база не зависела от EF-конвенций.
     }

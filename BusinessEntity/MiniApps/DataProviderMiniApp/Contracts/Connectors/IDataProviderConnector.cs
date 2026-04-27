@@ -1,5 +1,6 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
+using BusinessEntity.Core.RichText;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
 {
@@ -25,5 +26,10 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
         Task<BusinessEntityRelation> CreateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default);
         Task UpdateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default);
         Task DeleteRelationAsync(Guid id, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<RichTextDocumentChunk>> GetRichTextChunksAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
+        Task ReplaceRichTextChunksAsync(Guid businessEntityId, IReadOnlyList<RichTextDocumentChunk> chunks, CancellationToken cancellationToken = default);
+        Task SaveRichTextEmbeddedFilesAsync(Guid businessEntityId, IReadOnlyList<RichTextEmbeddedFile> files, bool replaceExistingFiles, CancellationToken cancellationToken = default);
+        Task<RichTextEmbeddedFileContent?> GetRichTextEmbeddedFileAsync(Guid businessEntityId, string imageId, string variant, CancellationToken cancellationToken = default);
+        Task DeleteRichTextStorageAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
     }
 }

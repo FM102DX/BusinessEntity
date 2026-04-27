@@ -19,6 +19,8 @@ namespace BusinessEntity.Core.Classes
         Folder = 200,
         // Текстовый документ
         Document = 300,
+        // Rich-text документ с чанковым хранением и embedded-файлами
+        RichTextDocument = 350,
         // Системные параметры приложения
         SysParametersTp = 400,
 

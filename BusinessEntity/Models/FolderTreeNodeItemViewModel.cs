@@ -36,6 +36,12 @@ namespace BusinessEntity.Models
                     Text = "Создать документ",
                     Value = "CreateDocument",
                     Icon = "note_add"
+                },
+                new ContextMenuItem()
+                {
+                    Text = "Создать рич-документ",
+                    Value = "CreateRichTextDocument",
+                    Icon = "article"
                 }
             };
 
@@ -69,6 +75,9 @@ namespace BusinessEntity.Models
                     break;
                 case "CreateDocument":
                     await OnCreateDocumentAsync();
+                    break;
+                case "CreateRichTextDocument":
+                    await OnCreateRichTextDocumentAsync();
                     break;
                 case "Rename":
                     await OnRenameAsync();
@@ -104,6 +113,16 @@ namespace BusinessEntity.Models
             // Вызываем обратный вызов для создания документа
             if (OnEntityCreateRequested != null)
                 await OnEntityCreateRequested(this, "Document");
+        }
+
+        // Создает новый rich-text документ внутри текущей папки.
+        private async Task OnCreateRichTextDocumentAsync()
+        {
+            if (_webLogger != null)
+                await _webLogger.Information($"Создание нового rich-text документа в папке: {Title}");
+
+            if (OnEntityCreateRequested != null)
+                await OnEntityCreateRequested(this, "RichTextDocument");
         }
 
         private async Task OnRenameAsync()

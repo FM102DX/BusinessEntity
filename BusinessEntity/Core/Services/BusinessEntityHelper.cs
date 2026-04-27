@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.DomainEntities;
+using BusinessEntity.Core.RichText;
 using System.Linq;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.WebLogger.Services;
@@ -560,6 +561,8 @@ namespace BusinessEntity.Core.Services
                     return await LoadTypedDataListAsync<Folder>(entityData);
                 case BusinessEntityTypeEnum.Document:
                     return await LoadTypedDataListAsync<Document>(entityData);
+                case BusinessEntityTypeEnum.RichTextDocument:
+                    return await LoadTypedDataListAsync<RichTextDocument>(entityData);
                 case BusinessEntityTypeEnum.SysParametersTp:
                     return await LoadTypedDataListAsync<SysParameters>(entityData);
                 default:
@@ -741,6 +744,7 @@ namespace BusinessEntity.Core.Services
             return data switch
             {
                 Document document => CreateDocumentPersistenceEntity(entityData, document, entityType),
+                RichTextDocument richTextDocument => CreateRichTextDocumentPersistenceEntity(entityData, richTextDocument, entityType),
                 SysParameters sysParameters => CreateSysParametersPersistenceEntity(entityData, sysParameters, entityType),
                 Folder => CopyEntityState(entityData, _businessEntityFactory.Create<Folder>(entityType, entityData.Name)),
                 Space => CopyEntityState(entityData, _businessEntityFactory.Create<Space>(entityType, entityData.Name)),
@@ -764,6 +768,34 @@ namespace BusinessEntity.Core.Services
             typedEntity = CopyEntityState(entityData, typedEntity);
             typedEntity.Data.Tag = document.Tag;
             typedEntity.Data.Text = document.Text ?? string.Empty;
+
+            return typedEntity;
+        }
+
+        // Создает entity rich-text документа для сохранения manifest-а без потери storage-настроек.
+        private Classes.BusinessEntity CreateRichTextDocumentPersistenceEntity(Classes.BusinessEntity entityData, RichTextDocument richTextDocument, BusinessEntityTypeEnum entityType)
+        {
+            var typedEntity = _businessEntityFactory.Create(
+                entityType,
+                new RichTextDocument
+                {
+                    Name = string.IsNullOrWhiteSpace(richTextDocument.Name) ? entityData.Name : richTextDocument.Name,
+                    Tag = richTextDocument.Tag,
+                    ContentStorage = richTextDocument.ContentStorage,
+                    EditorFormat = richTextDocument.EditorFormat,
+                    ChunkPolicy = richTextDocument.ChunkPolicy,
+                    EmbeddedFileStorage = richTextDocument.EmbeddedFileStorage,
+                    SupportsImages = richTextDocument.SupportsImages
+                },
+                entityData.Name);
+
+            typedEntity = CopyEntityState(entityData, typedEntity);
+            typedEntity.Data.Tag = richTextDocument.Tag;
+            typedEntity.Data.ContentStorage = richTextDocument.ContentStorage;
+            typedEntity.Data.EditorFormat = richTextDocument.EditorFormat;
+            typedEntity.Data.ChunkPolicy = richTextDocument.ChunkPolicy;
+            typedEntity.Data.EmbeddedFileStorage = richTextDocument.EmbeddedFileStorage;
+            typedEntity.Data.SupportsImages = richTextDocument.SupportsImages;
 
             return typedEntity;
         }
@@ -852,6 +884,7 @@ namespace BusinessEntity.Core.Services
             return data switch
             {
                 Document document => _dataProviderConnector.UpdateDataAsync(entityId, document),
+                RichTextDocument richTextDocument => _dataProviderConnector.UpdateDataAsync(entityId, richTextDocument),
                 Folder folder => _dataProviderConnector.UpdateDataAsync(entityId, folder),
                 Space space => _dataProviderConnector.UpdateDataAsync(entityId, space),
                 SysParameters sysParameters => _dataProviderConnector.UpdateDataAsync(entityId, sysParameters),

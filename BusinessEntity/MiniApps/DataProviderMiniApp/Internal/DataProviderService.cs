@@ -1,5 +1,6 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
+using BusinessEntity.Core.RichText;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Conversion;
@@ -14,22 +15,28 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
     {
         private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
         private readonly IAsyncRepository<BusinessEntityDataDto> _businessEntityDataRepository;
+        private readonly IAsyncRepository<BusinessEntityDataChunkDto> _businessEntityDataChunkRepository;
         private readonly IAsyncRepository<BusinessEntityRelationDto> _businessEntityRelationRepository;
         private readonly EntityDataStorageCodec _entityDataStorageCodec;
+        private readonly RichTextDocumentFileStorageService _richTextDocumentFileStorageService;
         private readonly IWebLoggerService? _webLogger;
 
         // Получает typed-репозитории mini-app напрямую из DI-контейнера.
         public DataProviderService(
             IAsyncRepository<BusinessEntityDto> businessEntityRepository,
             IAsyncRepository<BusinessEntityDataDto> businessEntityDataRepository,
+            IAsyncRepository<BusinessEntityDataChunkDto> businessEntityDataChunkRepository,
             IAsyncRepository<BusinessEntityRelationDto> businessEntityRelationRepository,
             EntityDataStorageCodec entityDataStorageCodec,
+            RichTextDocumentFileStorageService richTextDocumentFileStorageService,
             IWebLoggerService? webLogger)
         {
             _businessEntityRepository = businessEntityRepository;
             _businessEntityDataRepository = businessEntityDataRepository;
+            _businessEntityDataChunkRepository = businessEntityDataChunkRepository;
             _businessEntityRelationRepository = businessEntityRelationRepository;
             _entityDataStorageCodec = entityDataStorageCodec;
+            _richTextDocumentFileStorageService = richTextDocumentFileStorageService;
             _webLogger = webLogger;
         }
 
@@ -140,6 +147,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         // Удаляет сущность, её payload и все связанные relation-записи.
         public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
         {
+            await DeleteRichTextStorageAsync(id, cancellationToken);
+
             var dataDto = await FindDataDtoAsync(id, cancellationToken);
             if (dataDto != null)
             {
@@ -158,9 +167,11 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         // Полностью очищает все DTO-таблицы mini-app для debug re-seed сценария.
         public async Task ClearAllAsync(CancellationToken cancellationToken = default)
         {
+            await _businessEntityDataChunkRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityDataRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityRelationRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityRepository.DeleteAllAsync(cancellationToken);
+            _richTextDocumentFileStorageService.DeleteAll();
         }
 
         // Читает все relation DTO и маппит их в runtime BusinessEntityRelation.
@@ -211,11 +222,134 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             return _businessEntityRelationRepository.DeleteAsync(id, cancellationToken);
         }
 
+        // Возвращает все технические rich-text чанки документа в порядке SortOrder.
+        public async Task<IReadOnlyList<RichTextDocumentChunk>> GetRichTextChunksAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        {
+            var chunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
+                d => d.BusinessEntityId == businessEntityId,
+                ct: cancellationToken);
+
+            return chunkDtos
+                .OrderBy(d => d.SortOrder)
+                .Select(MapChunkDtoToRuntime)
+                .ToList();
+        }
+
+        // Полностью заменяет chunk-body документа новым набором чанков.
+        public async Task ReplaceRichTextChunksAsync(Guid businessEntityId, IReadOnlyList<RichTextDocumentChunk> chunks, CancellationToken cancellationToken = default)
+        {
+            var existingChunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
+                d => d.BusinessEntityId == businessEntityId,
+                ct: cancellationToken);
+
+            foreach (var existingChunk in existingChunkDtos)
+            {
+                await _businessEntityDataChunkRepository.DeleteAsync(existingChunk.Id, cancellationToken);
+            }
+
+            if (chunks == null || chunks.Count == 0)
+            {
+                return;
+            }
+
+            var sortOrder = 0L;
+            foreach (var chunk in chunks.OrderBy(c => c.SortOrder))
+            {
+                var dto = MapChunkRuntimeToDto(businessEntityId, chunk, sortOrder++);
+                await _businessEntityDataChunkRepository.AddAsync(dto, cancellationToken);
+            }
+        }
+
+        // Сохраняет embedded-файлы rich-text документа в локальное техническое storage.
+        public Task SaveRichTextEmbeddedFilesAsync(
+            Guid businessEntityId,
+            IReadOnlyList<RichTextEmbeddedFile> files,
+            bool replaceExistingFiles,
+            CancellationToken cancellationToken = default)
+        {
+            return _richTextDocumentFileStorageService.SaveFilesAsync(
+                businessEntityId,
+                files,
+                replaceExistingFiles,
+                cancellationToken);
+        }
+
+        // Читает embedded-файл rich-text документа.
+        public Task<RichTextEmbeddedFileContent?> GetRichTextEmbeddedFileAsync(
+            Guid businessEntityId,
+            string imageId,
+            string variant,
+            CancellationToken cancellationToken = default)
+        {
+            return _richTextDocumentFileStorageService.GetFileAsync(
+                businessEntityId,
+                imageId,
+                variant,
+                cancellationToken);
+        }
+
+        // Полностью удаляет техническое rich-text storage документа.
+        public async Task DeleteRichTextStorageAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        {
+            var chunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
+                d => d.BusinessEntityId == businessEntityId,
+                ct: cancellationToken);
+
+            foreach (var chunkDto in chunkDtos)
+            {
+                await _businessEntityDataChunkRepository.DeleteAsync(chunkDto.Id, cancellationToken);
+            }
+
+            _richTextDocumentFileStorageService.DeleteDocumentFolder(businessEntityId);
+        }
+
         // Ищет первую data-запись, привязанную к конкретной сущности.
         private async Task<BusinessEntityDataDto?> FindDataDtoAsync(Guid businessEntityId, CancellationToken cancellationToken)
         {
             var dataItems = await _businessEntityDataRepository.GetAllAsync(d => d.BusinessEntityId == businessEntityId, 1, cancellationToken);
             return dataItems.FirstOrDefault();
+        }
+
+        // Преобразует DTO-строку чанка в runtime-объект rich-text чанка.
+        private static RichTextDocumentChunk MapChunkDtoToRuntime(BusinessEntityDataChunkDto dto)
+        {
+            var blocks = RichTextChunkStorageSerializer.DeserializeChunkData(dto.Data);
+            return new RichTextDocumentChunk
+            {
+                Id = dto.Id,
+                BusinessEntityId = dto.BusinessEntityId,
+                SortOrder = dto.SortOrder,
+                Blocks = blocks,
+                PlainText = dto.PlainText ?? string.Empty,
+                HtmlCache = dto.HtmlCache ?? string.Empty,
+                BlockCount = dto.BlockCount,
+                CharCount = dto.CharCount,
+                DataSizeBytes = dto.DataSizeBytes,
+                Version = dto.Version,
+                Checksum = dto.Checksum ?? string.Empty
+            };
+        }
+
+        // Преобразует runtime rich-text chunk в технический DTO storage-слоя.
+        private static BusinessEntityDataChunkDto MapChunkRuntimeToDto(Guid businessEntityId, RichTextDocumentChunk chunk, long sortOrder)
+        {
+            var dataJson = RichTextChunkStorageSerializer.SerializeChunkData(chunk.Blocks);
+            return new BusinessEntityDataChunkDto
+            {
+                Id = chunk.Id == Guid.Empty ? Guid.NewGuid() : chunk.Id,
+                CreatedDate = DateTime.UtcNow,
+                LastModifiedDate = DateTime.UtcNow,
+                BusinessEntityId = businessEntityId,
+                SortOrder = sortOrder,
+                Data = dataJson,
+                PlainText = RichTextChunkStorageSerializer.BuildPlainText(chunk.Blocks),
+                HtmlCache = RichTextChunkStorageSerializer.BuildHtmlCache(businessEntityId, chunk.Blocks),
+                BlockCount = chunk.Blocks?.Count ?? 0,
+                CharCount = RichTextChunkStorageSerializer.BuildCharCount(chunk.Blocks),
+                DataSizeBytes = DataPayloadEnvelopeSerializer.GetJsonLength(dataJson),
+                Version = chunk.Version <= 0 ? 1 : chunk.Version,
+                Checksum = RichTextChunkStorageSerializer.BuildChecksum(dataJson)
+            };
         }
 
         // Накладывает общие entity-метаданные поверх typed payload после чтения из storage.

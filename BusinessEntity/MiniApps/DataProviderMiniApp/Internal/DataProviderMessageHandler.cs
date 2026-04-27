@@ -40,6 +40,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             SubscribeBusinessEntityMessages();
             SubscribeRelationMessages();
             SubscribeBusinessEntityDataMessages();
+            SubscribeRichTextMessages();
 
             _logger.LogInformation("DataProviderMiniApp subscribed to storage messages.");
         }
@@ -71,6 +72,16 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         {
             _subscriptions.Add(_messageBus.Listen<GetBusinessEntityDataRequest>().Subscribe(request => _ = HandleGetDataAsync(request)));
             _subscriptions.Add(_messageBus.Listen<UpdateBusinessEntityDataRequest>().Subscribe(request => _ = HandleUpdateDataAsync(request)));
+        }
+
+        // Подписывает сообщения технического rich-text storage.
+        private void SubscribeRichTextMessages()
+        {
+            _subscriptions.Add(_messageBus.Listen<GetRichTextChunksRequest>().Subscribe(request => _ = HandleGetRichTextChunksAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<ReplaceRichTextChunksRequest>().Subscribe(request => _ = HandleReplaceRichTextChunksAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<SaveRichTextEmbeddedFilesRequest>().Subscribe(request => _ = HandleSaveRichTextEmbeddedFilesAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<GetRichTextEmbeddedFileRequest>().Subscribe(request => _ = HandleGetRichTextEmbeddedFileAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<DeleteRichTextStorageRequest>().Subscribe(request => _ = HandleDeleteRichTextStorageAsync(request)));
         }
 
         // Обрабатывает запрос на чтение всех бизнес-сущностей.
@@ -283,6 +294,87 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             {
                 _logger.LogError(ex, "Failed to delete relation {RecordId}.", request.Id);
                 _messageBus.SendMessage(new DeleteRelationResponse(request.RequestId, false, ex.Message));
+            }
+        }
+
+        // Обрабатывает запрос на чтение всех rich-text чанков документа.
+        private async Task HandleGetRichTextChunksAsync(GetRichTextChunksRequest request)
+        {
+            try
+            {
+                var records = await _dataProviderService.GetRichTextChunksAsync(request.BusinessEntityId);
+                _messageBus.SendMessage(new GetRichTextChunksResponse(request.RequestId, records));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load rich-text chunks for document {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new GetRichTextChunksResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentChunk>(), ex.Message));
+            }
+        }
+
+        // Обрабатывает команду на полную замену rich-text chunk-набора документа.
+        private async Task HandleReplaceRichTextChunksAsync(ReplaceRichTextChunksRequest request)
+        {
+            try
+            {
+                await _dataProviderService.ReplaceRichTextChunksAsync(request.BusinessEntityId, request.Records);
+                _messageBus.SendMessage(new ReplaceRichTextChunksResponse(request.RequestId, true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to replace rich-text chunks for document {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new ReplaceRichTextChunksResponse(request.RequestId, false, ex.Message));
+            }
+        }
+
+        // Обрабатывает команду на сохранение embedded-файлов rich-text документа.
+        private async Task HandleSaveRichTextEmbeddedFilesAsync(SaveRichTextEmbeddedFilesRequest request)
+        {
+            try
+            {
+                await _dataProviderService.SaveRichTextEmbeddedFilesAsync(
+                    request.BusinessEntityId,
+                    request.Files,
+                    request.ReplaceExistingFiles);
+                _messageBus.SendMessage(new SaveRichTextEmbeddedFilesResponse(request.RequestId, true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save rich-text embedded files for document {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new SaveRichTextEmbeddedFilesResponse(request.RequestId, false, ex.Message));
+            }
+        }
+
+        // Обрабатывает запрос на чтение embedded-файла rich-text документа.
+        private async Task HandleGetRichTextEmbeddedFileAsync(GetRichTextEmbeddedFileRequest request)
+        {
+            try
+            {
+                var record = await _dataProviderService.GetRichTextEmbeddedFileAsync(
+                    request.BusinessEntityId,
+                    request.ImageId,
+                    request.Variant);
+                _messageBus.SendMessage(new GetRichTextEmbeddedFileResponse(request.RequestId, record));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load rich-text embedded file for document {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new GetRichTextEmbeddedFileResponse(request.RequestId, null, ex.Message));
+            }
+        }
+
+        // Обрабатывает команду на полную очистку технического rich-text storage документа.
+        private async Task HandleDeleteRichTextStorageAsync(DeleteRichTextStorageRequest request)
+        {
+            try
+            {
+                await _dataProviderService.DeleteRichTextStorageAsync(request.BusinessEntityId);
+                _messageBus.SendMessage(new DeleteRichTextStorageResponse(request.RequestId, true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete rich-text storage for document {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new DeleteRichTextStorageResponse(request.RequestId, false, ex.Message));
             }
         }
 
