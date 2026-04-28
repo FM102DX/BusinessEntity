@@ -1,13 +1,48 @@
 @using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
 <div id="@ViewportElementId" class="rich-text-document-viewport">
     @HtmlMarkup
 </div>
 
 @code {
+    private bool _viewportRegistered;
+
     [Parameter] public string ViewportElementId { get; set; } = string.Empty;
     [Parameter] public string HtmlContent { get; set; } = string.Empty;
 
     // Рендерит уже подготовленный HTML документа как markup внутри scrollable viewport.
     private MarkupString HtmlMarkup => new(HtmlContent ?? string.Empty);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (string.IsNullOrWhiteSpace(ViewportElementId))
+        {
+            return;
+        }
+
+        // Высота viewport должна зависеть от его реального положения на странице.
+        // Поэтому при каждом рендере синхронизируем max-height с нижней границей окна.
+        await JS.InvokeVoidAsync("richTextViewport.registerViewport", ViewportElementId);
+        _viewportRegistered = true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!_viewportRegistered || string.IsNullOrWhiteSpace(ViewportElementId))
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("richTextViewport.unregisterViewport", ViewportElementId);
+        }
+        catch (JSDisconnectedException)
+        {
+            // Во время teardown Blazor Server JS runtime может уже быть отключен.
+        }
+    }
 }

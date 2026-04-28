@@ -13,14 +13,7 @@
 
 .rich-text-document-layout__content {
     min-width: 0;
-}
-
-.rich-text-document-viewport {
-    max-height: calc(100vh - 220px);
-    overflow: auto;
-    scroll-behavior: smooth;
-    background: #ffffff;
-    padding: 0.25rem 0 0.5rem 0;
+    min-height: 0;
 }
 
 ::deep .rich-text-outline {
@@ -108,12 +101,6 @@
     margin-top: 0.1rem;
 }
 
-::deep .rich-text-document-viewport h1,
-::deep .rich-text-document-viewport h2,
-::deep .rich-text-document-viewport h3 {
-    scroll-margin-top: 12px;
-}
-
 @media (max-width: 1100px) {
     .rich-text-document-layout {
         grid-template-columns: 1fr;
@@ -126,9 +113,5 @@
     ::deep .rich-text-outline__tree {
         border-right: none;
         padding-right: 0;
-    }
-
-    .rich-text-document-viewport {
-        max-height: none;
     }
 }
