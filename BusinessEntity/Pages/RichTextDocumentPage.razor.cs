@@ -92,14 +92,14 @@ namespace BusinessEntity.Pages
                 manifest.EmbeddedFileStorage = importResult.Manifest.EmbeddedFileStorage;
                 manifest.SupportsImages = importResult.Manifest.SupportsImages;
 
-                await RichTextDocumentHelper.SaveRichTextDocumentAsync(
+                // Импорт больше не заменяет документ целиком: новый контент добавляется в конец текущего содержимого.
+                await RichTextDocumentHelper.AppendImportedContentAsync(
                     Entity,
                     manifest,
                     importResult.Chunks,
-                    importResult.Files,
-                    replaceExistingFiles: true);
+                    importResult.Files);
 
-                StatusMessage = $"Импорт файла '{file.Name}' завершен.";
+                StatusMessage = $"Импорт файла '{file.Name}' добавлен в конец документа.";
                 await LoadAsync();
             }
             catch (Exception ex)

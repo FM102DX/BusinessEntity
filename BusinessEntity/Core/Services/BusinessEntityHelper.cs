@@ -809,13 +809,15 @@ namespace BusinessEntity.Core.Services
                 {
                     Name = string.IsNullOrWhiteSpace(sysParameters.Name) ? entityData.Name : sysParameters.Name,
                     Tag = sysParameters.Tag,
-                    CompanyName = sysParameters.CompanyName ?? string.Empty
+                    CompanyName = sysParameters.CompanyName ?? string.Empty,
+                    RichTextChunkCharLimit = sysParameters.RichTextChunkCharLimit
                 },
                 entityData.Name);
 
             typedEntity = CopyEntityState(entityData, typedEntity);
             typedEntity.Data.Tag = sysParameters.Tag;
             typedEntity.Data.CompanyName = sysParameters.CompanyName ?? string.Empty;
+            typedEntity.Data.RichTextChunkCharLimit = sysParameters.RichTextChunkCharLimit;
 
             return typedEntity;
         }

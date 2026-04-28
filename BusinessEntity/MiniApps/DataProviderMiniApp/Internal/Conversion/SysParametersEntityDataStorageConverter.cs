@@ -16,6 +16,7 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
         return SerializeBody(new SysParametersPayloadBody
         {
             CompanyName = data.CompanyName ?? string.Empty,
+            RichTextChunkCharLimit = data.RichTextChunkCharLimit,
             Tag = data.Tag
         });
     }
@@ -27,6 +28,7 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
         return new SysParameters
         {
             CompanyName = body.CompanyName ?? string.Empty,
+            RichTextChunkCharLimit = body.RichTextChunkCharLimit <= 0 ? 12000 : body.RichTextChunkCharLimit,
             Tag = body.Tag ?? string.Empty
         };
     }
@@ -39,5 +41,8 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
 
         [JsonPropertyName("tag")]
         public string? Tag { get; set; }
+
+        [JsonPropertyName("richTextChunkCharLimit")]
+        public int RichTextChunkCharLimit { get; set; } = 12000;
     }
 }

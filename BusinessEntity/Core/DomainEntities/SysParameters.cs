@@ -11,5 +11,7 @@ namespace BusinessEntity.Core.DomainEntities
         public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.SysParametersTp;
         // Название компании для отображения в системе
         public string CompanyName { get; set; } = string.Empty;
+        // Глобальный целевой размер rich-text чанка в символах.
+        public int RichTextChunkCharLimit { get; set; } = 12000;
     }
 }

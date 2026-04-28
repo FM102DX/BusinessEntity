@@ -24,6 +24,14 @@
                            @bind:event="oninput"
                            placeholder="Введите название компании" />
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label">Размер rich-text чанка, символов</label>
+                    <input class="form-control"
+                           type="number"
+                           min="1000"
+                           step="500"
+                           @bind="RichTextChunkCharLimit" />
+                </div>
                 <div class="col-md-auto">
                     <button class="btn btn-primary"
                             @onclick="SaveSysParametersAsync"
@@ -51,6 +59,7 @@
     private bool IsLoading { get; set; }
     private bool IsBusy { get; set; }
     private string CompanyName { get; set; } = string.Empty;
+    private int RichTextChunkCharLimit { get; set; } = 12000;
     private string? StatusMessage { get; set; }
     private string? ErrorMessage { get; set; }
 
@@ -70,6 +79,9 @@
                 "SysParameters");
 
             CompanyName = SysParametersEntity.Data.CompanyName ?? string.Empty;
+            RichTextChunkCharLimit = SysParametersEntity.Data.RichTextChunkCharLimit <= 0
+                ? 12000
+                : SysParametersEntity.Data.RichTextChunkCharLimit;
         }
         catch (Exception ex)
         {
@@ -98,6 +110,9 @@
             SysParametersEntity.Data.Name = "SysParameters";
             SysParametersEntity.Data.Tag = BusinessEntityTypeEnum.SysParametersTp.ToString();
             SysParametersEntity.Data.CompanyName = CompanyName?.Trim() ?? string.Empty;
+            SysParametersEntity.Data.RichTextChunkCharLimit = RichTextChunkCharLimit < 1000
+                ? 1000
+                : RichTextChunkCharLimit;
 
             await BusinessEntityHelper.SaveEntityAsync(SysParametersEntity);
             StatusMessage = "Параметры системы сохранены.";

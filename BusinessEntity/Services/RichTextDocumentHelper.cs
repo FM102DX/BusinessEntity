@@ -163,6 +163,64 @@ namespace BusinessEntity.Services
         }
 
         /// <summary>
+        /// Добавляет новый импортированный контент в конец существующего rich-text документа.
+        /// </summary>
+        public async Task AppendImportedContentAsync(
+            BusinessEntity.Core.Classes.BusinessEntity entity,
+            RichTextDocument manifest,
+            IReadOnlyList<RichTextDocumentChunk> appendedChunks,
+            IReadOnlyList<RichTextEmbeddedFile>? appendedFiles,
+            CancellationToken ct = default)
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            if (manifest == null) throw new ArgumentNullException(nameof(manifest));
+
+            // Сначала читаем текущий снимок, чтобы append строился поверх реального сохраненного состояния.
+            var snapshot = await GetRichTextDocumentSnapshotAsync(entity.Id, ct);
+            var existingChunks = snapshot?.Chunks ?? Array.Empty<RichTextDocumentChunk>();
+
+            // Для нового пустого документа стартовый технический chunk убираем, чтобы импорт не создавал пустую строку сверху.
+            var normalizedExistingChunks = IsOnlyInitialEmptyChunk(existingChunks)
+                ? Array.Empty<RichTextDocumentChunk>()
+                : existingChunks;
+
+            var mergedChunks = new List<RichTextDocumentChunk>();
+            var nextSortOrder = 0L;
+
+            // Сохраняем существующие chunks в исходном порядке, но нормализуем SortOrder перед полной replace-операцией.
+            foreach (var existingChunk in normalizedExistingChunks.OrderBy(x => x.SortOrder))
+            {
+                mergedChunks.Add(CloneChunkForSave(existingChunk, entity.Id, nextSortOrder++));
+            }
+
+            // Новые chunks добавляем строго снизу, после последнего существующего.
+            foreach (var appendedChunk in appendedChunks ?? Array.Empty<RichTextDocumentChunk>())
+            {
+                mergedChunks.Add(CloneChunkForSave(appendedChunk, entity.Id, nextSortOrder++));
+            }
+
+            // Если после merge ничего не осталось, сохраняем один пустой технический chunk, как и в create-path.
+            if (mergedChunks.Count == 0)
+            {
+                mergedChunks.Add(new RichTextDocumentChunk
+                {
+                    BusinessEntityId = entity.Id,
+                    SortOrder = 0,
+                    Blocks = new List<RichTextBlock>()
+                });
+            }
+
+            // Embedded files не заменяем, а дозаписываем, чтобы прежние изображения документа сохранялись.
+            await SaveRichTextDocumentAsync(
+                entity,
+                manifest,
+                mergedChunks,
+                appendedFiles,
+                replaceExistingFiles: false,
+                ct);
+        }
+
+        /// <summary>
         /// Генерирует следующее имя rich-text документа среди дочерних элементов родителя.
         /// </summary>
         private async Task<string> GetNewRichTextDocumentNameAsync(
@@ -202,6 +260,51 @@ namespace BusinessEntity.Services
 
             entity.BusinessEntityType = BusinessEntityTypeEnum.Document;
             return entity;
+        }
+
+        /// <summary>
+        /// Клонирует chunk в новый runtime-экземпляр перед replace-save, чтобы не тащить старые служебные ссылки.
+        /// </summary>
+        private static RichTextDocumentChunk CloneChunkForSave(RichTextDocumentChunk source, Guid businessEntityId, long sortOrder)
+        {
+            return new RichTextDocumentChunk
+            {
+                Id = source.Id == Guid.Empty ? Guid.NewGuid() : source.Id,
+                BusinessEntityId = businessEntityId,
+                SortOrder = sortOrder,
+                Blocks = source.Blocks?.Select(CloneBlock).ToList() ?? new List<RichTextBlock>(),
+                Version = source.Version <= 0 ? 1 : source.Version
+            };
+        }
+
+        /// <summary>
+        /// Клонирует один rich-text блок, чтобы merged save работал с независимым набором данных.
+        /// </summary>
+        private static RichTextBlock CloneBlock(RichTextBlock source)
+        {
+            return new RichTextBlock
+            {
+                Kind = source.Kind,
+                Level = source.Level,
+                Html = source.Html,
+                ImageId = source.ImageId,
+                DisplayVariant = source.DisplayVariant,
+                AltText = source.AltText
+            };
+        }
+
+        /// <summary>
+        /// Проверяет, состоит ли документ только из одного пустого стартового chunk-а.
+        /// </summary>
+        private static bool IsOnlyInitialEmptyChunk(IReadOnlyList<RichTextDocumentChunk> chunks)
+        {
+            if (chunks == null || chunks.Count != 1)
+            {
+                return false;
+            }
+
+            var chunk = chunks[0];
+            return chunk.Blocks == null || chunk.Blocks.Count == 0;
         }
     }
 }

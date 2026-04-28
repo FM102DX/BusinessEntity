@@ -1,0 +1,19 @@
+@using BusinessEntity.Components
+
+@if (Nodes != null && Nodes.Count > 0)
+{
+    <div class="rich-text-outline">
+        <div class="rich-text-outline__title">Содержание</div>
+        <div class="rich-text-outline__tree">
+            @foreach (var node in Nodes)
+            {
+                <RichTextDocumentOutlineItem Node="node" OnHeadingSelected="OnHeadingSelected" />
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode> Nodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
+    [Parameter] public EventCallback<string> OnHeadingSelected { get; set; }
+}

@@ -1,0 +1,13 @@
+@using Microsoft.AspNetCore.Components
+
+<div id="@ViewportElementId" class="rich-text-document-viewport">
+    @HtmlMarkup
+</div>
+
+@code {
+    [Parameter] public string ViewportElementId { get; set; } = string.Empty;
+    [Parameter] public string HtmlContent { get; set; } = string.Empty;
+
+    // Рендерит уже подготовленный HTML документа как markup внутри scrollable viewport.
+    private MarkupString HtmlMarkup => new(HtmlContent ?? string.Empty);
+}

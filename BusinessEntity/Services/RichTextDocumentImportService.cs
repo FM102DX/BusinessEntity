@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text;
+using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.Services;
 using HtmlAgilityPack;
 using Markdig;
 
@@ -11,12 +13,21 @@ namespace BusinessEntity.Services
     // На этом этапе сервис только нормализует содержимое; сохранение выполняет BusinessEntityHelper.
     public class RichTextDocumentImportService
     {
+        // Текущий hard-limit по числу блоков в чанке пока оставляем константой MVP.
+        private const int MaxBlocksPerChunk = 24;
+        // Дефолтный лимит символов используется, если системные параметры еще не заполнены.
+        private const int DefaultRichTextChunkCharLimit = 12000;
+
         private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly BusinessEntityHelper _businessEntityHelper;
 
-        public RichTextDocumentImportService(IHttpClientFactory httpClientFactory)
+        public RichTextDocumentImportService(
+            IHttpClientFactory httpClientFactory,
+            BusinessEntityHelper businessEntityHelper)
         {
             _httpClientFactory = httpClientFactory;
+            _businessEntityHelper = businessEntityHelper;
         }
 
         // Читает загруженный файл и строит manifest + chunks + embedded-файлы.
@@ -58,12 +69,14 @@ namespace BusinessEntity.Services
                     throw new InvalidOperationException("Поддерживаются только файлы .txt, .md, .markdown, .html и .htm.");
             }
 
-            var chunks = BuildChunks(blocks);
+            var richTextChunkCharLimit = await ResolveRichTextChunkCharLimitAsync(cancellationToken);
+            var chunks = BuildChunks(blocks, richTextChunkCharLimit);
             return new RichTextDocumentImportResult
             {
                 Manifest = new RichTextDocument
                 {
-                    Tag = "RichTextDocument"
+                    Tag = "RichTextDocument",
+                    ChunkPolicy = $"RichTextMvpV1(chars={richTextChunkCharLimit})"
                 },
                 Chunks = chunks,
                 Files = files
@@ -328,11 +341,10 @@ namespace BusinessEntity.Services
         }
 
         // Режет блоки на chunks с умеренным размером для MVP.
-        private static IReadOnlyList<RichTextDocumentChunk> BuildChunks(IReadOnlyList<RichTextBlock> blocks)
+        private static IReadOnlyList<RichTextDocumentChunk> BuildChunks(
+            IReadOnlyList<RichTextBlock> blocks,
+            int maxCharsPerChunk)
         {
-            const int maxBlocksPerChunk = 24;
-            const int maxCharsPerChunk = 12000;
-
             if (blocks == null || blocks.Count == 0)
             {
                 return new[]
@@ -353,7 +365,7 @@ namespace BusinessEntity.Services
             foreach (var block in blocks)
             {
                 var blockCharCount = (block.Html ?? string.Empty).Length + (block.AltText ?? string.Empty).Length;
-                if (currentBlocks.Count >= maxBlocksPerChunk || (currentChars + blockCharCount) > maxCharsPerChunk)
+                if (currentBlocks.Count >= MaxBlocksPerChunk || (currentChars + blockCharCount) > maxCharsPerChunk)
                 {
                     result.Add(new RichTextDocumentChunk
                     {
@@ -378,6 +390,20 @@ namespace BusinessEntity.Services
             }
 
             return result;
+        }
+
+        // Читает глобальную настройку размера rich-text чанка из системных параметров.
+        private async Task<int> ResolveRichTextChunkCharLimitAsync(CancellationToken cancellationToken)
+        {
+            var sysParametersEntity = await _businessEntityHelper.GetOrCreateSingletonEntityAsync<SysParameters>(
+                BusinessEntityTypeEnum.SysParametersTp,
+                "SysParameters",
+                cancellationToken);
+
+            var configuredLimit = sysParametersEntity.Data.RichTextChunkCharLimit;
+            return configuredLimit < 1000
+                ? DefaultRichTextChunkCharLimit
+                : configuredLimit;
         }
 
         // Декодирует текстовый файл как UTF-8 с fallback без BOM.
