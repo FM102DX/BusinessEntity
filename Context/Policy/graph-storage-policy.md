@@ -120,17 +120,26 @@
 
 ## 4. DTO-слой хранения
 
-В storage-слое используются ровно три DTO:
+В storage-слое используются три базовых DTO графа:
 
 1. `BusinessEntityDto`
 2. `BusinessEntityDataDto`
 3. `BusinessEntityRelationDto`
+
+Кроме них в storage-слое есть технические DTO, которые не являются самостоятельными runtime-сущностями графа:
+
+1. `BusinessEntityDataChunkDto`
+2. `BusinessEntityPropertyDto`
+3. `BusinessEntityDataPropertyDto`
+4. `BusinessEntityDataChunkPropertyDto`
 
 Соответствие runtime -> storage:
 
 - `BusinessEntity` <-> `BusinessEntityDto`
 - `BusinessEntityData` <-> `BusinessEntityDataDto`
 - `BusinessEntityRelation` <-> `BusinessEntityRelationDto`
+
+Технические DTO не имеют прямого runtime-аналога уровня бизнес-объекта. Они обслуживают хранение частей данных, индексов, кешей и вспомогательных свойств.
 
 ### `BusinessEntityDto`
 
@@ -177,6 +186,64 @@
 - `RelationType`
 - `RelationParams`
 
+### `BusinessEntityDataChunkDto`
+
+Технический DTO одного чанка данных, сейчас используется для chunked rich-text storage.
+
+Он не является четвертой базовой runtime-сущностью графа и не должен трактоваться как самостоятельный бизнес-объект.
+
+Он содержит:
+
+- `Id`
+- `CreatedDate`
+- `LastModifiedDate`
+- `BusinessEntityId`
+- `SortOrder`
+- `Data : string`
+- `PlainText`
+- `HtmlCache`
+- `BlockCount`
+- `CharCount`
+- `DataSizeBytes`
+- `Version`
+- `Checksum`
+
+### `IPropertyDto`
+
+`IPropertyDto` — общий storage-контракт для технических property-строк.
+
+Property DTO нужны для хранения вспомогательных частей данных и признаков объектов storage-слоя, которые не являются отдельными бизнес-объектами графа.
+
+`IPropertyDto` содержит базовые поля `IBaseEntity` и дополнительно:
+
+- `ParentEntityId : Guid`
+- `PropertyType : int`
+- `Data : string`
+- `Metadata : string`
+
+### Property DTO
+
+В storage-слое есть три конкретных property DTO:
+
+- `BusinessEntityPropertyDto`
+- `BusinessEntityDataPropertyDto`
+- `BusinessEntityDataChunkPropertyDto`
+
+Правила привязки:
+
+- `BusinessEntityPropertyDto.ParentEntityId` ссылается на `BusinessEntityDto.Id`
+- `BusinessEntityDataPropertyDto.ParentEntityId` ссылается на `BusinessEntityDataDto.Id`
+- `BusinessEntityDataChunkPropertyDto.ParentEntityId` ссылается на `BusinessEntityDataChunkDto.Id`
+
+Жизненный цикл property-строк подчинен родительской storage-строке:
+
+- при удалении `BusinessEntityDto` должны удаляться его `BusinessEntityPropertyDto`
+- при удалении `BusinessEntityDataDto` должны удаляться его `BusinessEntityDataPropertyDto`
+- при удалении `BusinessEntityDataChunkDto` должны удаляться его `BusinessEntityDataChunkPropertyDto`
+- при полной замене chunk-набора старые `BusinessEntityDataChunkPropertyDto` должны удаляться вместе со старыми chunk DTO
+
+Property DTO не должны использоваться для хранения новых бизнес-сущностей, связей графа или основного payload. Для бизнес-сущностей используется `BusinessEntityDto`, для связей — `BusinessEntityRelationDto`, для payload — `BusinessEntityDataDto` и технические chunk DTO.
+
 ---
 
 ## 5. Физическое хранение в Postgres
@@ -197,17 +264,28 @@
 
 ### Таблицы основной базы `business_entity`
 
-В основной базе используются три таблицы:
+В основной базе используются базовые таблицы графа:
 
 1. `BusinessEntities`
 2. `BusinessEntityRelations`
 3. `BusinessEntityDataItems`
+
+Также используются технические таблицы storage-слоя:
+
+1. `BusinessEntityDataChunks`
+2. `BusinessEntityProperties`
+3. `BusinessEntityDataProperties`
+4. `BusinessEntityDataChunkProperties`
 
 Соответствие:
 
 - `BusinessEntities` <- `BusinessEntityDto`
 - `BusinessEntityRelations` <- `BusinessEntityRelationDto`
 - `BusinessEntityDataItems` <- `BusinessEntityDataDto`
+- `BusinessEntityDataChunks` <- `BusinessEntityDataChunkDto`
+- `BusinessEntityProperties` <- `BusinessEntityPropertyDto`
+- `BusinessEntityDataProperties` <- `BusinessEntityDataPropertyDto`
+- `BusinessEntityDataChunkProperties` <- `BusinessEntityDataChunkPropertyDto`
 
 ### Таблицы базы логгера `web_logger`
 
@@ -446,6 +524,10 @@ Payload сохраняется через `DataProviderMiniApp`.
 
 - `BusinessEntityDtoEfPostgresRepository`
 - `BusinessEntityDataDtoEfPostgresRepository`
+- `BusinessEntityDataChunkDtoEfPostgresRepository`
+- `BusinessEntityPropertyDtoEfPostgresRepository`
+- `BusinessEntityDataPropertyDtoEfPostgresRepository`
+- `BusinessEntityDataChunkPropertyDtoEfPostgresRepository`
 - `BusinessEntityRelationDtoEfPostgresRepository`
 
 Для CRUD-операций используется свежий `KmsBusinessEntityDbContext` на каждую операцию.
@@ -464,13 +546,32 @@ Payload сохраняется через `DataProviderMiniApp`.
 - `BusinessEntities`
 - `BusinessEntityRelations`
 - `BusinessEntityDataItems`
+- `BusinessEntityDataChunks`
+- `BusinessEntityProperties`
+- `BusinessEntityDataProperties`
+- `BusinessEntityDataChunkProperties`
 
-Для `BusinessEntityDataItems.Data` используется текстовое поле `text`.
+Для строковых payload/property-полей используется тип `text`:
+
+- `BusinessEntityDataItems.Data`
+- `BusinessEntityDataChunks.Data`
+- `BusinessEntityDataChunks.PlainText`
+- `BusinessEntityDataChunks.HtmlCache`
+- `BusinessEntityDataChunks.Checksum`
+- `BusinessEntityProperties.Data`
+- `BusinessEntityProperties.Metadata`
+- `BusinessEntityDataProperties.Data`
+- `BusinessEntityDataProperties.Metadata`
+- `BusinessEntityDataChunkProperties.Data`
+- `BusinessEntityDataChunkProperties.Metadata`
 
 Причина:
 
 - payload хранится как JSON string
+- property data и metadata хранятся как string-представление технических данных
 - схема должна соответствовать string-based envelope storage
+
+Для property-таблиц обязательны индексы по `ParentEntityId` и по паре `ParentEntityId + PropertyType`, чтобы быстро получать свойства конкретной storage-строки и свойства конкретного технического типа.
 
 ---
 
@@ -525,6 +626,10 @@ Payload сохраняется через `DataProviderMiniApp`.
 - `BusinessEntityDto`
 - `BusinessEntityRelationDto`
 - `BusinessEntityDataDto`
+- опционально `BusinessEntityPropertyDto`
+- опционально `BusinessEntityDataPropertyDto`
+- опционально `BusinessEntityDataChunkDto`
+- опционально `BusinessEntityDataChunkPropertyDto`
 
 ---
 
@@ -538,6 +643,9 @@ Payload сохраняется через `DataProviderMiniApp`.
 - смешивать таблицы логгера и бизнес-объектов в одной базе данных
 - использовать `BusinessEntityData` как независимую identity
 - хранить связи внутри payload вместо `BusinessEntityRelation`
+- использовать property DTO как самостоятельные бизнес-объекты графа
+- хранить graph-связи в property DTO вместо `BusinessEntityRelationDto`
+- хранить основной payload объекта в property DTO вместо `BusinessEntityDataDto`
 
 Допустимо:
 
@@ -545,6 +653,8 @@ Payload сохраняется через `DataProviderMiniApp`.
 - хранить payload как minified JSON string
 - расширять payload новыми typed-наследниками `BusinessEntityData`
 - повышать `schemaVersion` и вводить адаптеры старых версий
+- хранить технические свойства storage-строк в property DTO
+- хранить крупный или структурированный технический data-body в `BusinessEntityDataChunkDto`
 
 ---
 
@@ -553,10 +663,11 @@ Payload сохраняется через `DataProviderMiniApp`.
 На текущий момент система хранения устроена так:
 
 - runtime-модель разделена на `BusinessEntity`, `BusinessEntityData`, `BusinessEntityRelation`
-- storage-модель разделена на `BusinessEntityDto`, `BusinessEntityDataDto`, `BusinessEntityRelationDto`
+- storage-модель разделена на базовые `BusinessEntityDto`, `BusinessEntityDataDto`, `BusinessEntityRelationDto` и технические DTO для chunk/property-хранения
 - основное приложение хранит данные в базе `business_entity`
 - веб-логгер хранит данные в базе `web_logger`
 - payload `BusinessEntityData` хранится как minified JSON string
+- технические свойства storage-строк хранятся в `BusinessEntityPropertyDto`, `BusinessEntityDataPropertyDto`, `BusinessEntityDataChunkPropertyDto`
 - канонический формат payload — versioned JSON envelope
 - дерево и граф документов строятся через relation типа `Contains`
 - запись и чтение идут через `DataProviderMiniApp`

@@ -263,10 +263,49 @@ namespace BusinessEntity
                     CONSTRAINT ""PK_BusinessEntityDataChunks"" PRIMARY KEY (""Id"")
                 );
 
+                CREATE TABLE IF NOT EXISTS ""BusinessEntityProperties"" (
+                    ""Id"" uuid NOT NULL,
+                    ""CreatedDate"" timestamp with time zone NOT NULL,
+                    ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""ParentEntityId"" uuid NOT NULL,
+                    ""PropertyType"" integer NOT NULL,
+                    ""Data"" text NOT NULL,
+                    ""Metadata"" text NOT NULL,
+                    CONSTRAINT ""PK_BusinessEntityProperties"" PRIMARY KEY (""Id"")
+                );
+
+                CREATE TABLE IF NOT EXISTS ""BusinessEntityDataProperties"" (
+                    ""Id"" uuid NOT NULL,
+                    ""CreatedDate"" timestamp with time zone NOT NULL,
+                    ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""ParentEntityId"" uuid NOT NULL,
+                    ""PropertyType"" integer NOT NULL,
+                    ""Data"" text NOT NULL,
+                    ""Metadata"" text NOT NULL,
+                    CONSTRAINT ""PK_BusinessEntityDataProperties"" PRIMARY KEY (""Id"")
+                );
+
+                CREATE TABLE IF NOT EXISTS ""BusinessEntityDataChunkProperties"" (
+                    ""Id"" uuid NOT NULL,
+                    ""CreatedDate"" timestamp with time zone NOT NULL,
+                    ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""ParentEntityId"" uuid NOT NULL,
+                    ""PropertyType"" integer NOT NULL,
+                    ""Data"" text NOT NULL,
+                    ""Metadata"" text NOT NULL,
+                    CONSTRAINT ""PK_BusinessEntityDataChunkProperties"" PRIMARY KEY (""Id"")
+                );
+
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectAId"" ON ""BusinessEntityRelations"" (""ObjectAId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectBId"" ON ""BusinessEntityRelations"" (""ObjectBId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataItems_BusinessEntityId"" ON ""BusinessEntityDataItems"" (""BusinessEntityId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunks_BusinessEntityId_SortOrder"" ON ""BusinessEntityDataChunks"" (""BusinessEntityId"", ""SortOrder"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityProperties_ParentEntityId"" ON ""BusinessEntityProperties"" (""ParentEntityId"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityProperties_ParentEntityId_PropertyType"" ON ""BusinessEntityProperties"" (""ParentEntityId"", ""PropertyType"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataProperties_ParentEntityId"" ON ""BusinessEntityDataProperties"" (""ParentEntityId"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataProperties_ParentEntityId_PropertyType"" ON ""BusinessEntityDataProperties"" (""ParentEntityId"", ""PropertyType"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunkProperties_ParentEntityId"" ON ""BusinessEntityDataChunkProperties"" (""ParentEntityId"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunkProperties_ParentEntityId_PropertyType"" ON ""BusinessEntityDataChunkProperties"" (""ParentEntityId"", ""PropertyType"");
                 ");
         }
 	}

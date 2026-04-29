@@ -17,6 +17,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         private readonly IAsyncRepository<BusinessEntityDataDto> _businessEntityDataRepository;
         private readonly IAsyncRepository<BusinessEntityDataChunkDto> _businessEntityDataChunkRepository;
         private readonly IAsyncRepository<BusinessEntityRelationDto> _businessEntityRelationRepository;
+        private readonly IAsyncRepository<BusinessEntityPropertyDto> _businessEntityPropertyRepository;
+        private readonly IAsyncRepository<BusinessEntityDataPropertyDto> _businessEntityDataPropertyRepository;
+        private readonly IAsyncRepository<BusinessEntityDataChunkPropertyDto> _businessEntityDataChunkPropertyRepository;
         private readonly EntityDataStorageCodec _entityDataStorageCodec;
         private readonly RichTextDocumentFileStorageService _richTextDocumentFileStorageService;
         private readonly IWebLoggerService? _webLogger;
@@ -27,6 +30,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             IAsyncRepository<BusinessEntityDataDto> businessEntityDataRepository,
             IAsyncRepository<BusinessEntityDataChunkDto> businessEntityDataChunkRepository,
             IAsyncRepository<BusinessEntityRelationDto> businessEntityRelationRepository,
+            IAsyncRepository<BusinessEntityPropertyDto> businessEntityPropertyRepository,
+            IAsyncRepository<BusinessEntityDataPropertyDto> businessEntityDataPropertyRepository,
+            IAsyncRepository<BusinessEntityDataChunkPropertyDto> businessEntityDataChunkPropertyRepository,
             EntityDataStorageCodec entityDataStorageCodec,
             RichTextDocumentFileStorageService richTextDocumentFileStorageService,
             IWebLoggerService? webLogger)
@@ -35,6 +41,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             _businessEntityDataRepository = businessEntityDataRepository;
             _businessEntityDataChunkRepository = businessEntityDataChunkRepository;
             _businessEntityRelationRepository = businessEntityRelationRepository;
+            _businessEntityPropertyRepository = businessEntityPropertyRepository;
+            _businessEntityDataPropertyRepository = businessEntityDataPropertyRepository;
+            _businessEntityDataChunkPropertyRepository = businessEntityDataChunkPropertyRepository;
             _entityDataStorageCodec = entityDataStorageCodec;
             _richTextDocumentFileStorageService = richTextDocumentFileStorageService;
             _webLogger = webLogger;
@@ -152,6 +161,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             var dataDto = await FindDataDtoAsync(id, cancellationToken);
             if (dataDto != null)
             {
+                await DeletePropertiesAsync(_businessEntityDataPropertyRepository, dataDto.Id, cancellationToken);
                 await _businessEntityDataRepository.DeleteAsync(dataDto.Id, cancellationToken);
             }
 
@@ -161,12 +171,16 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 await _businessEntityRelationRepository.DeleteAsync(relation.Id, cancellationToken);
             }
 
+            await DeletePropertiesAsync(_businessEntityPropertyRepository, id, cancellationToken);
             await _businessEntityRepository.DeleteAsync(id, cancellationToken);
         }
 
         // Полностью очищает все DTO-таблицы mini-app для debug re-seed сценария.
         public async Task ClearAllAsync(CancellationToken cancellationToken = default)
         {
+            await _businessEntityDataChunkPropertyRepository.DeleteAllAsync(cancellationToken);
+            await _businessEntityDataPropertyRepository.DeleteAllAsync(cancellationToken);
+            await _businessEntityPropertyRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityDataChunkRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityDataRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityRelationRepository.DeleteAllAsync(cancellationToken);
@@ -244,6 +258,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 
             foreach (var existingChunk in existingChunkDtos)
             {
+                await DeletePropertiesAsync(_businessEntityDataChunkPropertyRepository, existingChunk.Id, cancellationToken);
                 await _businessEntityDataChunkRepository.DeleteAsync(existingChunk.Id, cancellationToken);
             }
 
@@ -297,6 +312,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 
             foreach (var chunkDto in chunkDtos)
             {
+                await DeletePropertiesAsync(_businessEntityDataChunkPropertyRepository, chunkDto.Id, cancellationToken);
                 await _businessEntityDataChunkRepository.DeleteAsync(chunkDto.Id, cancellationToken);
             }
 
@@ -308,6 +324,20 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         {
             var dataItems = await _businessEntityDataRepository.GetAllAsync(d => d.BusinessEntityId == businessEntityId, 1, cancellationToken);
             return dataItems.FirstOrDefault();
+        }
+
+        // Удаляет property-строки, привязанные к конкретной родительской DTO-записи.
+        private static async Task DeletePropertiesAsync<TProperty>(
+            IAsyncRepository<TProperty> repository,
+            Guid parentEntityId,
+            CancellationToken cancellationToken)
+            where TProperty : class, IPropertyDto
+        {
+            var properties = await repository.GetAllAsync(p => p.ParentEntityId == parentEntityId, ct: cancellationToken);
+            foreach (var property in properties)
+            {
+                await repository.DeleteAsync(property.Id, cancellationToken);
+            }
         }
 
         // Преобразует DTO-строку чанка в runtime-объект rich-text чанка.
