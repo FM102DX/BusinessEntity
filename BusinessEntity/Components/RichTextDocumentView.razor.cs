@@ -1,5 +1,3 @@
-using System.Net;
-using HtmlAgilityPack;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
@@ -8,126 +6,104 @@ namespace BusinessEntity.Components
 {
     public partial class RichTextDocumentView : ComponentBase
     {
-        // Стабильный DOM-id scrollable viewport rich-text документа.
+        // Stable DOM id of the scrollable rich-text viewport.
         private readonly string ViewportElementId = $"rich-text-viewport-{Guid.NewGuid():N}";
 
         [Parameter] public string EntityName { get; set; } = string.Empty;
         [Parameter] public string HtmlContent { get; set; } = string.Empty;
         [Parameter] public bool IsBusy { get; set; }
+        [Parameter] public bool IsRebuildingTableOfContents { get; set; }
         [Parameter] public string? StatusMessage { get; set; }
+        [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
         [Parameter] public EventCallback<InputFileChangeEventArgs> OnImportSelected { get; set; }
+        [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
 
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
 
-        // Подготовленный HTML документа с id на H1-H3, чтобы по ним можно было прокручивать viewport.
+        // HTML document assembled from persisted chunk HtmlCache values.
         private string RenderedHtmlContent { get; set; } = string.Empty;
-        // Иерархическое оглавление документа.
-        private IReadOnlyList<RichTextDocumentOutlineNode> OutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
+
+        // Hierarchical table of contents loaded from persisted chunk properties.
+        private IReadOnlyList<RichTextDocumentOutlineNode> LocalOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
+
+        private IReadOnlyList<RichTextDocumentOutlineNode> VisibleOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
+
+        // Number of heading levels displayed in the outline. H1-H2 is the default view.
+        private int DisplayLevelCount { get; set; } = 2;
 
         protected override void OnParametersSet()
         {
             BuildDocumentPresentation();
         }
 
-        // Пробрасывает событие выбора файла наружу, в page-level orchestration.
+        // Forwards file selection to the page-level import orchestration.
         private Task HandleImportSelected(InputFileChangeEventArgs args)
         {
             return OnImportSelected.InvokeAsync(args);
         }
 
-        // Прокручивает viewport документа к выбранному заголовку из дерева содержания.
+        private Task HandleRebuildTableOfContentsAsync()
+        {
+            return OnRebuildTableOfContents.InvokeAsync();
+        }
+
+        private Task HandleDisplayLevelCountChangedAsync(int value)
+        {
+            DisplayLevelCount = Math.Clamp(value, 1, 3);
+            VisibleOutlineNodes = FilterOutlineNodes(LocalOutlineNodes, DisplayLevelCount);
+            return Task.CompletedTask;
+        }
+
+        // Scrolls the viewport to a stable heading anchor from the persisted table of contents.
         private Task HandleHeadingSelectedAsync(string headingId)
         {
             return JSRuntime.InvokeVoidAsync("richTextViewport.scrollToHeading", ViewportElementId, headingId).AsTask();
         }
 
-        // Строит одновременно HTML для viewport и дерево содержания H1-H3.
+        // Uses persisted HTML and persisted outline data without reparsing headings from the DOM.
         private void BuildDocumentPresentation()
         {
             if (string.IsNullOrWhiteSpace(HtmlContent))
             {
                 RenderedHtmlContent = string.Empty;
-                OutlineNodes = Array.Empty<RichTextDocumentOutlineNode>();
+                LocalOutlineNodes = Array.Empty<RichTextDocumentOutlineNode>();
+                VisibleOutlineNodes = Array.Empty<RichTextDocumentOutlineNode>();
                 return;
             }
 
-            var htmlDocument = new HtmlDocument();
-            htmlDocument.LoadHtml(HtmlContent);
-
-            var outlineNodes = BuildOutlineNodes(htmlDocument);
-            OutlineNodes = outlineNodes;
-            RenderedHtmlContent = htmlDocument.DocumentNode.InnerHtml;
+            RenderedHtmlContent = HtmlContent;
+            LocalOutlineNodes = OutlineNodes ?? Array.Empty<RichTextDocumentOutlineNode>();
+            VisibleOutlineNodes = FilterOutlineNodes(LocalOutlineNodes, DisplayLevelCount);
         }
 
-        // Собирает иерархию содержания из заголовков H1-H3 и одновременно вшивает в них стабильные DOM-id.
-        private static IReadOnlyList<RichTextDocumentOutlineNode> BuildOutlineNodes(HtmlDocument htmlDocument)
+        private static IReadOnlyList<RichTextDocumentOutlineNode> FilterOutlineNodes(
+            IReadOnlyList<RichTextDocumentOutlineNode> nodes,
+            int maxLevel)
         {
-            var headingNodes = htmlDocument.DocumentNode
-                .SelectNodes("//h1|//h2|//h3")
-                ?.ToList()
-                ?? new List<HtmlNode>();
-
-            if (headingNodes.Count == 0)
+            if (nodes.Count == 0)
             {
                 return Array.Empty<RichTextDocumentOutlineNode>();
             }
 
-            var roots = new List<RichTextDocumentOutlineNode>();
-            var stack = new Stack<RichTextDocumentOutlineNode>();
-            var index = 0;
-
-            foreach (var headingNode in headingNodes)
+            var result = new List<RichTextDocumentOutlineNode>();
+            foreach (var node in nodes)
             {
-                index++;
-                var level = ParseHeadingLevel(headingNode.Name);
-                var title = WebUtility.HtmlDecode(headingNode.InnerText ?? string.Empty).Trim();
-                if (string.IsNullOrWhiteSpace(title))
+                if (node.Level > maxLevel)
                 {
-                    title = $"Heading {index}";
+                    continue;
                 }
 
-                var headingId = $"rt-heading-{index}";
-                headingNode.SetAttributeValue("id", headingId);
-                headingNode.SetAttributeValue("data-outline-level", level.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-                var outlineNode = new RichTextDocumentOutlineNode
+                result.Add(new RichTextDocumentOutlineNode
                 {
-                    HeadingId = headingId,
-                    Title = title,
-                    Level = level,
-                    IsExpanded = true
-                };
-
-                while (stack.Count > 0 && stack.Peek().Level >= level)
-                {
-                    stack.Pop();
-                }
-
-                if (stack.Count == 0)
-                {
-                    roots.Add(outlineNode);
-                }
-                else
-                {
-                    stack.Peek().Children.Add(outlineNode);
-                }
-
-                stack.Push(outlineNode);
+                    HeadingId = node.HeadingId,
+                    Title = node.Title,
+                    Level = node.Level,
+                    IsExpanded = node.IsExpanded,
+                    Children = FilterOutlineNodes(node.Children, maxLevel).ToList()
+                });
             }
 
-            return roots;
-        }
-
-        // Возвращает числовой уровень заголовка h1/h2/h3.
-        private static int ParseHeadingLevel(string headingTagName)
-        {
-            return headingTagName.ToLowerInvariant() switch
-            {
-                "h1" => 1,
-                "h2" => 2,
-                "h3" => 3,
-                _ => 3
-            };
+            return result;
         }
     }
 }

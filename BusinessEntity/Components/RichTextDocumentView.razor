@@ -29,7 +29,12 @@
     {
         <div class="rich-text-document-layout">
             <div class="rich-text-document-layout__outline">
-                <RichTextDocumentOutline Nodes="OutlineNodes" OnHeadingSelected="HandleHeadingSelectedAsync" />
+                <RichTextDocumentOutline Nodes="VisibleOutlineNodes"
+                                         DisplayLevelCount="@DisplayLevelCount"
+                                         IsRebuilding="@IsRebuildingTableOfContents"
+                                         OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
+                                         OnRebuildRequested="HandleRebuildTableOfContentsAsync"
+                                         OnHeadingSelected="HandleHeadingSelectedAsync" />
             </div>
             <div class="rich-text-document-layout__content">
                 <RichTextDocumentViewport ViewportElementId="@ViewportElementId" HtmlContent="@RenderedHtmlContent" />

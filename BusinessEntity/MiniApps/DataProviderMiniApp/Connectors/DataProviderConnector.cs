@@ -271,6 +271,34 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return response.Records;
         }
 
+        // Запрашивает сохранённые entries оглавления rich-text документа.
+        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<GetRichTextTableOfContentsEntriesRequest, GetRichTextTableOfContentsEntriesResponse>(
+                new GetRichTextTableOfContentsEntriesRequest(requestId, businessEntityId),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            return response.Records;
+        }
+
+        // Пересоздаёт сохранённые entries оглавления rich-text документа и возвращает свежий набор.
+        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<RebuildRichTextTableOfContentsEntriesRequest, RebuildRichTextTableOfContentsEntriesResponse>(
+                new RebuildRichTextTableOfContentsEntriesRequest(requestId, businessEntityId),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            return response.Records;
+        }
+
         // Полностью заменяет chunk-набор rich-text документа.
         public async Task ReplaceRichTextChunksAsync(Guid businessEntityId, IReadOnlyList<RichTextDocumentChunk> chunks, CancellationToken cancellationToken = default)
         {

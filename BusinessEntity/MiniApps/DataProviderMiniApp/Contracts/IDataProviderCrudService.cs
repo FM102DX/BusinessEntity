@@ -29,6 +29,8 @@ public interface IDataProviderCrudService
     Task UpdateRelationAsync(BusinessEntityRelation relation, CancellationToken cancellationToken = default);
     Task DeleteRelationAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RichTextDocumentChunk>> GetRichTextChunksAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default);
     Task ReplaceRichTextChunksAsync(Guid businessEntityId, IReadOnlyList<RichTextDocumentChunk> chunks, CancellationToken cancellationToken = default);
     Task SaveRichTextEmbeddedFilesAsync(Guid businessEntityId, IReadOnlyList<RichTextEmbeddedFile> files, bool replaceExistingFiles, CancellationToken cancellationToken = default);
     Task<RichTextEmbeddedFileContent?> GetRichTextEmbeddedFileAsync(Guid businessEntityId, string imageId, string variant, CancellationToken cancellationToken = default);

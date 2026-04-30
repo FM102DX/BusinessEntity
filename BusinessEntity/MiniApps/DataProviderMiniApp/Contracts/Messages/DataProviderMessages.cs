@@ -48,6 +48,12 @@ public sealed record DeleteRelationResponse(Guid RequestId, bool Success, string
 public sealed record GetRichTextChunksRequest(Guid RequestId, Guid BusinessEntityId);
 public sealed record GetRichTextChunksResponse(Guid RequestId, IReadOnlyList<RichTextDocumentChunk> Records, string? ErrorMessage = null);
 
+public sealed record GetRichTextTableOfContentsEntriesRequest(Guid RequestId, Guid BusinessEntityId);
+public sealed record GetRichTextTableOfContentsEntriesResponse(Guid RequestId, IReadOnlyList<RichTextDocumentTableOfContentsEntry> Records, string? ErrorMessage = null);
+
+public sealed record RebuildRichTextTableOfContentsEntriesRequest(Guid RequestId, Guid BusinessEntityId);
+public sealed record RebuildRichTextTableOfContentsEntriesResponse(Guid RequestId, IReadOnlyList<RichTextDocumentTableOfContentsEntry> Records, string? ErrorMessage = null);
+
 public sealed record ReplaceRichTextChunksRequest(Guid RequestId, Guid BusinessEntityId, IReadOnlyList<RichTextDocumentChunk> Records);
 public sealed record ReplaceRichTextChunksResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 

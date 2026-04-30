@@ -76,7 +76,7 @@ internal static class RichTextChunkStorageSerializer
     }
 
     // Собирает готовый readonly HTML чанка.
-    public static string BuildHtmlCache(Guid businessEntityId, IReadOnlyList<RichTextBlock> blocks)
+    public static string BuildHtmlCache(Guid businessEntityId, Guid chunkId, IReadOnlyList<RichTextBlock> blocks)
     {
         if (blocks == null || blocks.Count == 0)
         {
@@ -84,13 +84,17 @@ internal static class RichTextChunkStorageSerializer
         }
 
         var builder = new StringBuilder();
-        foreach (var block in blocks)
+        for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
         {
+            var block = blocks[blockIndex];
             switch (block.Kind)
             {
                 case "heading":
                     var level = Math.Clamp(block.Level <= 0 ? 2 : block.Level, 1, 6);
-                    builder.Append($"<h{level}>{block.Html}</h{level}>");
+                    var anchorAttributes = level <= 3
+                        ? $" id=\"{BuildBlockAnchor(chunkId, blockIndex)}\" data-chunk-id=\"{chunkId:D}\" data-block-index=\"{blockIndex}\""
+                        : string.Empty;
+                    builder.Append($"<h{level}{anchorAttributes}>{block.Html}</h{level}>");
                     break;
                 case "paragraph":
                     builder.Append($"<p>{block.Html}</p>");
@@ -106,6 +110,18 @@ internal static class RichTextChunkStorageSerializer
         }
 
         return builder.ToString();
+    }
+
+    // Builds a stable DOM anchor for a block inside a persisted rich-text chunk.
+    public static string BuildBlockAnchor(Guid chunkId, int blockIndex)
+    {
+        return $"rt-chunk-{chunkId:N}-block-{blockIndex}";
+    }
+
+    // Extracts readable text from sanitized inline HTML.
+    public static string BuildInlineText(string? html)
+    {
+        return WebUtility.HtmlDecode(StripTags(html)).Trim();
     }
 
     // Считает количество текстовых символов чанка.

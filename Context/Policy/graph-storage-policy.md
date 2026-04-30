@@ -221,6 +221,56 @@ Property DTO нужны для хранения вспомогательных �
 - `Data : string`
 - `Metadata : string`
 
+`PropertyType` физически хранится как `int`, но его значения должны задаваться через enum соответствующего property-слоя:
+
+- `BusinessEntityPropertyTypeEnum`
+- `BusinessEntityDataPropertyTypeEnum`
+- `BusinessEntityDataChunkPropertyTypeEnum`
+
+Числовые значения enum являются частью storage-контракта. После записи данных в БД их нельзя переиспользовать для другого смысла.
+
+Текущие значения:
+
+- `BusinessEntityPropertyTypeEnum.Undefined = 0`
+- `BusinessEntityDataPropertyTypeEnum.Undefined = 0`
+- `BusinessEntityDataChunkPropertyTypeEnum.Undefined = 0`
+- `BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents = 100`
+
+`RichDocTableOfContents` предназначен для хранения содержания текстовых кусков, которые образуются при формировании `RichTextDocument`.
+
+Для `RichDocTableOfContents` действуют правила:
+
+- в оглавление включаются только heading-блоки уровней H1-H3;
+- H4-H6 и остальные типы блоков не попадают в это property;
+- если в чанке нет H1-H3, `BusinessEntityDataChunkPropertyDto` с типом `RichDocTableOfContents` для него не создается;
+- property создается при сохранении `BusinessEntityDataChunkDto`;
+- property может быть пересоздана отдельной асинхронной процедурой: процедура проходит по всем чанкам документа, удаляет старые properties типа `RichDocTableOfContents`, заново строит их из сохраненных блоков чанка, затем читает все properties из БД и возвращает дерево содержания;
+- при пересоздании содержания процедура также обновляет `HtmlCache` чанка, чтобы в HTML были актуальные stable anchors для H1-H3;
+- чтение оглавления выполняется отдельной асинхронной процедурой строго из property-таблиц БД, а не через парсинг HTML.
+
+Формат `BusinessEntityDataChunkPropertyDto.Data` для `RichDocTableOfContents`:
+
+```json
+{"schemaVersion":1,"kind":"RichDocChunkTableOfContents","entries":[{"chunkId":"00000000-0000-0000-0000-000000000000","chunkSortOrder":0,"blockIndex":0,"level":1,"title":"Heading","anchor":"rt-chunk-00000000000000000000000000000000-block-0"}]}
+```
+
+Каждая entry должна содержать достаточно данных для точной навигации:
+
+- `chunkId` — идентификатор `BusinessEntityDataChunkDto`;
+- `chunkSortOrder` — порядок чанка внутри rich-text документа;
+- `blockIndex` — zero-based индекс heading-блока внутри чанка;
+- `level` — уровень heading, только 1..3;
+- `title` — plain-text заголовок для отображения в дереве оглавления;
+- `anchor` — стабильный DOM id, построенный из `chunkId` и `blockIndex`.
+
+Формат `Metadata` для этого property:
+
+```json
+{"schemaVersion":1,"kind":"RichDocChunkTableOfContentsMetadata","entryCount":1}
+```
+
+HTML-cache чанка обязан ставить тот же `anchor` в атрибут `id` соответствующего H1-H3, чтобы клик по оглавлению мог точно прокрутить viewport к нужному блоку.
+
 ### Property DTO
 
 В storage-слое есть три конкретных property DTO:

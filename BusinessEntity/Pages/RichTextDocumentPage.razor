@@ -20,8 +20,11 @@ else
         <RichTextDocumentView
             EntityName="@(Entity.Name)"
             HtmlContent="@HtmlContent"
+            OutlineNodes="@OutlineNodes"
             IsBusy="@IsImporting"
+            IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
             StatusMessage="@StatusMessage"
-            OnImportSelected="OnImportSelectedAsync" />
+            OnImportSelected="OnImportSelectedAsync"
+            OnRebuildTableOfContents="OnRebuildTableOfContentsAsync" />
     </div>
 }

@@ -28,7 +28,25 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #7a8aa0;
-    margin-bottom: 1rem;
+    margin-bottom: 0.35rem;
+}
+
+::deep .rich-text-outline__controls {
+    display: grid;
+    grid-template-columns: minmax(7.5rem, 1fr);
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+    padding-right: 1rem;
+}
+
+::deep .rich-text-outline__level-select {
+    min-height: 1.9rem;
+}
+
+::deep .rich-text-outline__rebuild {
+    white-space: normal;
+    line-height: 1.2;
+    min-height: 1.9rem;
 }
 
 ::deep .rich-text-outline__tree {
@@ -112,6 +130,10 @@
 
     ::deep .rich-text-outline__tree {
         border-right: none;
+        padding-right: 0;
+    }
+
+    ::deep .rich-text-outline__controls {
         padding-right: 0;
     }
 }

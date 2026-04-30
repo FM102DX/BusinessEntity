@@ -105,6 +105,24 @@ namespace BusinessEntity.Services
         }
 
         /// <summary>
+        /// Loads the rich-text document table of contents from persisted chunk properties and returns it as a tree.
+        /// </summary>
+        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsAsync(Guid entityId, CancellationToken ct = default)
+        {
+            var entries = await _dataProviderConnector.GetRichTextTableOfContentsEntriesAsync(entityId, ct);
+            return BuildTableOfContentsTree(entries);
+        }
+
+        /// <summary>
+        /// Rebuilds persisted chunk table-of-contents properties and returns the fresh tree.
+        /// </summary>
+        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildTableOfContentsAsync(Guid entityId, CancellationToken ct = default)
+        {
+            var entries = await _dataProviderConnector.RebuildRichTextTableOfContentsEntriesAsync(entityId, ct);
+            return BuildTableOfContentsTree(entries);
+        }
+
+        /// <summary>
         /// Возвращает embedded-файл rich-text документа для HTTP-выдачи.
         /// </summary>
         public Task<RichTextEmbeddedFileContent?> GetRichTextEmbeddedFileAsync(
@@ -305,6 +323,57 @@ namespace BusinessEntity.Services
 
             var chunk = chunks[0];
             return chunk.Blocks == null || chunk.Blocks.Count == 0;
+        }
+
+        // Builds a hierarchical H1-H3 tree from persisted flat table-of-contents entries.
+        private static IReadOnlyList<RichTextDocumentTableOfContentsEntry> BuildTableOfContentsTree(IReadOnlyList<RichTextDocumentTableOfContentsEntry> entries)
+        {
+            if (entries == null || entries.Count == 0)
+            {
+                return Array.Empty<RichTextDocumentTableOfContentsEntry>();
+            }
+
+            var roots = new List<RichTextDocumentTableOfContentsEntry>();
+            var stack = new Stack<RichTextDocumentTableOfContentsEntry>();
+
+            foreach (var entry in entries
+                .OrderBy(x => x.ChunkSortOrder)
+                .ThenBy(x => x.BlockIndex))
+            {
+                var node = CloneTableOfContentsEntry(entry);
+                while (stack.Count > 0 && stack.Peek().Level >= node.Level)
+                {
+                    stack.Pop();
+                }
+
+                if (stack.Count == 0)
+                {
+                    roots.Add(node);
+                }
+                else
+                {
+                    stack.Peek().Children.Add(node);
+                }
+
+                stack.Push(node);
+            }
+
+            return roots;
+        }
+
+        // Copies a persisted entry into a tree node with its own children collection.
+        private static RichTextDocumentTableOfContentsEntry CloneTableOfContentsEntry(RichTextDocumentTableOfContentsEntry source)
+        {
+            return new RichTextDocumentTableOfContentsEntry
+            {
+                ChunkId = source.ChunkId,
+                ChunkSortOrder = source.ChunkSortOrder,
+                BlockIndex = source.BlockIndex,
+                Level = source.Level,
+                Title = source.Title,
+                Anchor = source.Anchor,
+                Children = new List<RichTextDocumentTableOfContentsEntry>()
+            };
         }
     }
 }

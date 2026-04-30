@@ -1,6 +1,7 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
+using BusinessEntity.Components;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
@@ -17,8 +18,10 @@ namespace BusinessEntity.Pages
         private BusinessEntity.Core.Classes.BusinessEntity? Entity;
         private RichTextDocument? Manifest;
         private string HtmlContent { get; set; } = string.Empty;
+        private IReadOnlyList<RichTextDocumentOutlineNode> OutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         private bool IsLoading { get; set; } = true;
         private bool IsImporting { get; set; }
+        private bool IsRebuildingTableOfContents { get; set; }
         private string? Error;
         private string? StatusMessage;
 
@@ -41,6 +44,7 @@ namespace BusinessEntity.Pages
                     Entity = null;
                     Manifest = null;
                     HtmlContent = string.Empty;
+                    OutlineNodes = Array.Empty<RichTextDocumentOutlineNode>();
                     Error = "Rich-text документ не найден.";
                     return;
                 }
@@ -48,6 +52,8 @@ namespace BusinessEntity.Pages
                 Entity = snapshot.Entity;
                 Manifest = snapshot.Manifest;
                 HtmlContent = string.Join(Environment.NewLine, snapshot.Chunks.Select(chunk => chunk.HtmlCache ?? string.Empty));
+                var tableOfContents = await RichTextDocumentHelper.GetTableOfContentsAsync(Id);
+                OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
             }
             catch (Exception ex)
             {
@@ -111,6 +117,56 @@ namespace BusinessEntity.Pages
             {
                 IsImporting = false;
             }
+        }
+
+        // Пересоздаёт сохранённые chunk-properties содержания и обновляет HTML-cache на странице.
+        private async Task OnRebuildTableOfContentsAsync()
+        {
+            if (Entity == null)
+            {
+                return;
+            }
+
+            IsRebuildingTableOfContents = true;
+            StatusMessage = "Пересоздание содержания...";
+            Error = null;
+
+            try
+            {
+                var tableOfContents = await RichTextDocumentHelper.RebuildTableOfContentsAsync(Id);
+                OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
+
+                var snapshot = await RichTextDocumentHelper.GetRichTextDocumentSnapshotAsync(Id);
+                if (snapshot != null)
+                {
+                    HtmlContent = string.Join(Environment.NewLine, snapshot.Chunks.Select(chunk => chunk.HtmlCache ?? string.Empty));
+                    Manifest = snapshot.Manifest;
+                }
+
+                StatusMessage = "Содержание пересоздано.";
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+                StatusMessage = null;
+            }
+            finally
+            {
+                IsRebuildingTableOfContents = false;
+            }
+        }
+
+        // Converts storage-backed rich-text table-of-contents entries into UI outline nodes.
+        private static RichTextDocumentOutlineNode MapTableOfContentsNode(RichTextDocumentTableOfContentsEntry entry)
+        {
+            return new RichTextDocumentOutlineNode
+            {
+                HeadingId = entry.Anchor,
+                Title = entry.Title,
+                Level = entry.Level,
+                IsExpanded = true,
+                Children = entry.Children.Select(MapTableOfContentsNode).ToList()
+            };
         }
     }
 }

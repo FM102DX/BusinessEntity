@@ -78,6 +78,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         private void SubscribeRichTextMessages()
         {
             _subscriptions.Add(_messageBus.Listen<GetRichTextChunksRequest>().Subscribe(request => _ = HandleGetRichTextChunksAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<GetRichTextTableOfContentsEntriesRequest>().Subscribe(request => _ = HandleGetRichTextTableOfContentsEntriesAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<RebuildRichTextTableOfContentsEntriesRequest>().Subscribe(request => _ = HandleRebuildRichTextTableOfContentsEntriesAsync(request)));
             _subscriptions.Add(_messageBus.Listen<ReplaceRichTextChunksRequest>().Subscribe(request => _ = HandleReplaceRichTextChunksAsync(request)));
             _subscriptions.Add(_messageBus.Listen<SaveRichTextEmbeddedFilesRequest>().Subscribe(request => _ = HandleSaveRichTextEmbeddedFilesAsync(request)));
             _subscriptions.Add(_messageBus.Listen<GetRichTextEmbeddedFileRequest>().Subscribe(request => _ = HandleGetRichTextEmbeddedFileAsync(request)));
@@ -309,6 +311,36 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             {
                 _logger.LogError(ex, "Failed to load rich-text chunks for document {RecordId}.", request.BusinessEntityId);
                 _messageBus.SendMessage(new GetRichTextChunksResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentChunk>(), ex.Message));
+            }
+        }
+
+        // Обрабатывает запрос на чтение сохранённых entries оглавления rich-text документа.
+        private async Task HandleGetRichTextTableOfContentsEntriesAsync(GetRichTextTableOfContentsEntriesRequest request)
+        {
+            try
+            {
+                var records = await _dataProviderService.GetRichTextTableOfContentsEntriesAsync(request.BusinessEntityId);
+                _messageBus.SendMessage(new GetRichTextTableOfContentsEntriesResponse(request.RequestId, records));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load rich-text table of contents entries for document {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new GetRichTextTableOfContentsEntriesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentTableOfContentsEntry>(), ex.Message));
+            }
+        }
+
+        // Обрабатывает команду на пересоздание сохранённых entries оглавления rich-text документа.
+        private async Task HandleRebuildRichTextTableOfContentsEntriesAsync(RebuildRichTextTableOfContentsEntriesRequest request)
+        {
+            try
+            {
+                var records = await _dataProviderService.RebuildRichTextTableOfContentsEntriesAsync(request.BusinessEntityId);
+                _messageBus.SendMessage(new RebuildRichTextTableOfContentsEntriesResponse(request.RequestId, records));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to rebuild rich-text table of contents entries for document {RecordId}.", request.BusinessEntityId);
+                _messageBus.SendMessage(new RebuildRichTextTableOfContentsEntriesResponse(request.RequestId, Array.Empty<BusinessEntity.Core.RichText.RichTextDocumentTableOfContentsEntry>(), ex.Message));
             }
         }
 
