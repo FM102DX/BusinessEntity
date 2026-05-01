@@ -21,7 +21,7 @@
     {
         <div class="alert alert-secondary mb-0">Обработка rich-text документа...</div>
     }
-    else if (string.IsNullOrWhiteSpace(HtmlContent))
+    else if (IsDocumentEmpty)
     {
         <div class="alert alert-secondary mb-0">Документ пуст. Импортируйте .txt, .md или .html.</div>
     }
@@ -30,14 +30,22 @@
         <div class="rich-text-document-layout">
             <div class="rich-text-document-layout__outline">
                 <RichTextDocumentOutline Nodes="VisibleOutlineNodes"
+                                         TreeElementId="@OutlineTreeElementId"
                                          DisplayLevelCount="@DisplayLevelCount"
+                                         IsLoading="@IsOutlineLoading"
                                          IsRebuilding="@IsRebuildingTableOfContents"
+                                         HideScrollbar="@HideTableOfContentsScrollbar"
                                          OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
                                          OnRebuildRequested="HandleRebuildTableOfContentsAsync"
                                          OnHeadingSelected="HandleHeadingSelectedAsync" />
             </div>
             <div class="rich-text-document-layout__content">
-                <RichTextDocumentViewport ViewportElementId="@ViewportElementId" HtmlContent="@RenderedHtmlContent" />
+                <RichTextDocumentViewport @ref="Viewport"
+                                          ViewportElementId="@ViewportElementId"
+                                          BusinessEntityId="@BusinessEntityId"
+                                          OutlineNodes="@LocalOutlineNodes"
+                                          IsInitialContentLoading="@IsInitialContentLoading"
+                                          InitialWindow="@InitialChunkWindow" />
             </div>
         </div>
     }

@@ -8,52 +8,70 @@ using Microsoft.AspNetCore.Components.Forms;
 
 namespace BusinessEntity.Pages
 {
-    public partial class RichTextDocumentPage
+    public partial class RichTextDocumentPage : IDisposable
     {
         [Parameter] public Guid Id { get; set; }
 
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public RichTextDocumentImportService ImportService { get; set; } = default!;
+        [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
 
         private BusinessEntity.Core.Classes.BusinessEntity? Entity;
         private RichTextDocument? Manifest;
-        private string HtmlContent { get; set; } = string.Empty;
+        private RichTextDocumentChunkWindow? InitialChunkWindow { get; set; }
         private IReadOnlyList<RichTextDocumentOutlineNode> OutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         private bool IsLoading { get; set; } = true;
+        private bool IsInitialContentLoading { get; set; }
+        private bool IsOutlineLoading { get; set; }
         private bool IsImporting { get; set; }
         private bool IsRebuildingTableOfContents { get; set; }
         private string? Error;
         private string? StatusMessage;
+        private CancellationTokenSource? LoadCancellationTokenSource { get; set; }
+        private long LoadVersion { get; set; }
 
         protected override async Task OnParametersSetAsync()
         {
             await LoadAsync();
         }
 
-        // Загружает rich-text документ и собирает readonly HTML из сохраненных чанков.
+        // Loads only the document shell synchronously; heavy content parts are loaded in background tasks.
         private async Task LoadAsync()
         {
+            LoadCancellationTokenSource?.Cancel();
+            LoadCancellationTokenSource?.Dispose();
+            LoadCancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = LoadCancellationTokenSource.Token;
+            var version = ++LoadVersion;
+
             IsLoading = true;
+            IsInitialContentLoading = false;
+            IsOutlineLoading = false;
             Error = null;
+            InitialChunkWindow = null;
+            OutlineNodes = Array.Empty<RichTextDocumentOutlineNode>();
 
             try
             {
-                var snapshot = await RichTextDocumentHelper.GetRichTextDocumentSnapshotAsync(Id);
-                if (snapshot == null)
+                var shell = await RichTextDocumentHelper.GetRichTextDocumentShellAsync(Id, cancellationToken);
+                if (shell == null)
                 {
                     Entity = null;
                     Manifest = null;
-                    HtmlContent = string.Empty;
-                    OutlineNodes = Array.Empty<RichTextDocumentOutlineNode>();
                     Error = "Rich-text документ не найден.";
                     return;
                 }
 
-                Entity = snapshot.Entity;
-                Manifest = snapshot.Manifest;
-                HtmlContent = string.Join(Environment.NewLine, snapshot.Chunks.Select(chunk => chunk.HtmlCache ?? string.Empty));
-                var tableOfContents = await RichTextDocumentHelper.GetTableOfContentsAsync(Id);
-                OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
+                Entity = shell.Entity;
+                Manifest = shell.Manifest;
+                IsInitialContentLoading = true;
+                IsOutlineLoading = true;
+                _ = LoadInitialChunkWindowAsync(Id, version, cancellationToken);
+                _ = LoadOutlineAsync(Id, version, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // A newer document navigation superseded this load.
             }
             catch (Exception ex)
             {
@@ -61,7 +79,92 @@ namespace BusinessEntity.Pages
             }
             finally
             {
-                IsLoading = false;
+                if (version == LoadVersion)
+                {
+                    IsLoading = false;
+                }
+            }
+        }
+
+        private async Task LoadInitialChunkWindowAsync(Guid documentId, long version, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync(cancellationToken);
+                var chunkWindow = await RichTextDocumentHelper.GetChunkWindowAsync(
+                    documentId,
+                    0,
+                    richTextDocumentSettings.GetInitialChunkCount(),
+                    cancellationToken);
+
+                await InvokeAsync(() =>
+                {
+                    if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    InitialChunkWindow = chunkWindow;
+                    IsInitialContentLoading = false;
+                    StateHasChanged();
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                // A newer document navigation superseded this load.
+            }
+            catch (Exception ex)
+            {
+                await InvokeAsync(() =>
+                {
+                    if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    Error = ex.Message;
+                    IsInitialContentLoading = false;
+                    StateHasChanged();
+                });
+            }
+        }
+
+        private async Task LoadOutlineAsync(Guid documentId, long version, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var tableOfContents = await RichTextDocumentHelper.GetTableOfContentsAsync(documentId, cancellationToken);
+                var outlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
+
+                await InvokeAsync(() =>
+                {
+                    if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    OutlineNodes = outlineNodes;
+                    IsOutlineLoading = false;
+                    StateHasChanged();
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                // A newer document navigation superseded this load.
+            }
+            catch (Exception ex)
+            {
+                await InvokeAsync(() =>
+                {
+                    if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    Error = ex.Message;
+                    IsOutlineLoading = false;
+                    StateHasChanged();
+                });
             }
         }
 
@@ -136,12 +239,11 @@ namespace BusinessEntity.Pages
                 var tableOfContents = await RichTextDocumentHelper.RebuildTableOfContentsAsync(Id);
                 OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
 
-                var snapshot = await RichTextDocumentHelper.GetRichTextDocumentSnapshotAsync(Id);
-                if (snapshot != null)
-                {
-                    HtmlContent = string.Join(Environment.NewLine, snapshot.Chunks.Select(chunk => chunk.HtmlCache ?? string.Empty));
-                    Manifest = snapshot.Manifest;
-                }
+                var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync();
+                InitialChunkWindow = await RichTextDocumentHelper.GetChunkWindowAsync(
+                    Id,
+                    0,
+                    richTextDocumentSettings.GetInitialChunkCount());
 
                 StatusMessage = "Содержание пересоздано.";
             }
@@ -162,11 +264,18 @@ namespace BusinessEntity.Pages
             return new RichTextDocumentOutlineNode
             {
                 HeadingId = entry.Anchor,
+                ChunkSortOrder = entry.ChunkSortOrder,
                 Title = entry.Title,
                 Level = entry.Level,
                 IsExpanded = true,
                 Children = entry.Children.Select(MapTableOfContentsNode).ToList()
             };
+        }
+
+        public void Dispose()
+        {
+            LoadCancellationTokenSource?.Cancel();
+            LoadCancellationTokenSource?.Dispose();
         }
     }
 }

@@ -32,6 +32,49 @@
                            step="500"
                            @bind="RichTextChunkCharLimit" />
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label">RichDocument: чанков при открытии</label>
+                    <input class="form-control"
+                           type="number"
+                           min="1"
+                           step="1"
+                           @bind="RichTextInitialChunkCount" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">RichDocument: чанков перед пунктом содержания</label>
+                    <input class="form-control"
+                           type="number"
+                           min="0"
+                           step="1"
+                           @bind="RichTextTableOfContentsBeforeBuffer" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">RichDocument: чанков после пункта содержания</label>
+                    <input class="form-control"
+                           type="number"
+                           min="0"
+                           step="1"
+                           @bind="RichTextTableOfContentsAfterBuffer" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">RichDocument: предыдущих чанков при скролле</label>
+                    <input class="form-control"
+                           type="number"
+                           min="0"
+                           step="1"
+                           @bind="RichTextScrollPreviousChunkCount" />
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input"
+                               id="rich-text-hide-toc-scrollbar"
+                               type="checkbox"
+                               @bind="RichTextHideTableOfContentsScrollbar" />
+                        <label class="form-check-label" for="rich-text-hide-toc-scrollbar">
+                            Скрывать scrollbar содержания
+                        </label>
+                    </div>
+                </div>
                 <div class="col-md-auto">
                     <button class="btn btn-primary"
                             @onclick="SaveSysParametersAsync"
@@ -60,6 +103,11 @@
     private bool IsBusy { get; set; }
     private string CompanyName { get; set; } = string.Empty;
     private int RichTextChunkCharLimit { get; set; } = 12000;
+    private int RichTextInitialChunkCount { get; set; } = 2;
+    private int RichTextTableOfContentsBeforeBuffer { get; set; } = 2;
+    private int RichTextTableOfContentsAfterBuffer { get; set; } = 5;
+    private int RichTextScrollPreviousChunkCount { get; set; } = 1;
+    private bool RichTextHideTableOfContentsScrollbar { get; set; } = true;
     private string? StatusMessage { get; set; }
     private string? ErrorMessage { get; set; }
 
@@ -82,6 +130,19 @@
             RichTextChunkCharLimit = SysParametersEntity.Data.RichTextChunkCharLimit <= 0
                 ? 12000
                 : SysParametersEntity.Data.RichTextChunkCharLimit;
+            RichTextInitialChunkCount = SysParametersEntity.Data.RichTextInitialChunkCount <= 0
+                ? 2
+                : SysParametersEntity.Data.RichTextInitialChunkCount;
+            RichTextTableOfContentsBeforeBuffer = SysParametersEntity.Data.RichTextTableOfContentsBeforeBuffer < 0
+                ? 2
+                : SysParametersEntity.Data.RichTextTableOfContentsBeforeBuffer;
+            RichTextTableOfContentsAfterBuffer = SysParametersEntity.Data.RichTextTableOfContentsAfterBuffer < 0
+                ? 5
+                : SysParametersEntity.Data.RichTextTableOfContentsAfterBuffer;
+            RichTextScrollPreviousChunkCount = SysParametersEntity.Data.RichTextScrollPreviousChunkCount < 0
+                ? 1
+                : SysParametersEntity.Data.RichTextScrollPreviousChunkCount;
+            RichTextHideTableOfContentsScrollbar = SysParametersEntity.Data.RichTextHideTableOfContentsScrollbar;
         }
         catch (Exception ex)
         {
@@ -113,6 +174,19 @@
             SysParametersEntity.Data.RichTextChunkCharLimit = RichTextChunkCharLimit < 1000
                 ? 1000
                 : RichTextChunkCharLimit;
+            SysParametersEntity.Data.RichTextInitialChunkCount = RichTextInitialChunkCount <= 0
+                ? 1
+                : RichTextInitialChunkCount;
+            SysParametersEntity.Data.RichTextTableOfContentsBeforeBuffer = RichTextTableOfContentsBeforeBuffer < 0
+                ? 0
+                : RichTextTableOfContentsBeforeBuffer;
+            SysParametersEntity.Data.RichTextTableOfContentsAfterBuffer = RichTextTableOfContentsAfterBuffer < 0
+                ? 0
+                : RichTextTableOfContentsAfterBuffer;
+            SysParametersEntity.Data.RichTextScrollPreviousChunkCount = RichTextScrollPreviousChunkCount < 0
+                ? 0
+                : RichTextScrollPreviousChunkCount;
+            SysParametersEntity.Data.RichTextHideTableOfContentsScrollbar = RichTextHideTableOfContentsScrollbar;
 
             await BusinessEntityHelper.SaveEntityAsync(SysParametersEntity);
             StatusMessage = "Параметры системы сохранены.";

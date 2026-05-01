@@ -36,6 +36,44 @@ public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where
         }
     }
 
+    // Читает страницу записей с явным order/skip/take без доменной специфики.
+    public Task<IReadOnlyList<T>> GetPageAsync<TKey>(
+        Expression<Func<T, bool>>? filter,
+        Expression<Func<T, TKey>> orderBy,
+        bool descending = false,
+        int skip = 0,
+        int? take = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(orderBy);
+
+        lock (_syncRoot)
+        {
+            IEnumerable<T> query = _storage.Values;
+            if (filter != null)
+            {
+                query = query.Where(filter.Compile());
+            }
+
+            var keySelector = orderBy.Compile();
+            query = descending
+                ? query.OrderByDescending(keySelector)
+                : query.OrderBy(keySelector);
+
+            if (skip > 0)
+            {
+                query = query.Skip(skip);
+            }
+
+            if (take.HasValue)
+            {
+                query = query.Take(take.Value);
+            }
+
+            return Task.FromResult<IReadOnlyList<T>>(query.ToList());
+        }
+    }
+
     // Читает одну запись текущего DTO-типа по id.
     public Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -100,6 +138,20 @@ public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where
     public Task<int> GetCountAsync(CancellationToken ct = default)
     {
         return Task.FromResult(_storage.Count);
+    }
+
+    // Возвращает количество записей текущего DTO-типа по optional-фильтру.
+    public Task<int> GetCountAsync(Expression<Func<T, bool>>? filter, CancellationToken ct = default)
+    {
+        lock (_syncRoot)
+        {
+            if (filter == null)
+            {
+                return Task.FromResult(_storage.Count);
+            }
+
+            return Task.FromResult(_storage.Values.Count(filter.Compile()));
+        }
     }
 
     // Полностью очищает in-memory хранилище текущего DTO-типа.

@@ -18,9 +18,12 @@ else
 {
     <div class="py-2 px-2">
         <RichTextDocumentView
+            BusinessEntityId="@Id"
             EntityName="@(Entity.Name)"
-            HtmlContent="@HtmlContent"
+            InitialChunkWindow="@InitialChunkWindow"
             OutlineNodes="@OutlineNodes"
+            IsInitialContentLoading="@IsInitialContentLoading"
+            IsOutlineLoading="@IsOutlineLoading"
             IsBusy="@IsImporting"
             IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
             StatusMessage="@StatusMessage"

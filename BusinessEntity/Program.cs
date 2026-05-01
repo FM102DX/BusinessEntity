@@ -14,6 +14,7 @@ using BusinessEntity.Service;
 using BusinessEntity.Service.WebLogging;
 using BusinessEntity.Services;
 using BusinessEntity.Services.RichTextImport;
+using BusinessEntity.Settings;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
@@ -118,11 +119,14 @@ namespace BusinessEntity
             builder.Services.AddUserMiniApp();
 
             // Регистрирует прикладные сервисы и message bus.
+            builder.Services.Configure<RichTextDocumentSettings>(
+                builder.Configuration.GetSection(RichTextDocumentSettings.SectionName));
             builder.Services.AddScoped<IPossibleEntityRelationTypesProvider, PossibleEntityRelationTypesProvider>();
             builder.Services.AddScoped<IBusinessEntityFactory, BusinessEntityFactory>();
             builder.Services.AddScoped<BusinessEntity.Core.Services.BusinessEntityHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentHelper>();
+            builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentSettingsService>();
             builder.Services.AddScoped<HtmlToRichTextBlocksConverter>();
             builder.Services.AddScoped<IRichDocFormatConverter, PlainTextRichTextImportConverter>();
             builder.Services.AddScoped<IRichDocFormatConverter, MarkdownRichTextImportConverter>();

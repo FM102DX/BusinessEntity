@@ -17,6 +17,11 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
         {
             CompanyName = data.CompanyName ?? string.Empty,
             RichTextChunkCharLimit = data.RichTextChunkCharLimit,
+            RichTextInitialChunkCount = data.RichTextInitialChunkCount,
+            RichTextTableOfContentsBeforeBuffer = data.RichTextTableOfContentsBeforeBuffer,
+            RichTextTableOfContentsAfterBuffer = data.RichTextTableOfContentsAfterBuffer,
+            RichTextScrollPreviousChunkCount = data.RichTextScrollPreviousChunkCount,
+            RichTextHideTableOfContentsScrollbar = data.RichTextHideTableOfContentsScrollbar,
             Tag = data.Tag
         });
     }
@@ -29,6 +34,11 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
         {
             CompanyName = body.CompanyName ?? string.Empty,
             RichTextChunkCharLimit = body.RichTextChunkCharLimit <= 0 ? 12000 : body.RichTextChunkCharLimit,
+            RichTextInitialChunkCount = body.RichTextInitialChunkCount <= 0 ? 2 : body.RichTextInitialChunkCount,
+            RichTextTableOfContentsBeforeBuffer = body.RichTextTableOfContentsBeforeBuffer < 0 ? 2 : body.RichTextTableOfContentsBeforeBuffer,
+            RichTextTableOfContentsAfterBuffer = body.RichTextTableOfContentsAfterBuffer < 0 ? 5 : body.RichTextTableOfContentsAfterBuffer,
+            RichTextScrollPreviousChunkCount = body.RichTextScrollPreviousChunkCount < 0 ? 1 : body.RichTextScrollPreviousChunkCount,
+            RichTextHideTableOfContentsScrollbar = body.RichTextHideTableOfContentsScrollbar,
             Tag = body.Tag ?? string.Empty
         };
     }
@@ -44,5 +54,20 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
 
         [JsonPropertyName("richTextChunkCharLimit")]
         public int RichTextChunkCharLimit { get; set; } = 12000;
+
+        [JsonPropertyName("richTextInitialChunkCount")]
+        public int RichTextInitialChunkCount { get; set; } = 2;
+
+        [JsonPropertyName("richTextTableOfContentsBeforeBuffer")]
+        public int RichTextTableOfContentsBeforeBuffer { get; set; } = 2;
+
+        [JsonPropertyName("richTextTableOfContentsAfterBuffer")]
+        public int RichTextTableOfContentsAfterBuffer { get; set; } = 5;
+
+        [JsonPropertyName("richTextScrollPreviousChunkCount")]
+        public int RichTextScrollPreviousChunkCount { get; set; } = 1;
+
+        [JsonPropertyName("richTextHideTableOfContentsScrollbar")]
+        public bool RichTextHideTableOfContentsScrollbar { get; set; } = true;
     }
 }

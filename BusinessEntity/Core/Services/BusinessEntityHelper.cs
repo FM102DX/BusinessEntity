@@ -810,7 +810,12 @@ namespace BusinessEntity.Core.Services
                     Name = string.IsNullOrWhiteSpace(sysParameters.Name) ? entityData.Name : sysParameters.Name,
                     Tag = sysParameters.Tag,
                     CompanyName = sysParameters.CompanyName ?? string.Empty,
-                    RichTextChunkCharLimit = sysParameters.RichTextChunkCharLimit
+                    RichTextChunkCharLimit = sysParameters.RichTextChunkCharLimit,
+                    RichTextInitialChunkCount = sysParameters.RichTextInitialChunkCount,
+                    RichTextTableOfContentsBeforeBuffer = sysParameters.RichTextTableOfContentsBeforeBuffer,
+                    RichTextTableOfContentsAfterBuffer = sysParameters.RichTextTableOfContentsAfterBuffer,
+                    RichTextScrollPreviousChunkCount = sysParameters.RichTextScrollPreviousChunkCount,
+                    RichTextHideTableOfContentsScrollbar = sysParameters.RichTextHideTableOfContentsScrollbar
                 },
                 entityData.Name);
 
@@ -818,6 +823,11 @@ namespace BusinessEntity.Core.Services
             typedEntity.Data.Tag = sysParameters.Tag;
             typedEntity.Data.CompanyName = sysParameters.CompanyName ?? string.Empty;
             typedEntity.Data.RichTextChunkCharLimit = sysParameters.RichTextChunkCharLimit;
+            typedEntity.Data.RichTextInitialChunkCount = sysParameters.RichTextInitialChunkCount;
+            typedEntity.Data.RichTextTableOfContentsBeforeBuffer = sysParameters.RichTextTableOfContentsBeforeBuffer;
+            typedEntity.Data.RichTextTableOfContentsAfterBuffer = sysParameters.RichTextTableOfContentsAfterBuffer;
+            typedEntity.Data.RichTextScrollPreviousChunkCount = sysParameters.RichTextScrollPreviousChunkCount;
+            typedEntity.Data.RichTextHideTableOfContentsScrollbar = sysParameters.RichTextHideTableOfContentsScrollbar;
 
             return typedEntity;
         }

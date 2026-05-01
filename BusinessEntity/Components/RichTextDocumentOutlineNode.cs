@@ -5,6 +5,8 @@ namespace BusinessEntity.Components
     {
         // Стабильный id заголовка внутри DOM документа.
         public string HeadingId { get; set; } = string.Empty;
+        // Порядок чанка, где лежит заголовок.
+        public long ChunkSortOrder { get; set; }
         // Текст заголовка для отображения в оглавлении.
         public string Title { get; set; } = string.Empty;
         // Уровень заголовка: H1=1, H2=2, H3=3.

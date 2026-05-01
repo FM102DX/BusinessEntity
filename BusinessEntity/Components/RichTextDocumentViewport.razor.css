@@ -11,6 +11,26 @@
     min-height: 0;
 }
 
+.rich-text-document-viewport:focus {
+    outline: none;
+}
+
+.rich-text-document-viewport__spacer {
+    flex: 0 0 auto;
+    pointer-events: none;
+}
+
+.rich-text-document-viewport__chunk {
+    display: block;
+    min-height: 1px;
+}
+
+.rich-text-document-viewport__loading {
+    color: #6c7a89;
+    font-size: 0.95rem;
+    padding: 0.25rem 0;
+}
+
 .rich-text-document-viewport h1,
 .rich-text-document-viewport h2,
 .rich-text-document-viewport h3 {

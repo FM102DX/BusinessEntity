@@ -15,8 +15,6 @@ namespace BusinessEntity.Services
     // 4. Формирует manifest результата для последующего сохранения.
     public class RichTextDocumentImportService
     {
-        // Текущий hard-limit по числу блоков в чанке пока оставляем константой MVP.
-        private const int MaxBlocksPerChunk = 24;
         // Дефолтный лимит символов используется, если системные параметры еще не заполнены.
         private const int DefaultRichTextChunkCharLimit = 12000;
 
@@ -64,7 +62,7 @@ namespace BusinessEntity.Services
             };
         }
 
-        // Режет блоки на chunks с умеренным размером для MVP.
+        // Режет блоки на chunks по целевому размеру в символах.
         private static IReadOnlyList<RichTextDocumentChunk> BuildChunks(
             IReadOnlyList<RichTextBlock> blocks,
             int maxCharsPerChunk)
@@ -89,7 +87,7 @@ namespace BusinessEntity.Services
             foreach (var block in blocks)
             {
                 var blockCharCount = (block.Html ?? string.Empty).Length + (block.AltText ?? string.Empty).Length;
-                if (currentBlocks.Count >= MaxBlocksPerChunk || (currentChars + blockCharCount) > maxCharsPerChunk)
+                if (currentBlocks.Count > 0 && (currentChars + blockCharCount) > maxCharsPerChunk)
                 {
                     result.Add(new RichTextDocumentChunk
                     {

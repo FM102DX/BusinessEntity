@@ -271,6 +271,32 @@ Property DTO нужны для хранения вспомогательных �
 
 HTML-cache чанка обязан ставить тот же `anchor` в атрибут `id` соответствующего H1-H3, чтобы клик по оглавлению мог точно прокрутить viewport к нужному блоку.
 
+### Virtualized RichTextDocument viewport
+
+Просмотр больших `RichTextDocument` не должен склеивать все `BusinessEntityDataChunkDto.HtmlCache` в одну строку и загружать весь документ в DOM.
+
+Правильная runtime-механика просмотра:
+
+- открытие документа загружает только shell (`BusinessEntity` + manifest), содержание из property-таблиц и начальное окно чанков;
+- начальное окно содержит первые 2 чанка;
+- публичные доменные операции чтения окон чанков находятся в `RichTextDocumentHelper`, а не в DataProvider connector/message bus;
+- DataProvider/storage layer может предоставлять только generic repository операции вроде filtered count и ordered page без знания rich-doc домена;
+- viewport рендерит только текущее окно чанков, каждый чанк отдельным DOM-контейнером;
+- сверху и снизу окна стоят spacer-элементы, высота которых имитирует невидимые чанки документа;
+- высоты реально отрендеренных чанков измеряются в браузере и кешируются в runtime-состоянии viewport;
+- для неизвестных высот используется оценочная средняя высота чанка;
+- при scroll/drag scrollbar viewport вычисляет примерный `chunkSortOrder` по `scrollTop` и загружает окно вокруг нужной позиции;
+- при клике по содержанию используется `chunkSortOrder + anchor`: viewport сначала загружает окно вокруг нужного чанка, затем скроллит к `anchor`;
+- `PageUp`/`PageDown` работают через тот же scroll pipeline и не должны требовать загрузки всего документа.
+
+Для больших документов запрещено на странице делать:
+
+```csharp
+HtmlContent = string.Join(Environment.NewLine, allChunks.Select(x => x.HtmlCache));
+```
+
+Такой full-DOM путь допустим только как legacy/debug fallback, но не как основной механизм просмотра.
+
 ### Property DTO
 
 В storage-слое есть три конкретных property DTO:

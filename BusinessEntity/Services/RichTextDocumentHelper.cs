@@ -4,7 +4,11 @@ using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.Core.Services;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
+using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.Services
 {
@@ -15,6 +19,8 @@ namespace BusinessEntity.Services
         private readonly BusinessEntityHelper _businessEntityHelper;
         // Коннектор data-provider нужен для технических rich-text данных: chunks и embedded files.
         private readonly IDataProviderConnector _dataProviderConnector;
+        private readonly IAsyncRepository<BusinessEntityDataChunkDto> _businessEntityDataChunkRepository;
+        private readonly IWebLoggerService? _webLogger;
         // Фабрика нужна для сборки runtime entity rich-text документа.
         private readonly IBusinessEntityFactory _businessEntityFactory;
 
@@ -22,10 +28,14 @@ namespace BusinessEntity.Services
         public RichTextDocumentHelper(
             BusinessEntityHelper businessEntityHelper,
             IDataProviderConnector dataProviderConnector,
+            IAsyncRepository<BusinessEntityDataChunkDto> businessEntityDataChunkRepository,
+            IWebLoggerService? webLogger,
             IBusinessEntityFactory businessEntityFactory)
         {
             _businessEntityHelper = businessEntityHelper ?? throw new ArgumentNullException(nameof(businessEntityHelper));
             _dataProviderConnector = dataProviderConnector ?? throw new ArgumentNullException(nameof(dataProviderConnector));
+            _businessEntityDataChunkRepository = businessEntityDataChunkRepository ?? throw new ArgumentNullException(nameof(businessEntityDataChunkRepository));
+            _webLogger = webLogger;
             _businessEntityFactory = businessEntityFactory ?? throw new ArgumentNullException(nameof(businessEntityFactory));
         }
 
@@ -85,22 +95,39 @@ namespace BusinessEntity.Services
         /// </summary>
         public async Task<RichTextDocumentSnapshot?> GetRichTextDocumentSnapshotAsync(Guid entityId, CancellationToken ct = default)
         {
+            var shell = await GetRichTextDocumentShellAsync(entityId, ct);
+            if (shell == null)
+            {
+                return null;
+            }
+
+            // Legacy full snapshot path. The virtualized viewer uses chunk windows instead.
+            var chunks = await _dataProviderConnector.GetRichTextChunksAsync(shell.Entity.Id, ct);
+
+            return new RichTextDocumentSnapshot
+            {
+                Entity = shell.Entity,
+                Manifest = shell.Manifest,
+                Chunks = chunks
+            };
+        }
+
+        /// <summary>
+        /// Loads only entity and manifest metadata without body chunks.
+        /// </summary>
+        public async Task<RichTextDocumentShell?> GetRichTextDocumentShellAsync(Guid entityId, CancellationToken ct = default)
+        {
             var entity = await _businessEntityHelper.GetBusinessEntityById(entityId);
             if (entity == null || entity.EntityType != BusinessEntityTypeEnum.RichTextDocument)
             {
                 return null;
             }
 
-            // Manifest читаем через общий typed entity-path helper-а, а технические chunks — напрямую из data-provider.
             var typedEntity = await _businessEntityHelper.GetEntityWithDataAsync<RichTextDocument>(entity.Id, ct);
-            var manifest = typedEntity?.Data ?? new RichTextDocument();
-            var chunks = await _dataProviderConnector.GetRichTextChunksAsync(entity.Id, ct);
-
-            return new RichTextDocumentSnapshot
+            return new RichTextDocumentShell
             {
                 Entity = entity,
-                Manifest = manifest,
-                Chunks = chunks
+                Manifest = typedEntity?.Data ?? new RichTextDocument()
             };
         }
 
@@ -120,6 +147,101 @@ namespace BusinessEntity.Services
         {
             var entries = await _dataProviderConnector.RebuildRichTextTableOfContentsEntriesAsync(entityId, ct);
             return BuildTableOfContentsTree(entries);
+        }
+
+        /// <summary>
+        /// Returns the number of persisted chunks for virtualized reading.
+        /// </summary>
+        public Task<int> GetChunkCountAsync(Guid entityId, CancellationToken ct = default)
+        {
+            return _businessEntityDataChunkRepository.GetCountAsync(
+                d => d.BusinessEntityId == entityId,
+                ct);
+        }
+
+        /// <summary>
+        /// Loads a sort-order window of chunks for virtualized reading.
+        /// </summary>
+        public async Task<RichTextDocumentChunkWindow> GetChunkWindowAsync(
+            Guid entityId,
+            long startSortOrder,
+            int take,
+            CancellationToken ct = default)
+        {
+            var totalCount = await GetChunkCountAsync(entityId, ct);
+            if (totalCount <= 0 || take <= 0)
+            {
+                return new RichTextDocumentChunkWindow
+                {
+                    BusinessEntityId = entityId,
+                    StartSortOrder = 0,
+                    TotalChunkCount = totalCount
+                };
+            }
+
+            var normalizedStart = Math.Clamp(startSortOrder, 0, Math.Max(totalCount - 1, 0));
+            var dtos = await _businessEntityDataChunkRepository.GetPageAsync(
+                d => d.BusinessEntityId == entityId && d.SortOrder >= normalizedStart,
+                d => d.SortOrder,
+                skip: 0,
+                take: take,
+                ct: ct);
+
+            await LogChunkWindowReadAsync(entityId, normalizedStart, take, totalCount, dtos);
+
+            return new RichTextDocumentChunkWindow
+            {
+                BusinessEntityId = entityId,
+                StartSortOrder = normalizedStart,
+                TotalChunkCount = totalCount,
+                Chunks = dtos.Select(MapChunkDtoToRuntime).ToList()
+            };
+        }
+
+        /// <summary>
+        /// Loads a chunk window centered around a target sort order.
+        /// </summary>
+        public Task<RichTextDocumentChunkWindow> GetChunkWindowAroundAsync(
+            Guid entityId,
+            long centerSortOrder,
+            int before,
+            int after,
+            CancellationToken ct = default)
+        {
+            var normalizedBefore = Math.Max(before, 0);
+            var normalizedAfter = Math.Max(after, 0);
+            var startSortOrder = Math.Max(centerSortOrder - normalizedBefore, 0);
+            return GetChunkWindowAsync(entityId, startSortOrder, normalizedBefore + 1 + normalizedAfter, ct);
+        }
+
+        // Логирует каждое фактическое чтение rich-text chunk DTO для наблюдения за virtual viewport.
+        private async Task LogChunkWindowReadAsync(
+            Guid entityId,
+            long normalizedStart,
+            int requestedTake,
+            int totalCount,
+            IReadOnlyList<BusinessEntityDataChunkDto> chunkDtos)
+        {
+            if (_webLogger == null || chunkDtos.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var chunkDto in chunkDtos)
+            {
+                await _webLogger.Information(
+                    "[rich-doc-chunk-read] " +
+                    $"documentId={entityId:D} " +
+                    $"chunkId={chunkDto.Id:D} " +
+                    $"sortOrder={chunkDto.SortOrder} " +
+                    $"windowStart={normalizedStart} " +
+                    $"requestedTake={requestedTake} " +
+                    $"totalChunks={totalCount} " +
+                    $"blockCount={chunkDto.BlockCount} " +
+                    $"charCount={chunkDto.CharCount} " +
+                    $"dataSizeBytes={chunkDto.DataSizeBytes} " +
+                    $"htmlLength={chunkDto.HtmlCache?.Length ?? 0}");
+            }
         }
 
         /// <summary>
@@ -308,6 +430,26 @@ namespace BusinessEntity.Services
                 ImageId = source.ImageId,
                 DisplayVariant = source.DisplayVariant,
                 AltText = source.AltText
+            };
+        }
+
+        // Преобразует DTO-строку чанка в runtime-объект rich-text чанка.
+        private static RichTextDocumentChunk MapChunkDtoToRuntime(BusinessEntityDataChunkDto dto)
+        {
+            var blocks = RichTextChunkStorageSerializer.DeserializeChunkData(dto.Data);
+            return new RichTextDocumentChunk
+            {
+                Id = dto.Id,
+                BusinessEntityId = dto.BusinessEntityId,
+                SortOrder = dto.SortOrder,
+                Blocks = blocks,
+                PlainText = dto.PlainText ?? string.Empty,
+                HtmlCache = dto.HtmlCache ?? string.Empty,
+                BlockCount = dto.BlockCount,
+                CharCount = dto.CharCount,
+                DataSizeBytes = dto.DataSizeBytes,
+                Version = dto.Version,
+                Checksum = dto.Checksum ?? string.Empty
             };
         }
 

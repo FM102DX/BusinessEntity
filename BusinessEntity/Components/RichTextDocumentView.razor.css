@@ -55,6 +55,31 @@
     gap: 0.15rem;
     border-right: 1px solid #dbe5f0;
     padding-right: 1rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    min-height: 0;
+}
+
+::deep .rich-text-outline__tree:focus {
+    outline: none;
+}
+
+::deep .rich-text-outline__tree--hide-scrollbar {
+    scrollbar-width: none;
+}
+
+::deep .rich-text-outline__tree--hide-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+::deep .rich-text-outline__loading {
+    color: #6c7a89;
+    font-size: 0.9rem;
+    padding: 0.25rem 1rem 0.25rem 0;
 }
 
 ::deep .rich-text-outline__item--level-2 {
@@ -131,6 +156,9 @@
     ::deep .rich-text-outline__tree {
         border-right: none;
         padding-right: 0;
+        max-height: none !important;
+        overflow: visible;
+        overscroll-behavior: auto;
     }
 
     ::deep .rich-text-outline__controls {

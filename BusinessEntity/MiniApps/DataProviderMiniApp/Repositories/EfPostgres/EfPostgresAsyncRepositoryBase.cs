@@ -45,6 +45,43 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
         return await query.ToListAsync(ct);
     }
 
+    // Читает страницу записей с явным order/skip/take без доменной специфики.
+    public async Task<IReadOnlyList<T>> GetPageAsync<TKey>(
+        Expression<Func<T, bool>>? filter,
+        Expression<Func<T, TKey>> orderBy,
+        bool descending = false,
+        int skip = 0,
+        int? take = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(orderBy);
+
+        await using var context = _dbContextFactory.CreateDbContext();
+        context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+        IQueryable<T> query = context.Set<T>();
+        if (filter != null)
+        {
+            query = query.Where(filter);
+        }
+
+        query = descending
+            ? query.OrderByDescending(orderBy)
+            : query.OrderBy(orderBy);
+
+        if (skip > 0)
+        {
+            query = query.Skip(skip);
+        }
+
+        if (take.HasValue)
+        {
+            query = query.Take(take.Value);
+        }
+
+        return await query.ToListAsync(ct);
+    }
+
     /// <summary>
     /// Возвращает запись по идентификатору.
     /// </summary>
@@ -127,6 +164,21 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
         await using var context = _dbContextFactory.CreateDbContext();
         context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
         return await context.Set<T>().CountAsync(ct);
+    }
+
+    // Возвращает количество строк текущего DTO-типа по optional-фильтру.
+    public async Task<int> GetCountAsync(Expression<Func<T, bool>>? filter, CancellationToken ct = default)
+    {
+        await using var context = _dbContextFactory.CreateDbContext();
+        context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+        IQueryable<T> query = context.Set<T>();
+        if (filter != null)
+        {
+            query = query.Where(filter);
+        }
+
+        return await query.CountAsync(ct);
     }
 
     /// <summary>

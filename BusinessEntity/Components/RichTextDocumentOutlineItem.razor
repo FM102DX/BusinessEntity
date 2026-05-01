@@ -35,7 +35,7 @@
 
 @code {
     [Parameter] public RichTextDocumentOutlineNode Node { get; set; } = default!;
-    [Parameter] public EventCallback<string> OnHeadingSelected { get; set; }
+    [Parameter] public EventCallback<RichTextDocumentOutlineNode> OnHeadingSelected { get; set; }
 
     // Переключает видимость дочерних заголовков текущего узла оглавления.
     private void ToggleExpanded()
@@ -46,6 +46,6 @@
     // Сообщает родительскому компоненту, к какому заголовку нужно прокрутить viewport документа.
     private Task SelectHeadingAsync()
     {
-        return OnHeadingSelected.InvokeAsync(Node.HeadingId);
+        return OnHeadingSelected.InvokeAsync(Node);
     }
 }

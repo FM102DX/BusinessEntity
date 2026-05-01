@@ -22,22 +22,34 @@
 
     @if (Nodes != null && Nodes.Count > 0)
     {
-        <div class="rich-text-outline__tree">
+        <div id="@TreeElementId" class="@TreeClass" tabindex="0">
             @foreach (var node in Nodes)
             {
                 <RichTextDocumentOutlineItem Node="node" OnHeadingSelected="OnHeadingSelected" />
             }
         </div>
     }
+    else if (IsLoading)
+    {
+        <div class="rich-text-outline__loading">Загрузка содержания...</div>
+    }
 </div>
 
 @code {
     [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode> Nodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
+    [Parameter] public string TreeElementId { get; set; } = string.Empty;
     [Parameter] public int DisplayLevelCount { get; set; } = 2;
+    [Parameter] public bool IsLoading { get; set; }
     [Parameter] public bool IsRebuilding { get; set; }
-    [Parameter] public EventCallback<string> OnHeadingSelected { get; set; }
+    [Parameter] public bool HideScrollbar { get; set; } = true;
+    [Parameter] public EventCallback<RichTextDocumentOutlineNode> OnHeadingSelected { get; set; }
     [Parameter] public EventCallback<int> OnDisplayLevelCountChanged { get; set; }
     [Parameter] public EventCallback OnRebuildRequested { get; set; }
+
+    private string TreeClass =>
+        HideScrollbar
+            ? "rich-text-outline__tree rich-text-outline__tree--hide-scrollbar"
+            : "rich-text-outline__tree";
 
     private Task HandleDisplayLevelCountChangedAsync(ChangeEventArgs args)
     {
