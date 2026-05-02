@@ -1,64 +1,64 @@
-# Rich Document Read Policy
+# Политика чтения Rich Document
 
-## 1. Purpose
+## 1. Назначение
 
-This document defines the read-side policy for rich-text documents stored in `BusinessEntity`.
+Этот документ фиксирует read-side политику для rich-text документов, хранящихся в `BusinessEntity`.
 
-It describes the concepts and implementation rules used for:
+Документ описывает концепции и правила реализации для:
 
-- chunked rich-text storage
-- document opening
-- table-of-contents loading
-- viewport-based chunk reading
-- scroll behavior
-- chunk cache behavior
-- diagnostics and logging
-- boundaries between storage infrastructure and rich-document domain logic
+- чанкового хранения rich-text документов
+- открытия документа
+- загрузки содержания
+- чтения чанков через viewport
+- поведения скролла
+- кеширования чанков
+- диагностики и логирования
+- границ ответственности между storage-инфраструктурой и rich-document доменной логикой
 
-The goal is to keep large rich-text documents readable without loading the entire document into the browser DOM at once.
-
----
-
-## 2. Core Storage Model
-
-A rich-text document is represented by a normal `BusinessEntity` plus a typed `BusinessEntityData` payload.
-
-The document body is not stored as one large text field. It is split into ordered chunks stored as `BusinessEntityDataChunkDto`.
-
-The basic storage structure is:
-
-- `BusinessEntityDto` - document identity and tree object
-- `BusinessEntityDataDto` - document manifest and metadata
-- `BusinessEntityDataChunkDto` - ordered content chunks
-- `BusinessEntityDataChunkPropertyDto` - technical properties for chunks, such as table-of-contents data
-
-`BusinessEntityDataChunkDto` is a technical storage row. It is not a business object and must not be treated as a graph node.
-
-The chunk order is defined by `SortOrder`. All read-side navigation and viewport estimation uses `SortOrder` as the stable ordering key.
+Цель политики: дать возможность читать большие rich-text документы без загрузки всего документа в browser DOM целиком.
 
 ---
 
-## 3. Rich Document Manifest
+## 2. Базовая модель хранения
 
-The document-level payload stores the manifest, not the full content.
+Rich-text документ представлен обычным `BusinessEntity` и typed payload в `BusinessEntityData`.
 
-The manifest describes the document format and storage policy, for example:
+Тело документа не хранится одним большим текстовым полем. Оно режется на упорядоченные чанки, которые хранятся как `BusinessEntityDataChunkDto`.
 
-- content storage mode
-- editor format
-- chunk policy
-- embedded file storage mode
-- image support flags
+Базовая структура хранения:
 
-The manifest is intentionally small. It is safe to read when opening a document and is the only document data that should block the initial page shell render.
+- `BusinessEntityDto` - идентичность документа и объект дерева
+- `BusinessEntityDataDto` - manifest документа и метаданные
+- `BusinessEntityDataChunkDto` - упорядоченные чанки содержимого
+- `BusinessEntityDataChunkPropertyDto` - технические свойства чанков, например данные содержания
+
+`BusinessEntityDataChunkDto` является технической storage-строкой. Он не является бизнес-объектом и не должен трактоваться как узел графа.
+
+Порядок чанков задается полем `SortOrder`. Вся read-side навигация и оценка позиции viewport опирается на `SortOrder` как на стабильный ключ порядка.
 
 ---
 
-## 4. Chunk Content
+## 3. Manifest rich-документа
 
-Each rich-text chunk stores the content needed to render that range of the document.
+Payload уровня документа хранит manifest, а не полный контент.
 
-Relevant chunk fields include:
+Manifest описывает формат и политику хранения документа, например:
+
+- режим хранения содержимого
+- формат редактора
+- политику чанков
+- режим хранения embedded-файлов
+- флаги поддержки изображений
+
+Manifest намеренно остается маленьким. Его безопасно читать при открытии документа, и это единственные данные документа, которые должны блокировать первичный render shell страницы.
+
+---
+
+## 4. Содержимое чанка
+
+Каждый rich-text chunk хранит данные, необходимые для render соответствующего диапазона документа.
+
+Важные поля чанка:
 
 - `BusinessEntityId`
 - `SortOrder`
@@ -71,103 +71,103 @@ Relevant chunk fields include:
 - `Version`
 - `Checksum`
 
-`HtmlCache` is the primary read-side field for the browser viewport. The viewport renders already prepared HTML and does not rebuild the document from raw blocks during normal reading.
+`HtmlCache` является основным read-side полем для browser viewport. Viewport рендерит уже подготовленный HTML и не пересобирает документ из raw blocks при обычном чтении.
 
-Chunks are cut by configured size. The read side must not depend on semantic boundaries being perfectly aligned with chunk boundaries.
+Чанки режутся по настроенному размеру. Read-side логика не должна зависеть от того, что семантические границы идеально совпадают с границами чанков.
 
 ---
 
-## 5. Chunk Properties
+## 5. Свойства чанков
 
-Chunk properties are stored in `BusinessEntityDataChunkPropertyDto`.
+Свойства чанков хранятся в `BusinessEntityDataChunkPropertyDto`.
 
-The table of contents is stored as a chunk property with:
+Содержание хранится как chunk property с типом:
 
 ```text
 BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents = 100
 ```
 
-The property belongs to the chunk via `ParentEntityId`.
+Property принадлежит чанку через `ParentEntityId`.
 
-The property data contains heading entries found inside that chunk. Each entry must contain enough information to navigate back to the exact rendered location:
+Данные property содержат heading entries, найденные внутри этого чанка. Каждая запись должна содержать достаточно информации, чтобы вернуться к точному месту render:
 
-- heading title
-- heading level
-- heading anchor
+- заголовок
+- уровень заголовка
+- anchor заголовка
 - chunk id
 - chunk sort order
-- block id or block index when available
+- block id или block index, если доступен
 
-The read side builds the full document outline by reading these chunk properties from storage. It must not parse all document HTML in the browser to build the outline.
+Read-side собирает полное outline документа чтением этих chunk properties из storage. Он не должен парсить весь HTML документа в браузере, чтобы построить outline.
 
 ---
 
-## 6. Document Open Flow
+## 6. Flow открытия документа
 
-Opening a rich-text document is staged.
+Открытие rich-text документа выполняется поэтапно.
 
-The page should synchronously read only the document shell:
+Страница должна синхронно читать только shell документа:
 
 1. `BusinessEntity`
 2. rich-document manifest
 
-After the shell is available, the page can render the document view immediately.
+После получения shell страница может сразу render document view.
 
-The following operations must run asynchronously and independently:
+Следующие операции должны выполняться асинхронно и независимо:
 
-- initial chunk window loading
-- table-of-contents loading
+- загрузка начального окна чанков
+- загрузка содержания
 
-This prevents a large table of contents from blocking the first visible document screen.
+Это не дает большому содержанию блокировать первый видимый экран документа.
 
-The UI uses separate loading states:
+UI использует отдельные loading-состояния:
 
 - `IsInitialContentLoading`
 - `IsOutlineLoading`
 
-`InitialChunkWindow == null` must not mean "empty document" while `IsInitialContentLoading` is true.
+`InitialChunkWindow == null` не должно означать "документ пуст", пока `IsInitialContentLoading` равно true.
 
 ---
 
-## 7. Initial Chunk Window
+## 7. Начальное окно чанков
 
-When a document opens, the viewport loads only the configured initial chunk window.
+При открытии документа viewport загружает только настроенное начальное окно чанков.
 
-The initial window size is controlled by system settings.
+Размер начального окна управляется системными настройками.
 
-The default behavior is to show the first document chunks quickly, without waiting for the whole table of contents.
+Поведение по умолчанию: быстро показать первые чанки документа, не ожидая загрузки всего содержания.
 
-The initial window is passed to `RichTextDocumentViewport` as `InitialWindow`. The viewport applies it to `LoadedChunks`.
-
----
-
-## 8. Table Of Contents Loading
-
-The outline is loaded from persisted chunk properties.
-
-The read-side outline is a tree of `RichTextDocumentOutlineNode`.
-
-Only heading levels H1-H3 are currently included in table-of-contents properties. The UI can display a configured subset of those levels, currently 1 to 3.
-
-The outline loading must be independent from initial chunk loading.
-
-If the outline is not loaded yet, the document body should still be readable.
+Начальное окно передается в `RichTextDocumentViewport` как `InitialWindow`. Viewport применяет его к `LoadedChunks`.
 
 ---
 
-## 9. Viewport Read Model
+## 8. Загрузка содержания
 
-The rich-text viewport is a virtualized chunk window.
+Outline загружается из сохраненных chunk properties.
 
-It renders:
+Read-side outline является деревом `RichTextDocumentOutlineNode`.
 
-- a top spacer
-- currently loaded chunks
-- a bottom spacer
+Сейчас в table-of-contents properties включаются только уровни H1-H3. UI может показывать настроенное подмножество этих уровней, сейчас от 1 до 3.
 
-The spacers represent unloaded document ranges. This lets the browser scrollbar approximate the full document length while the DOM contains only a limited set of real chunks.
+Загрузка outline должна быть независимой от загрузки начальных чанков.
 
-The viewport state is held in:
+Если outline еще не загружен, тело документа все равно должно быть доступно для чтения.
+
+---
+
+## 9. Read model viewport
+
+Rich-text viewport является виртуализированным окном чанков.
+
+Он рендерит:
+
+- top spacer
+- текущие загруженные чанки
+- bottom spacer
+
+Spacers представляют незагруженные диапазоны документа. Это позволяет browser scrollbar приблизительно отражать полную длину документа, пока DOM содержит только ограниченный набор реальных чанков.
+
+Состояние viewport хранится в:
 
 ```text
 LoadedChunks
@@ -177,418 +177,418 @@ BottomSpacerPx
 EstimatedChunkHeight
 ```
 
-`LoadedChunks` is the source of truth for what is currently rendered as real HTML. Any change to `LoadedChunks` is reflected in the page through normal Blazor rendering.
+`LoadedChunks` является source of truth для того, что сейчас отображается как реальный HTML. Любое изменение `LoadedChunks` прокидывается на страницу через обычный Blazor render.
 
 ---
 
-## 10. LoadedChunks Policy
+## 10. Политика LoadedChunks
 
-`LoadedChunks` contains the real chunks currently rendered in the viewport.
+`LoadedChunks` содержит реальные чанки, которые сейчас отрендерены во viewport.
 
-For adjacent scroll loading, new chunks are merged into the existing loaded set. This prevents already visible content from disappearing when the user scrolls across a chunk boundary.
+При adjacent scroll loading новые чанки merge-ятся в уже загруженный набор. Это не дает уже видимому тексту исчезать, когда пользователь пересекает границу чанка.
 
-For table-of-contents navigation or far jumps, the viewport replaces the loaded set with a new window around the target chunk. This avoids unbounded DOM growth during direct navigation.
+При навигации по содержанию или дальнем jump viewport заменяет загруженный набор новым окном вокруг target chunk. Это предотвращает неограниченный рост DOM при прямой навигации.
 
-The merge policy is:
+Политика merge:
 
-- merge when the requested window is adjacent to the currently loaded window
-- replace when the requested window is a far jump
+- merge, если requested window соседствует с текущим loaded window
+- replace, если requested window является дальним jump
 
-Duplicate chunks are resolved by `SortOrder`; the latest loaded instance wins.
-
----
-
-## 11. Chunk Read Cache
-
-Before reading from storage, the viewport checks whether requested chunks already exist in `LoadedChunks`.
-
-If all requested chunks are already loaded, no database read is needed.
-
-If only part of the requested range is missing, only missing contiguous ranges should be fetched.
-
-This prevents unnecessary database reads when the user scrolls back into a range that is still displayed.
+Дубликаты чанков разрешаются по `SortOrder`; последняя загруженная версия побеждает.
 
 ---
 
-## 12. Scroll Down Behavior
+## 11. Read cache чанков
 
-When the user scrolls down normally, the viewport estimates the target chunk based on scroll offset and estimated chunk height.
+Перед чтением из storage viewport проверяет, есть ли запрошенные чанки уже в `LoadedChunks`.
 
-If the estimated chunk is already loaded, no read is performed.
+Если все запрошенные чанки уже загружены, чтение из БД не нужно.
 
-If the estimated chunk is not loaded, the viewport loads a configured scroll window around that target.
+Если отсутствует только часть requested range, нужно читать только отсутствующие contiguous ranges.
 
-For normal adjacent scrolling, the new window is merged into `LoadedChunks`.
-
----
-
-## 13. Scroll Up Behavior
-
-When the user scrolls up, the viewport checks whether the scroll position approaches the top boundary of the first loaded chunk.
-
-If the user reaches that boundary and previous chunks exist, the viewport loads the previous window and merges it into `LoadedChunks`.
-
-The number of previous chunks kept or loaded during scroll is controlled by rich-document settings.
-
-This behavior must work after direct table-of-contents navigation as well as after normal scrolling.
+Это предотвращает лишние чтения из БД, когда пользователь скроллит обратно в диапазон, который все еще отображается.
 
 ---
 
-## 14. PageUp And PageDown
+## 12. Скролл вниз
 
-`PageUp` and `PageDown` are treated like normal viewport scrolling.
+При обычном скролле вниз viewport оценивает target chunk по scroll offset и estimated chunk height.
 
-They should trigger the same boundary checks and chunk-window loading as mouse-wheel or trackpad scrolling.
+Если estimated chunk уже загружен, чтение не выполняется.
 
-They must not use table-of-contents jump semantics.
+Если estimated chunk не загружен, viewport грузит настроенное scroll window вокруг target.
 
----
-
-## 15. Scrollbar Drag Behavior
-
-Dragging the rich-document scrollbar has special semantics.
-
-While the user holds and drags the scrollbar thumb, the viewport must not read chunks.
-
-On mouse release, the viewport:
-
-1. reads the final scrollbar position
-2. estimates the approximate document position
-3. maps that position to an approximate chunk `SortOrder`
-4. finds the nearest table-of-contents node
-5. loads that node as if the user clicked the outline item
-
-This prevents repeated reads during rapid scrollbar movement and gives the scrollbar a whole-document navigation meaning.
-
-If the table of contents is not available, the viewport may load a window around the estimated chunk.
+При обычном adjacent scrolling новое окно merge-ится в `LoadedChunks`.
 
 ---
 
-## 16. Table-Of-Contents Navigation
+## 13. Скролл вверх
 
-Clicking an outline item navigates to a stable heading anchor.
+При скролле вверх viewport проверяет, приближается ли scroll position к верхней границе первого загруженного чанка.
 
-If the target chunk is already loaded, the viewport scrolls to the anchor in the current DOM.
+Если пользователь достигает этой границы и предыдущие чанки существуют, viewport загружает предыдущее окно и merge-ит его в `LoadedChunks`.
 
-If the target chunk is not loaded, the viewport loads a configured window around the target chunk, then scrolls to the heading anchor after render.
+Количество предыдущих чанков, которые удерживаются или подгружаются при скролле, управляется rich-document settings.
 
-The configured table-of-contents window includes:
-
-- chunks before the target
-- the target chunk
-- chunks after the target
-
-The before and after counts are system settings.
+Это поведение должно работать и после прямой навигации по содержанию, и после обычного скролла.
 
 ---
 
-## 17. Settings
+## 14. PageUp и PageDown
 
-Rich-document read behavior is controlled by system parameters.
+`PageUp` и `PageDown` трактуются как обычный viewport scrolling.
 
-Current read-side settings include:
+Они должны запускать те же проверки границ и загрузку chunk-window, что mouse wheel или trackpad scrolling.
 
-- rich-text chunk size
-- initial chunk count on document open
+Они не должны использовать table-of-contents jump semantics.
+
+---
+
+## 15. Перетаскивание scrollbar
+
+Перетаскивание rich-document scrollbar имеет специальную семантику.
+
+Пока пользователь удерживает и тащит scrollbar thumb, viewport не должен читать чанки.
+
+При отпускании мыши viewport:
+
+1. читает финальную позицию scrollbar
+2. оценивает приблизительную позицию в документе
+3. мапит эту позицию на примерный chunk `SortOrder`
+4. находит ближайший table-of-contents node
+5. загружает этот node так, как если бы пользователь кликнул по outline item
+
+Это предотвращает повторяющиеся чтения во время быстрого движения scrollbar и дает scrollbar семантику навигации по всему документу.
+
+Если содержание недоступно, viewport может загрузить окно вокруг estimated chunk.
+
+---
+
+## 16. Навигация по содержанию
+
+Клик по outline item переводит viewport к стабильному heading anchor.
+
+Если target chunk уже загружен, viewport скроллит к anchor в текущем DOM.
+
+Если target chunk не загружен, viewport загружает настроенное окно вокруг target chunk, затем после render скроллит к heading anchor.
+
+Настроенное table-of-contents window включает:
+
+- чанки перед target
+- target chunk
+- чанки после target
+
+Before/after count задаются системными настройками.
+
+---
+
+## 17. Настройки
+
+Read behavior rich-документа управляется системными параметрами.
+
+Текущие read-side настройки включают:
+
+- размер rich-text chunk
+- количество начальных чанков при открытии документа
 - table-of-contents before buffer
 - table-of-contents after buffer
 - scroll previous chunk count
-- table-of-contents scrollbar visibility
+- видимость scrollbar содержания
 
-Settings are read through `RichTextDocumentSettingsService`.
+Настройки читаются через `RichTextDocumentSettingsService`.
 
-The storage provider should not contain rich-document domain decisions. Domain-specific reading behavior belongs in rich-document services and components.
+Storage provider не должен содержать rich-document domain decisions. Доменное поведение чтения принадлежит rich-document services и components.
 
 ---
 
-## 18. Logging
+## 18. Логирование
 
-Chunk reads are logged to the web logger with a dedicated tag:
+Чтение чанков логируется в web logger со специальным tag:
 
 ```text
 [rich-doc-chunk-read]
 ```
 
-Loaded chunk state can be logged with:
+Состояние loaded chunks может логироваться с tag:
 
 ```text
 [rich-doc-loaded-chunks]
 ```
 
-Diagnostic logs must use stable tags so they can be filtered in the web logger.
+Diagnostic logs должны использовать стабильные tags, чтобы их можно было фильтровать в web logger.
 
-Diagnostic tags should not include dynamic chunk values as separate logger tags. Dynamic values belong in the message text.
-
----
-
-## 19. Rebuilding The Table Of Contents
-
-The table of contents is rebuilt explicitly.
-
-It should run:
-
-- after import
-- after pressing the rebuild table-of-contents button
-
-Opening a document must not rebuild the table of contents.
-
-Opening a document only reads persisted table-of-contents properties.
+Diagnostic tags не должны содержать динамические chunk values как отдельные logger tags. Динамические значения должны быть частью message text.
 
 ---
 
-## 20. Import Policy
+## 19. Пересоздание содержания
 
-Import creates or appends chunks and creates table-of-contents properties for those chunks.
+Содержание пересоздается явно.
 
-Chunk cutting is controlled by size settings.
+Оно должно запускаться:
 
-The read side assumes imported chunks already have:
+- после import
+- после нажатия кнопки rebuild table-of-contents
 
-- stable `SortOrder`
-- rendered `HtmlCache`
-- table-of-contents properties when headings exist
+Открытие документа не должно пересоздавать содержание.
 
-If a chunk has no H1-H3 headings, no table-of-contents property is required.
+Открытие документа только читает сохраненные table-of-contents properties.
 
 ---
 
-## 21. Ownership Boundaries
+## 20. Import policy
 
-Rich-document logic belongs to the rich-document layer.
+Import создает или append-ит чанки и создает table-of-contents properties для этих чанков.
 
-The data provider may expose generic storage operations and converters, but it must not own rich-document read policy.
+Нарезка чанков управляется настройками размера.
 
-The correct responsibility split is:
+Read-side предполагает, что imported chunks уже имеют:
 
-- data provider: store and retrieve DTOs
-- converters: translate persisted DTO payloads
+- стабильный `SortOrder`
+- отрендеренный `HtmlCache`
+- table-of-contents properties, если внутри есть headings
+
+Если в chunk нет H1-H3 headings, table-of-contents property не требуется.
+
+---
+
+## 21. Границы ответственности
+
+Rich-document logic принадлежит rich-document layer.
+
+Data provider может предоставлять generic storage operations и converters, но он не должен владеть rich-document read policy.
+
+Правильное разделение ответственности:
+
+- data provider: хранит и читает DTO
+- converters: переводят persisted DTO payloads
 - rich-document helper: rich-document domain operations
-- rich-document viewport: UI windowing and navigation
+- rich-document viewport: UI windowing и navigation
 - rich-document outline: table-of-contents UI
 
-This keeps the storage layer reusable and prevents domain-specific behavior from leaking into generic infrastructure.
+Это сохраняет storage layer переиспользуемым и не дает domain-specific behavior протекать в generic infrastructure.
 
 ---
 
-## 22. Failure And Cancellation Policy
+## 22. Политика ошибок и cancellation
 
-Opening a document can start multiple asynchronous reads.
+Открытие документа может запускать несколько асинхронных чтений.
 
-If the user navigates to another document before those reads complete, old reads must not overwrite the new page state.
+Если пользователь перешел к другому документу до завершения этих чтений, старые чтения не должны перетирать состояние новой страницы.
 
-The page uses:
+Страница использует:
 
 - cancellation tokens
-- a load version
+- load version
 
-Every asynchronous result must check that it still belongs to the active document before applying UI state.
-
----
-
-## 23. Current Tradeoffs
-
-The current model limits initial DOM size and avoids full-document reads during normal opening.
-
-However, adjacent scrolling can still grow the DOM over time because merged chunks remain visible. This is acceptable for the current implementation phase.
-
-A future stricter virtualization model may evict distant chunks and keep only the visible range plus buffer.
+Каждый asynchronous result должен проверять, что он все еще относится к активному документу, перед применением UI state.
 
 ---
 
-## 24. Non-Goals
+## 23. Текущие tradeoffs
 
-The current read policy does not require:
+Текущая модель ограничивает initial DOM size и избегает full-document reads при обычном открытии.
 
-- loading the whole rich document into the DOM
-- rebuilding the table of contents on every open
-- parsing browser DOM to discover headings
-- treating chunks as business entities
-- putting rich-document navigation rules into the data provider
+Однако adjacent scrolling пока может увеличивать DOM со временем, потому что merged chunks остаются видимыми. Для текущей фазы реализации это допустимо.
 
-These behaviors should be avoided unless this policy is intentionally revised.
+В будущем более строгая virtualization model может вытеснять дальние чанки и держать только visible range plus buffer.
 
 ---
 
-## 25. Principal Solution Approaches
+## 24. Non-goals
 
-This section defines the preferred engineering approaches for recurring rich-document read problems.
+Текущая read policy не требует:
 
-### 25.1. Opening a large document
+- загружать весь rich document в DOM
+- пересоздавать содержание при каждом открытии
+- парсить browser DOM для поиска headings
+- трактовать chunks как business entities
+- помещать rich-document navigation rules в data provider
 
-Problem:
+Этих подходов нужно избегать, если policy не пересматривается намеренно.
 
-- the user needs to see the document quickly
-- the document can contain many chunks
-- the table of contents can be large
+---
 
-Principled approach:
+## 25. Принципиальные подходы к решению задач
 
-- read only the shell synchronously
-- render the page frame as soon as the shell is available
-- load the initial chunk window asynchronously
-- load the table of contents asynchronously
-- keep separate loading states for body and outline
+Этот раздел фиксирует предпочтительные инженерные подходы для повторяющихся задач чтения rich-документа.
 
-Avoid:
+### 25.1. Открытие большого документа
 
-- waiting for all chunks before rendering
-- waiting for the table of contents before showing the first text
-- using one global loading flag for all read stages
+Проблема:
 
-### 25.2. Reading document body content
+- пользователь должен быстро увидеть документ
+- документ может содержать много чанков
+- содержание может быть большим
 
-Problem:
+Принципиальный подход:
 
-- the document body can be too large for a single DOM render
-- the user usually needs only a local range
+- синхронно читать только shell
+- render page frame сразу после получения shell
+- загружать initial chunk window асинхронно
+- загружать table of contents асинхронно
+- держать отдельные loading states для body и outline
 
-Principled approach:
+Избегать:
 
-- read chunks by ordered windows
-- render only loaded chunks as real DOM
-- represent unloaded ranges with spacers
-- estimate total scroll height from chunk count and measured chunk heights
+- ожидания всех чанков перед render
+- ожидания содержания перед показом первого текста
+- одного global loading flag для всех этапов чтения
 
-Avoid:
+### 25.2. Чтение тела документа
 
-- concatenating all chunk HTML into one giant string
-- loading all chunks on open
-- making the scrollbar represent only the currently loaded window
+Проблема:
 
-### 25.3. Navigating by table of contents
+- тело документа может быть слишком большим для одного DOM render
+- пользователю обычно нужен только локальный диапазон
 
-Problem:
+Принципиальный подход:
 
-- the user clicks a semantic heading, not a raw chunk number
-- the target chunk may not be loaded
+- читать chunks ordered windows
+- рендерить только loaded chunks как real DOM
+- представлять unloaded ranges через spacers
+- оценивать total scroll height по chunk count и measured chunk heights
 
-Principled approach:
+Избегать:
 
-- store stable heading anchors in chunk properties
-- resolve the clicked outline node to `ChunkSortOrder` and anchor
-- if the chunk is loaded, scroll to the anchor
-- if the chunk is not loaded, load a configured window around it, then scroll after render
+- склейки всех chunk HTML в одну огромную строку
+- загрузки всех chunks при открытии
+- scrollbar, который отражает только текущее loaded window
 
-Avoid:
+### 25.3. Навигация по содержанию
 
-- reparsing all document HTML to find headings
-- loading the entire document to make anchor navigation possible
-- relying on visual text matching instead of stable anchors
+Проблема:
 
-### 25.4. Scrolling down and up
+- пользователь кликает по смысловому heading, а не по raw chunk number
+- target chunk может быть не загружен
 
-Problem:
+Принципиальный подход:
 
-- the user can move through chunk boundaries gradually
-- content must not disappear at the boundary
+- хранить stable heading anchors в chunk properties
+- резолвить clicked outline node в `ChunkSortOrder` и anchor
+- если chunk загружен, скроллить к anchor
+- если chunk не загружен, загрузить configured window вокруг него, затем scroll after render
 
-Principled approach:
+Избегать:
 
-- detect that the user is approaching the loaded range boundary
-- fetch only the missing adjacent window
-- merge adjacent windows into `LoadedChunks`
-- reuse chunks already present in `LoadedChunks`
+- reparsing всего document HTML для поиска headings
+- загрузки всего документа ради anchor navigation
+- visual text matching вместо stable anchors
 
-Avoid:
+### 25.4. Скролл вниз и вверх
 
-- replacing the whole loaded range during adjacent scrolling
-- rereading chunks that are already loaded
-- treating upward scrolling as a different navigation model from downward scrolling
+Проблема:
 
-### 25.5. Dragging the scrollbar thumb
+- пользователь постепенно пересекает chunk boundaries
+- контент не должен исчезать на границе
 
-Problem:
+Принципиальный подход:
 
-- scrollbar dragging can emit many scroll events
-- reading during drag causes repeated database reads and flicker
+- определять приближение к границе loaded range
+- читать только missing adjacent window
+- merge adjacent windows в `LoadedChunks`
+- переиспользовать chunks, которые уже есть в `LoadedChunks`
 
-Principled approach:
+Избегать:
 
-- suppress chunk reads while the mouse holds the scrollbar thumb
-- wait until mouse release
-- estimate the final document position
-- map that position to the nearest outline node when possible
-- load that location using table-of-contents jump semantics
+- замены всего loaded range при adjacent scrolling
+- повторного чтения chunks, которые уже загружены
+- отдельной навигационной модели для скролла вверх
 
-Avoid:
+### 25.5. Перетаскивание scrollbar thumb
 
-- reading chunks continuously during thumb drag
-- treating every intermediate scroll event as a real navigation intent
-- merging every drag-produced window into the current DOM
+Проблема:
 
-### 25.6. Rebuilding the table of contents
+- scrollbar dragging может генерировать много scroll events
+- чтение во время drag вызывает повторные чтения БД и flicker
 
-Problem:
+Принципиальный подход:
 
-- rebuilding scans chunks and writes technical properties
-- this is heavier than reading persisted outline data
+- подавлять chunk reads, пока мышь удерживает scrollbar thumb
+- ждать mouse release
+- оценивать final document position
+- мапить позицию на ближайший outline node, если возможно
+- грузить эту точку через table-of-contents jump semantics
 
-Principled approach:
+Избегать:
 
-- rebuild only on explicit events
-- run rebuild after import
-- run rebuild when the user presses the rebuild button
-- on document open, read persisted properties only
+- чтения chunks непрерывно во время thumb drag
+- трактовки каждого промежуточного scroll event как real navigation intent
+- merge каждого drag-produced window в текущий DOM
 
-Avoid:
+### 25.6. Пересоздание содержания
 
-- rebuilding on every open
-- rebuilding as a side effect of reading
-- hiding rebuild cost inside generic data-provider reads
+Проблема:
 
-### 25.7. Choosing merge versus replace
+- rebuild сканирует chunks и пишет technical properties
+- это тяжелее, чем чтение persisted outline data
 
-Problem:
+Принципиальный подход:
 
-- adjacent scroll should feel continuous
-- far jumps should not grow the DOM unnecessarily
+- rebuild только по explicit events
+- выполнять rebuild после import
+- выполнять rebuild по кнопке пользователя
+- при открытии документа только читать persisted properties
 
-Principled approach:
+Избегать:
 
-- merge when the new window touches or overlaps the existing loaded window
-- replace when the new window is a far jump
-- use table-of-contents jumps and scrollbar-release jumps as replace operations
+- rebuild при каждом open
+- rebuild как side effect чтения
+- скрытия rebuild cost внутри generic data-provider reads
 
-Avoid:
+### 25.7. Выбор merge или replace
 
-- always replacing, because it causes visible disappearance near boundaries
-- always merging, because it can grow the DOM too aggressively after many jumps
+Проблема:
 
-### 25.8. Placing domain behavior
+- adjacent scroll должен ощущаться непрерывным
+- far jumps не должны без необходимости раздувать DOM
 
-Problem:
+Принципиальный подход:
 
-- chunk storage is generic infrastructure
-- rich-document reading is domain-specific behavior
+- merge, когда новое window соприкасается или пересекается с existing loaded window
+- replace, когда новое window является far jump
+- использовать replace для table-of-contents jumps и scrollbar-release jumps
 
-Principled approach:
+Избегать:
 
-- keep DTO persistence in the data provider
-- keep rich-document decisions in `RichTextDocumentHelper` and UI components
-- keep converters limited to storage payload conversion
+- always replace, потому что это вызывает видимое исчезновение текста около границ
+- always merge, потому что после многих jumps DOM может сильно вырасти
 
-Avoid:
+### 25.8. Размещение domain behavior
 
-- putting table-of-contents navigation policy into the data provider
-- making storage APIs understand UI scroll behavior
-- coupling generic repository code to rich-document semantics
+Проблема:
 
-### 25.9. Diagnostics
+- chunk storage является generic infrastructure
+- rich-document reading является domain-specific behavior
 
-Problem:
+Принципиальный подход:
 
-- chunked reading is hard to reason about without visibility
-- logs can become noisy and hard to filter
+- держать DTO persistence в data provider
+- держать rich-document decisions в `RichTextDocumentHelper` и UI components
+- ограничить converters переводом storage payload
 
-Principled approach:
+Избегать:
 
-- log actual chunk reads with a stable tag
-- log loaded-window state with a separate stable tag
-- keep dynamic values in message text, not in logger tags
-- remove or reduce diagnostic logging when it starts to interfere with normal analysis
+- table-of-contents navigation policy в data provider
+- storage APIs, которые понимают UI scroll behavior
+- coupling generic repository code с rich-document semantics
 
-Avoid:
+### 25.9. Диагностика
 
-- creating dynamic tags for chunk ids or chunk sizes
-- logging every internal UI estimate as a separate tag
-- mixing read diagnostics with unrelated application logs
+Проблема:
+
+- chunked reading сложно понимать без наблюдаемости
+- logs могут стать шумными и тяжелыми для фильтрации
+
+Принципиальный подход:
+
+- логировать реальные chunk reads со stable tag
+- логировать loaded-window state отдельным stable tag
+- держать dynamic values в message text, а не в logger tags
+- уменьшать или удалять diagnostic logging, когда оно начинает мешать normal analysis
+
+Избегать:
+
+- dynamic tags для chunk ids или chunk sizes
+- логирования каждой внутренней UI estimate как отдельного tag
+- смешивания read diagnostics с unrelated application logs
