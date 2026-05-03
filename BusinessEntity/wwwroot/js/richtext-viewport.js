@@ -1,4 +1,4 @@
-window.richTextViewport = (() => {
+function createRichTextViewportRuntime() {
     const registry = new Map();
 
     function syncViewportSize(viewportElementId) {
@@ -22,6 +22,24 @@ window.richTextViewport = (() => {
 
     function registerViewport(viewportElementId) {
         registerVirtualViewport(viewportElementId, null);
+    }
+
+    function isScrollNotificationSuppressed(viewportElementId) {
+        const entry = registry.get(viewportElementId);
+        return !!entry &&
+            Number.isFinite(entry.suppressScrollNotificationsUntil) &&
+            performance.now() < entry.suppressScrollNotificationsUntil;
+    }
+
+    function suppressScrollNotifications(viewportElementId, milliseconds) {
+        const entry = registry.get(viewportElementId);
+        if (!entry || !Number.isFinite(milliseconds) || milliseconds <= 0) {
+            return;
+        }
+
+        entry.suppressScrollNotificationsUntil = Math.max(
+            entry.suppressScrollNotificationsUntil || 0,
+            performance.now() + milliseconds);
     }
 
     function registerVirtualViewport(viewportElementId, dotNetReference) {
@@ -70,13 +88,16 @@ window.richTextViewport = (() => {
         };
 
         const requestScrollNotification = () => {
-            if (!dotNetReference || scrollFrameId !== 0 || isScrollbarDragging) {
+            if (!dotNetReference ||
+                scrollFrameId !== 0 ||
+                isScrollbarDragging ||
+                isScrollNotificationSuppressed(viewportElementId)) {
                 return;
             }
 
             scrollFrameId = window.requestAnimationFrame(() => {
                 scrollFrameId = 0;
-                if (isScrollbarDragging) {
+                if (isScrollbarDragging || isScrollNotificationSuppressed(viewportElementId)) {
                     return;
                 }
 
@@ -145,7 +166,8 @@ window.richTextViewport = (() => {
             handleKeyDown,
             handleMouseDown,
             handleMouseUp,
-            dotNetReference
+            dotNetReference,
+            suppressScrollNotificationsUntil: 0
         });
         window.addEventListener("resize", requestSync, { passive: true });
         window.addEventListener("scroll", requestSync, { passive: true });
@@ -173,14 +195,18 @@ window.richTextViewport = (() => {
         registry.delete(viewportElementId);
     }
 
-    function scrollToHeading(viewportElementId, headingId) {
+    function scrollToHeading(viewportElementId, headingId, behavior = "smooth", suppressScrollMs = 0) {
         const viewport = document.getElementById(viewportElementId);
         if (!viewport) {
             return false;
         }
 
-        const target = viewport.querySelector(`[id="${headingId}"]`);
+        const target = document.getElementById(headingId);
         if (!target) {
+            return false;
+        }
+
+        if (!viewport.contains(target)) {
             return false;
         }
 
@@ -188,15 +214,16 @@ window.richTextViewport = (() => {
         const targetRect = target.getBoundingClientRect();
         const nextScrollTop = viewport.scrollTop + (targetRect.top - viewportRect.top) - 12;
 
+        suppressScrollNotifications(viewportElementId, suppressScrollMs);
         viewport.scrollTo({
             top: Math.max(nextScrollTop, 0),
-            behavior: "smooth",
+            behavior: behavior || "auto",
         });
 
         return true;
     }
 
-    function scrollToChunk(viewportElementId, sortOrder) {
+    function scrollToChunk(viewportElementId, sortOrder, behavior = "auto", suppressScrollMs = 0) {
         const viewport = document.getElementById(viewportElementId);
         if (!viewport) {
             return false;
@@ -211,15 +238,16 @@ window.richTextViewport = (() => {
         const targetRect = target.getBoundingClientRect();
         const nextScrollTop = viewport.scrollTop + (targetRect.top - viewportRect.top) - 12;
 
+        suppressScrollNotifications(viewportElementId, suppressScrollMs);
         viewport.scrollTo({
             top: Math.max(nextScrollTop, 0),
-            behavior: "auto",
+            behavior: behavior || "auto",
         });
 
         return true;
     }
 
-    function ensureChunkVisible(viewportElementId, sortOrder) {
+    function ensureChunkVisible(viewportElementId, sortOrder, behavior = "auto", suppressScrollMs = 0) {
         const viewport = document.getElementById(viewportElementId);
         if (!viewport) {
             return false;
@@ -236,7 +264,7 @@ window.richTextViewport = (() => {
         const bottomLimit = viewportRect.bottom - 8;
 
         if (targetRect.bottom < topLimit || targetRect.top > bottomLimit) {
-            return scrollToChunk(viewportElementId, sortOrder);
+            return scrollToChunk(viewportElementId, sortOrder, behavior, suppressScrollMs);
         }
 
         return true;
@@ -312,7 +340,15 @@ window.richTextViewport = (() => {
         scrollToHeading,
         scrollToChunk,
         ensureChunkVisible,
+        suppressScrollNotifications,
         getCurrentChunkSortOrder,
         measureChunks
     };
-})();
+}
+
+window.richTextReadViewport = createRichTextViewportRuntime();
+window.richTextEditViewport = createRichTextViewportRuntime();
+window.richTextOutlineViewport = createRichTextViewportRuntime();
+
+// Backward-compatible alias for any old markup still loaded in the browser.
+window.richTextViewport = window.richTextReadViewport;

@@ -12,6 +12,8 @@ namespace BusinessEntity.Components
         private const double DefaultEstimatedChunkHeight = 1400;
         private const double MinEstimatedChunkHeight = 360;
         private const double MaxEstimatedChunkHeight = 8000;
+        private const int ProgrammaticScrollSuppressionMs = 350;
+        private const string ProgrammaticScrollBehavior = "auto";
 
         private readonly Dictionary<long, double> _chunkHeights = new();
         private readonly Dictionary<long, EditorChunkDraft> _dirtyDrafts = new();
@@ -75,12 +77,12 @@ namespace BusinessEntity.Components
             if (firstRender)
             {
                 _dotNetReference = DotNetObjectReference.Create(this);
-                await JS.InvokeVoidAsync("richTextViewport.registerVirtualViewport", ViewportElementId, _dotNetReference);
+                await JS.InvokeVoidAsync("richTextEditViewport.registerVirtualViewport", ViewportElementId, _dotNetReference);
                 _viewportRegistered = true;
             }
             else
             {
-                await JS.InvokeVoidAsync("richTextViewport.syncViewportSize", ViewportElementId);
+                await JS.InvokeVoidAsync("richTextEditViewport.syncViewportSize", ViewportElementId);
             }
 
             if (!_initialEditWindowChecked)
@@ -114,27 +116,21 @@ namespace BusinessEntity.Components
                 await SyncEditorsAsync();
             }
 
-            await JS.InvokeVoidAsync("richTextViewport.measureChunks", ViewportElementId);
+            await JS.InvokeVoidAsync("richTextEditViewport.measureChunks", ViewportElementId);
 
             if (!string.IsNullOrWhiteSpace(_pendingAnchor))
             {
                 var anchor = _pendingAnchor;
                 _pendingAnchor = null;
-                var scrolledToHeading = await JS.InvokeAsync<bool>("richTextViewport.scrollToHeading", ViewportElementId, anchor);
+                var scrolledToHeading = await ScrollToHeadingInViewportAsync(anchor);
                 if (!scrolledToHeading && _pendingVisibleChunkSortOrder.HasValue)
                 {
-                    await JS.InvokeAsync<bool>(
-                        "richTextViewport.scrollToChunk",
-                        ViewportElementId,
-                        _pendingVisibleChunkSortOrder.Value);
+                    await ScrollToChunkInViewportAsync(_pendingVisibleChunkSortOrder.Value);
                 }
             }
             else if (_pendingVisibleChunkSortOrder.HasValue)
             {
-                await JS.InvokeAsync<bool>(
-                    "richTextViewport.ensureChunkVisible",
-                    ViewportElementId,
-                    _pendingVisibleChunkSortOrder.Value);
+                await EnsureChunkVisibleInViewportAsync(_pendingVisibleChunkSortOrder.Value);
             }
 
             _pendingVisibleChunkSortOrder = null;
@@ -181,10 +177,10 @@ namespace BusinessEntity.Components
 
             if (IsChunkLoaded(chunkSortOrder))
             {
-                var scrolledToHeading = await JS.InvokeAsync<bool>("richTextViewport.scrollToHeading", ViewportElementId, headingId);
+                var scrolledToHeading = await ScrollToHeadingInViewportAsync(headingId);
                 if (!scrolledToHeading)
                 {
-                    await JS.InvokeAsync<bool>("richTextViewport.scrollToChunk", ViewportElementId, chunkSortOrder);
+                    await ScrollToChunkInViewportAsync(chunkSortOrder);
                 }
 
                 return;
@@ -625,6 +621,39 @@ namespace BusinessEntity.Components
             };
         }
 
+        private async Task<bool> ScrollToHeadingInViewportAsync(string headingId)
+        {
+            _lastScrollTop = null;
+            return await JS.InvokeAsync<bool>(
+                "richTextEditViewport.scrollToHeading",
+                ViewportElementId,
+                headingId,
+                ProgrammaticScrollBehavior,
+                ProgrammaticScrollSuppressionMs);
+        }
+
+        private async Task<bool> ScrollToChunkInViewportAsync(long sortOrder)
+        {
+            _lastScrollTop = null;
+            return await JS.InvokeAsync<bool>(
+                "richTextEditViewport.scrollToChunk",
+                ViewportElementId,
+                sortOrder,
+                ProgrammaticScrollBehavior,
+                ProgrammaticScrollSuppressionMs);
+        }
+
+        private async Task<bool> EnsureChunkVisibleInViewportAsync(long sortOrder)
+        {
+            _lastScrollTop = null;
+            return await JS.InvokeAsync<bool>(
+                "richTextEditViewport.ensureChunkVisible",
+                ViewportElementId,
+                sortOrder,
+                ProgrammaticScrollBehavior,
+                ProgrammaticScrollSuppressionMs);
+        }
+
         private Task SyncEditorsAsync()
         {
             if (!_viewportRegistered || string.IsNullOrWhiteSpace(ViewportElementId))
@@ -812,7 +841,7 @@ namespace BusinessEntity.Components
                 {
                     await CaptureCurrentEditorsAsync();
                     await JS.InvokeVoidAsync("richTextEditor.destroyEditors", ViewportElementId);
-                    await JS.InvokeVoidAsync("richTextViewport.unregisterViewport", ViewportElementId);
+                    await JS.InvokeVoidAsync("richTextEditViewport.unregisterViewport", ViewportElementId);
                 }
                 catch (JSDisconnectedException)
                 {

@@ -1,0 +1,59 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components
+
+<div class="py-2">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="rich-text-document-title">
+            <h4 class="mb-0">@EntityName</h4>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    @onclick="HandleEditAsync">
+                Edit
+            </button>
+            <label class="btn btn-sm btn-outline-secondary mb-0">
+                Импорт
+                <InputFile class="d-none" OnChange="HandleImportSelected" accept=".txt,.md,.markdown,.html,.htm" />
+            </label>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+    {
+        <div class="alert alert-info py-2">@StatusMessage</div>
+    }
+
+    @if (IsBusy)
+    {
+        <div class="alert alert-secondary mb-0">Обработка rich-text документа...</div>
+    }
+    else if (IsDocumentEmpty)
+    {
+        <div class="alert alert-secondary mb-0">Документ пуст. Импортируйте .txt, .md или .html.</div>
+    }
+    else
+    {
+        <div class="rich-text-document-layout">
+            <div class="rich-text-document-layout__outline">
+                <RichTextDocumentOutline Nodes="VisibleOutlineNodes"
+                                         TreeElementId="@OutlineTreeElementId"
+                                         DisplayLevelCount="@DisplayLevelCount"
+                                         IsLoading="@IsOutlineLoading"
+                                         IsRebuilding="@IsRebuildingTableOfContents"
+                                         HideScrollbar="@HideTableOfContentsScrollbar"
+                                         OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
+                                         OnRebuildRequested="HandleRebuildTableOfContentsAsync"
+                                         OnHeadingSelected="HandleHeadingSelectedAsync" />
+            </div>
+            <div class="rich-text-document-layout__content">
+                <RichTextDocumentViewport @ref="Viewport"
+                                          ViewportElementId="@ViewportElementId"
+                                          BusinessEntityId="@BusinessEntityId"
+                                          OutlineNodes="@LocalOutlineNodes"
+                                          IsInitialContentLoading="@IsInitialContentLoading"
+                                          InitialWindow="@InitialChunkWindow" />
+            </div>
+        </div>
+    }
+</div>

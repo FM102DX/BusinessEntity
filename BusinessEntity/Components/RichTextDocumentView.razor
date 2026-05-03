@@ -1,114 +1,38 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components
 
-<div class="py-2">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div class="rich-text-document-title">
-            @if (IsEditMode)
-            {
-                <input class="form-control form-control-lg rich-text-document-title__input"
-                       value="@EditableEntityName"
-                       maxlength="@RichTextDocumentHelper.MaxRichTextDocumentTitleLength"
-                       @oninput="HandleTitleInputAsync"
-                       aria-label="Название rich-text документа" />
-                @if (!string.IsNullOrWhiteSpace(TitleValidationMessage))
-                {
-                    <div class="rich-text-document-title__validation">@TitleValidationMessage</div>
-                }
-            }
-            else
-            {
-                <h4 class="mb-0">@EntityName</h4>
-            }
-        </div>
-        <div class="d-flex align-items-center gap-2">
-            @if (IsEditMode)
-            {
-                <button type="button"
-                        class="btn btn-sm btn-outline-secondary rich-text-document-read-mode-button"
-                        title="Перейти в режим чтения"
-                        aria-label="Перейти в режим чтения"
-                        @onclick="HandleReadModeAsync"
-                        disabled="@IsSaving">
-                    <svg class="rich-text-document-read-mode-button__icon"
-                         viewBox="0 0 24 24"
-                         aria-hidden="true"
-                         focusable="false">
-                        <path d="M4 5.5c2.8 0 5 .6 7 2.1v11.2c-2-1.4-4.2-2-7-2.1V5.5Z" />
-                        <path d="M20 5.5c-2.8 0-5 .6-7 2.1v11.2c2-1.4 4.2-2 7-2.1V5.5Z" />
-                        <path d="M11 7.6h2" />
-                    </svg>
-                </button>
-                <button type="button"
-                        class="btn btn-sm btn-primary"
-                        @onclick="HandleSaveAsync"
-                        disabled="@IsSaving">
-                    Save
-                </button>
-            }
-            else
-            {
-                <button type="button"
-                        class="btn btn-sm btn-outline-primary"
-                        @onclick="HandleEditAsync">
-                    Edit
-                </button>
-                <label class="btn btn-sm btn-outline-secondary mb-0">
-                    Импорт
-                    <InputFile class="d-none" OnChange="HandleImportSelected" accept=".txt,.md,.markdown,.html,.htm" />
-                </label>
-            }
-        </div>
-    </div>
-
-    @if (!string.IsNullOrWhiteSpace(StatusMessage))
-    {
-        <div class="alert alert-info py-2">@StatusMessage</div>
-    }
-
-    @if (IsBusy)
-    {
-        <div class="alert alert-secondary mb-0">Обработка rich-text документа...</div>
-    }
-    else if (IsDocumentEmpty)
-    {
-        <div class="alert alert-secondary mb-0">Документ пуст. Импортируйте .txt, .md или .html.</div>
-    }
-    else
-    {
-        <div class="rich-text-document-layout">
-            <div class="rich-text-document-layout__outline">
-                <RichTextDocumentOutline Nodes="VisibleOutlineNodes"
-                                         TreeElementId="@OutlineTreeElementId"
-                                         DisplayLevelCount="@DisplayLevelCount"
-                                         IsLoading="@IsOutlineLoading"
-                                         IsRebuilding="@IsRebuildingTableOfContents"
-                                         HideScrollbar="@HideTableOfContentsScrollbar"
-                                         OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
-                                         OnRebuildRequested="HandleRebuildTableOfContentsAsync"
-                                         OnHeadingSelected="HandleHeadingSelectedAsync" />
-            </div>
-            <div class="rich-text-document-layout__content">
-                @if (IsEditMode)
-                {
-                    <RichTextDocumentEditorViewport @ref="EditorViewport"
-                                                    ViewportElementId="@EditorViewportElementId"
-                                                    BusinessEntityId="@BusinessEntityId"
-                                                    OutlineNodes="@LocalOutlineNodes"
-                                                    IsInitialContentLoading="@IsInitialContentLoading"
-                                                    InitialTargetSortOrder="@EditInitialChunkSortOrder"
-                                                    InitialWindow="@InitialChunkWindow" />
-                }
-                else
-                {
-                    <RichTextDocumentViewport @ref="Viewport"
-                                              ViewportElementId="@ViewportElementId"
-                                              BusinessEntityId="@BusinessEntityId"
-                                              OutlineNodes="@LocalOutlineNodes"
-                                              IsInitialContentLoading="@IsInitialContentLoading"
-                                              InitialWindow="@InitialChunkWindow" />
-                }
-            </div>
-        </div>
-    }
-</div>
+@if (IsEditMode)
+{
+    <RichTextDocumentEditView @ref="EditView"
+                              EditableEntityName="@EditableEntityName"
+                              TitleValidationMessage="@TitleValidationMessage"
+                              BusinessEntityId="@BusinessEntityId"
+                              InitialChunkWindow="@InitialChunkWindow"
+                              OutlineNodes="@OutlineNodes"
+                              IsInitialContentLoading="@IsInitialContentLoading"
+                              IsOutlineLoading="@IsOutlineLoading"
+                              IsBusy="@IsBusy"
+                              IsSaving="@IsSaving"
+                              IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
+                              StatusMessage="@StatusMessage"
+                              InitialTargetSortOrder="@EditInitialChunkSortOrder"
+                              OnTitleChanged="HandleTitleChangedAsync"
+                              OnSaveRequested="HandleSaveAsync"
+                              OnReadModeRequested="HandleReadModeAsync"
+                              OnRebuildTableOfContents="@OnRebuildTableOfContents" />
+}
+else
+{
+    <RichTextDocumentReadView EntityName="@EntityName"
+                              BusinessEntityId="@BusinessEntityId"
+                              InitialChunkWindow="@InitialChunkWindow"
+                              OutlineNodes="@OutlineNodes"
+                              IsInitialContentLoading="@IsInitialContentLoading"
+                              IsOutlineLoading="@IsOutlineLoading"
+                              IsBusy="@IsBusy"
+                              IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
+                              StatusMessage="@StatusMessage"
+                              OnImportSelected="@OnImportSelected"
+                              OnRebuildTableOfContents="@OnRebuildTableOfContents"
+                              OnEditRequested="HandleEditRequestedAsync" />
+}

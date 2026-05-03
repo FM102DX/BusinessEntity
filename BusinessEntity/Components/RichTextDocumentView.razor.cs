@@ -1,19 +1,12 @@
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.JSInterop;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.Services;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 
 namespace BusinessEntity.Components
 {
-    public partial class RichTextDocumentView : ComponentBase, IAsyncDisposable
+    public partial class RichTextDocumentView : ComponentBase
     {
-        // Stable DOM id of the scrollable rich-text viewport.
-        private readonly string ViewportElementId = $"rich-text-viewport-{Guid.NewGuid():N}";
-        private readonly string EditorViewportElementId = $"rich-text-editor-viewport-{Guid.NewGuid():N}";
-        private readonly string OutlineTreeElementId = $"rich-text-outline-tree-{Guid.NewGuid():N}";
-        private bool _outlineTreeRegistered;
-
         [Parameter] public string EntityName { get; set; } = string.Empty;
         [Parameter] public Guid BusinessEntityId { get; set; }
         [Parameter] public RichTextDocumentChunkWindow? InitialChunkWindow { get; set; }
@@ -27,45 +20,12 @@ namespace BusinessEntity.Components
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
         [Parameter] public EventCallback<RichTextDocumentEditorSaveRequest> OnEditorSaved { get; set; }
 
-        [Inject] public IJSRuntime JS { get; set; } = default!;
-        [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
-
-        // Hierarchical table of contents loaded from persisted chunk properties.
-        private IReadOnlyList<RichTextDocumentOutlineNode> LocalOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
-
-        private IReadOnlyList<RichTextDocumentOutlineNode> VisibleOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
-
-        private RichTextDocumentViewport? Viewport { get; set; }
-
-        private RichTextDocumentEditorViewport? EditorViewport { get; set; }
-
+        private RichTextDocumentEditView? EditView { get; set; }
         private bool IsEditMode { get; set; }
-
         private bool IsSaving { get; set; }
-
         private string EditableEntityName { get; set; } = string.Empty;
-
         private string? TitleValidationMessage { get; set; }
-
         private long? EditInitialChunkSortOrder { get; set; }
-
-        // Number of heading levels displayed in the outline. H1-H2 is the default view.
-        private int DisplayLevelCount { get; set; } = 2;
-
-        private bool HideTableOfContentsScrollbar { get; set; } = true;
-
-        private bool IsDocumentEmpty =>
-            !IsInitialContentLoading &&
-            (InitialChunkWindow == null ||
-            InitialChunkWindow.TotalChunkCount == 0 ||
-            (InitialChunkWindow.TotalChunkCount == 1 &&
-             InitialChunkWindow.Chunks.All(chunk => string.IsNullOrWhiteSpace(chunk.HtmlCache))));
-
-        protected override async Task OnInitializedAsync()
-        {
-            var settings = await RichTextDocumentSettingsService.GetSettingsAsync();
-            HideTableOfContentsScrollbar = settings.HideTableOfContentsScrollbar;
-        }
 
         protected override void OnParametersSet()
         {
@@ -74,70 +34,20 @@ namespace BusinessEntity.Components
                 EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(EntityName);
                 TitleValidationMessage = null;
             }
-
-            BuildDocumentPresentation();
         }
 
-        protected override async Task OnAfterRenderAsync(bool firstRender)
+        private Task HandleEditRequestedAsync(long? visibleChunkSortOrder)
         {
-            if (VisibleOutlineNodes.Count == 0)
-            {
-                return;
-            }
-
-            if (!_outlineTreeRegistered)
-            {
-                await JS.InvokeVoidAsync("richTextViewport.registerViewport", OutlineTreeElementId);
-                _outlineTreeRegistered = true;
-            }
-            else
-            {
-                await JS.InvokeVoidAsync("richTextViewport.syncViewportSize", OutlineTreeElementId);
-            }
-        }
-
-        // Forwards file selection to the page-level import orchestration.
-        private Task HandleImportSelected(InputFileChangeEventArgs args)
-        {
-            return OnImportSelected.InvokeAsync(args);
-        }
-
-        private Task HandleRebuildTableOfContentsAsync()
-        {
-            return OnRebuildTableOfContents.InvokeAsync();
-        }
-
-        private Task HandleDisplayLevelCountChangedAsync(int value)
-        {
-            DisplayLevelCount = Math.Clamp(value, 1, 3);
-            VisibleOutlineNodes = FilterOutlineNodes(LocalOutlineNodes, DisplayLevelCount);
-            return Task.CompletedTask;
-        }
-
-        // Scrolls the viewport to a stable heading anchor from the persisted table of contents.
-        private Task HandleHeadingSelectedAsync(RichTextDocumentOutlineNode node)
-        {
-            if (IsEditMode)
-            {
-                return EditorViewport?.ScrollToHeadingAsync(node.HeadingId, node.ChunkSortOrder) ?? Task.CompletedTask;
-            }
-
-            return Viewport?.ScrollToHeadingAsync(node.HeadingId, node.ChunkSortOrder) ?? Task.CompletedTask;
-        }
-
-        private async Task HandleEditAsync()
-        {
-            EditInitialChunkSortOrder = Viewport == null
-                ? null
-                : await Viewport.GetCurrentVisibleChunkSortOrderAsync();
+            EditInitialChunkSortOrder = visibleChunkSortOrder;
             IsEditMode = true;
             EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(EntityName);
             TitleValidationMessage = null;
+            return Task.CompletedTask;
         }
 
-        private Task HandleTitleInputAsync(ChangeEventArgs args)
+        private Task HandleTitleChangedAsync(string? value)
         {
-            EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(args.Value?.ToString());
+            EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(value);
             TitleValidationMessage = string.IsNullOrWhiteSpace(EditableEntityName)
                 ? "Название не может быть пустым."
                 : null;
@@ -154,7 +64,7 @@ namespace BusinessEntity.Components
             if (await SaveEditorChangesAsync())
             {
                 IsEditMode = false;
-                EditorViewport = null;
+                EditView = null;
                 EditInitialChunkSortOrder = null;
                 TitleValidationMessage = null;
             }
@@ -162,7 +72,7 @@ namespace BusinessEntity.Components
 
         private async Task<bool> SaveEditorChangesAsync()
         {
-            if (IsSaving || EditorViewport == null)
+            if (IsSaving || EditView == null)
             {
                 return false;
             }
@@ -182,7 +92,7 @@ namespace BusinessEntity.Components
                     return false;
                 }
 
-                var savedCount = await EditorViewport.SaveAsync();
+                var savedCount = await EditView.SaveAsync();
                 await OnEditorSaved.InvokeAsync(new RichTextDocumentEditorSaveRequest
                 {
                     SavedChunkCount = savedCount,
@@ -194,61 +104,6 @@ namespace BusinessEntity.Components
             finally
             {
                 IsSaving = false;
-            }
-        }
-
-        // Uses persisted HTML and persisted outline data without reparsing headings from the DOM.
-        private void BuildDocumentPresentation()
-        {
-            LocalOutlineNodes = OutlineNodes ?? Array.Empty<RichTextDocumentOutlineNode>();
-            VisibleOutlineNodes = FilterOutlineNodes(LocalOutlineNodes, DisplayLevelCount);
-        }
-
-        private static IReadOnlyList<RichTextDocumentOutlineNode> FilterOutlineNodes(
-            IReadOnlyList<RichTextDocumentOutlineNode> nodes,
-            int maxLevel)
-        {
-            if (nodes.Count == 0)
-            {
-                return Array.Empty<RichTextDocumentOutlineNode>();
-            }
-
-            var result = new List<RichTextDocumentOutlineNode>();
-            foreach (var node in nodes)
-            {
-                if (node.Level > maxLevel)
-                {
-                    continue;
-                }
-
-                result.Add(new RichTextDocumentOutlineNode
-                {
-                    HeadingId = node.HeadingId,
-                    ChunkSortOrder = node.ChunkSortOrder,
-                    Title = node.Title,
-                    Level = node.Level,
-                    IsExpanded = node.IsExpanded,
-                    Children = FilterOutlineNodes(node.Children, maxLevel).ToList()
-                });
-            }
-
-            return result;
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (!_outlineTreeRegistered)
-            {
-                return;
-            }
-
-            try
-            {
-                await JS.InvokeVoidAsync("richTextViewport.unregisterViewport", OutlineTreeElementId);
-            }
-            catch (JSDisconnectedException)
-            {
-                // Blazor Server can disconnect JS runtime during teardown.
             }
         }
     }
