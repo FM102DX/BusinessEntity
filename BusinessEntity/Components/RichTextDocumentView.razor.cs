@@ -10,6 +10,7 @@ namespace BusinessEntity.Components
     {
         // Stable DOM id of the scrollable rich-text viewport.
         private readonly string ViewportElementId = $"rich-text-viewport-{Guid.NewGuid():N}";
+        private readonly string EditorViewportElementId = $"rich-text-editor-viewport-{Guid.NewGuid():N}";
         private readonly string OutlineTreeElementId = $"rich-text-outline-tree-{Guid.NewGuid():N}";
         private bool _outlineTreeRegistered;
 
@@ -24,6 +25,7 @@ namespace BusinessEntity.Components
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
         [Parameter] public EventCallback<InputFileChangeEventArgs> OnImportSelected { get; set; }
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
+        [Parameter] public EventCallback<RichTextDocumentEditorSaveRequest> OnEditorSaved { get; set; }
 
         [Inject] public IJSRuntime JS { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
@@ -34,6 +36,18 @@ namespace BusinessEntity.Components
         private IReadOnlyList<RichTextDocumentOutlineNode> VisibleOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
 
         private RichTextDocumentViewport? Viewport { get; set; }
+
+        private RichTextDocumentEditorViewport? EditorViewport { get; set; }
+
+        private bool IsEditMode { get; set; }
+
+        private bool IsSaving { get; set; }
+
+        private string EditableEntityName { get; set; } = string.Empty;
+
+        private string? TitleValidationMessage { get; set; }
+
+        private long? EditInitialChunkSortOrder { get; set; }
 
         // Number of heading levels displayed in the outline. H1-H2 is the default view.
         private int DisplayLevelCount { get; set; } = 2;
@@ -55,6 +69,12 @@ namespace BusinessEntity.Components
 
         protected override void OnParametersSet()
         {
+            if (!IsEditMode)
+            {
+                EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(EntityName);
+                TitleValidationMessage = null;
+            }
+
             BuildDocumentPresentation();
         }
 
@@ -97,7 +117,84 @@ namespace BusinessEntity.Components
         // Scrolls the viewport to a stable heading anchor from the persisted table of contents.
         private Task HandleHeadingSelectedAsync(RichTextDocumentOutlineNode node)
         {
+            if (IsEditMode)
+            {
+                return EditorViewport?.ScrollToHeadingAsync(node.HeadingId, node.ChunkSortOrder) ?? Task.CompletedTask;
+            }
+
             return Viewport?.ScrollToHeadingAsync(node.HeadingId, node.ChunkSortOrder) ?? Task.CompletedTask;
+        }
+
+        private async Task HandleEditAsync()
+        {
+            EditInitialChunkSortOrder = Viewport == null
+                ? null
+                : await Viewport.GetCurrentVisibleChunkSortOrderAsync();
+            IsEditMode = true;
+            EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(EntityName);
+            TitleValidationMessage = null;
+        }
+
+        private Task HandleTitleInputAsync(ChangeEventArgs args)
+        {
+            EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(args.Value?.ToString());
+            TitleValidationMessage = string.IsNullOrWhiteSpace(EditableEntityName)
+                ? "Название не может быть пустым."
+                : null;
+            return Task.CompletedTask;
+        }
+
+        private async Task HandleSaveAsync()
+        {
+            await SaveEditorChangesAsync();
+        }
+
+        private async Task HandleReadModeAsync()
+        {
+            if (await SaveEditorChangesAsync())
+            {
+                IsEditMode = false;
+                EditorViewport = null;
+                EditInitialChunkSortOrder = null;
+                TitleValidationMessage = null;
+            }
+        }
+
+        private async Task<bool> SaveEditorChangesAsync()
+        {
+            if (IsSaving || EditorViewport == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                IsSaving = true;
+                TitleValidationMessage = null;
+
+                try
+                {
+                    EditableEntityName = RichTextDocumentHelper.NormalizeRichTextDocumentTitle(EditableEntityName);
+                }
+                catch (ArgumentException ex)
+                {
+                    TitleValidationMessage = ex.Message;
+                    return false;
+                }
+
+                var savedCount = await EditorViewport.SaveAsync();
+                await OnEditorSaved.InvokeAsync(new RichTextDocumentEditorSaveRequest
+                {
+                    SavedChunkCount = savedCount,
+                    Title = EditableEntityName
+                });
+
+                return true;
+            }
+            finally
+            {
+                IsSaving = false;
+            }
         }
 
         // Uses persisted HTML and persisted outline data without reparsing headings from the DOM.

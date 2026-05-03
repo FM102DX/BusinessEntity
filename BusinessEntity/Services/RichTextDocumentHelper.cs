@@ -8,18 +8,29 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
+using BusinessEntity.Services.RichTextImport;
 using BusinessEntity.WebLogger.Services;
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace BusinessEntity.Services
 {
     // Инкапсулирует все rich-text операции и использует BusinessEntityHelper как базовый entity-layer.
     public class RichTextDocumentHelper
     {
+        public const int MaxRichTextDocumentTitleLength = 120;
+
+        private const string InvalidTitleCharacters = "<>:\"/\\|?*";
+
         // Базовый helper обычных business-entity операций.
         private readonly BusinessEntityHelper _businessEntityHelper;
         // Коннектор data-provider нужен для технических rich-text данных: chunks и embedded files.
         private readonly IDataProviderConnector _dataProviderConnector;
         private readonly IAsyncRepository<BusinessEntityDataChunkDto> _businessEntityDataChunkRepository;
+        private readonly IAsyncRepository<BusinessEntityDataChunkPropertyDto> _businessEntityDataChunkPropertyRepository;
+        private readonly HtmlToRichTextBlocksConverter _htmlToRichTextBlocksConverter;
         private readonly IWebLoggerService? _webLogger;
         // Фабрика нужна для сборки runtime entity rich-text документа.
         private readonly IBusinessEntityFactory _businessEntityFactory;
@@ -29,12 +40,16 @@ namespace BusinessEntity.Services
             BusinessEntityHelper businessEntityHelper,
             IDataProviderConnector dataProviderConnector,
             IAsyncRepository<BusinessEntityDataChunkDto> businessEntityDataChunkRepository,
+            IAsyncRepository<BusinessEntityDataChunkPropertyDto> businessEntityDataChunkPropertyRepository,
+            HtmlToRichTextBlocksConverter htmlToRichTextBlocksConverter,
             IWebLoggerService? webLogger,
             IBusinessEntityFactory businessEntityFactory)
         {
             _businessEntityHelper = businessEntityHelper ?? throw new ArgumentNullException(nameof(businessEntityHelper));
             _dataProviderConnector = dataProviderConnector ?? throw new ArgumentNullException(nameof(dataProviderConnector));
             _businessEntityDataChunkRepository = businessEntityDataChunkRepository ?? throw new ArgumentNullException(nameof(businessEntityDataChunkRepository));
+            _businessEntityDataChunkPropertyRepository = businessEntityDataChunkPropertyRepository ?? throw new ArgumentNullException(nameof(businessEntityDataChunkPropertyRepository));
+            _htmlToRichTextBlocksConverter = htmlToRichTextBlocksConverter ?? throw new ArgumentNullException(nameof(htmlToRichTextBlocksConverter));
             _webLogger = webLogger;
             _businessEntityFactory = businessEntityFactory ?? throw new ArgumentNullException(nameof(businessEntityFactory));
         }
@@ -131,6 +146,115 @@ namespace BusinessEntity.Services
             };
         }
 
+        public static string FilterRichTextDocumentTitle(string? title)
+        {
+            if (string.IsNullOrEmpty(title))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(title.Length);
+            var previousWasWhitespace = false;
+
+            foreach (var ch in title)
+            {
+                if (char.IsControl(ch) || InvalidTitleCharacters.Contains(ch))
+                {
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(ch))
+                {
+                    if (previousWasWhitespace || builder.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    builder.Append(' ');
+                    previousWasWhitespace = true;
+                    continue;
+                }
+
+                builder.Append(ch);
+                previousWasWhitespace = false;
+
+                if (builder.Length >= MaxRichTextDocumentTitleLength)
+                {
+                    break;
+                }
+            }
+
+            return builder.ToString().TrimEnd(' ', '.');
+        }
+
+        public static string NormalizeRichTextDocumentTitle(string? title)
+        {
+            var normalized = FilterRichTextDocumentTitle(title);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                throw new ArgumentException("Название не может быть пустым.");
+            }
+
+            return normalized;
+        }
+
+        public async Task<RichTextDocumentTitleSaveResult> SaveRichTextDocumentTitleAsync(
+            Guid entityId,
+            string? title,
+            CancellationToken ct = default)
+        {
+            if (entityId == Guid.Empty)
+            {
+                throw new ArgumentException("Entity id is required.", nameof(entityId));
+            }
+
+            var normalizedTitle = NormalizeRichTextDocumentTitle(title);
+            var shell = await GetRichTextDocumentShellAsync(entityId, ct);
+            if (shell == null)
+            {
+                throw new InvalidOperationException("Rich-text документ не найден.");
+            }
+
+            var titleChanged = !string.Equals(shell.Entity.Name, normalizedTitle, StringComparison.Ordinal);
+            if (!titleChanged)
+            {
+                return new RichTextDocumentTitleSaveResult
+                {
+                    Entity = shell.Entity,
+                    Title = normalizedTitle,
+                    TitleChanged = false
+                };
+            }
+
+            shell.Entity.Name = normalizedTitle;
+            shell.Entity.EntityType = BusinessEntityTypeEnum.RichTextDocument;
+            shell.Entity.BusinessEntityType = BusinessEntityTypeEnum.Document;
+            shell.Entity.LastModifiedDate = DateTime.UtcNow;
+
+            shell.Manifest.Id = shell.Entity.Id;
+            shell.Manifest.Name = normalizedTitle;
+            shell.Manifest.EntityType = BusinessEntityTypeEnum.RichTextDocument;
+            shell.Manifest.LastModifiedDate = shell.Entity.LastModifiedDate;
+            if (shell.Manifest.CreatedDate == default)
+            {
+                shell.Manifest.CreatedDate = shell.Entity.CreatedDate;
+            }
+
+            if (string.IsNullOrWhiteSpace(shell.Manifest.Tag))
+            {
+                shell.Manifest.Tag = BusinessEntityTypeEnum.RichTextDocument.ToString();
+            }
+
+            await _businessEntityHelper.SaveEntity(shell.Entity, shell.Manifest);
+
+            return new RichTextDocumentTitleSaveResult
+            {
+                Entity = shell.Entity,
+                Title = normalizedTitle,
+                TitleChanged = true
+            };
+        }
+
         /// <summary>
         /// Loads the rich-text document table of contents from persisted chunk properties and returns it as a tree.
         /// </summary>
@@ -138,6 +262,53 @@ namespace BusinessEntity.Services
         {
             var entries = await _dataProviderConnector.GetRichTextTableOfContentsEntriesAsync(entityId, ct);
             return BuildTableOfContentsTree(entries);
+        }
+
+        /// <summary>
+        /// Loads persisted table-of-contents entries progressively by chunk batches.
+        /// </summary>
+        public async IAsyncEnumerable<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsBatchesAsync(
+            Guid entityId,
+            int chunkBatchSize = 5,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            var normalizedBatchSize = Math.Max(chunkBatchSize, 1);
+            var totalChunkCount = await GetChunkCountAsync(entityId, ct);
+            if (totalChunkCount <= 0)
+            {
+                yield return Array.Empty<RichTextDocumentTableOfContentsEntry>();
+                yield break;
+            }
+
+            var flatEntries = new List<RichTextDocumentTableOfContentsEntry>();
+            for (var skip = 0; skip < totalChunkCount; skip += normalizedBatchSize)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var chunkDtos = await _businessEntityDataChunkRepository.GetPageAsync(
+                    d => d.BusinessEntityId == entityId,
+                    d => d.SortOrder,
+                    skip: skip,
+                    take: normalizedBatchSize,
+                    ct: ct);
+
+                foreach (var chunkDto in chunkDtos.OrderBy(d => d.SortOrder))
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var properties = await _businessEntityDataChunkPropertyRepository.GetAllAsync(
+                        p => p.ParentEntityId == chunkDto.Id &&
+                             p.PropertyType == (int)BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents,
+                        ct: ct);
+
+                    foreach (var property in properties)
+                    {
+                        flatEntries.AddRange(ReadTableOfContentsEntries(property));
+                    }
+                }
+
+                yield return BuildTableOfContentsTree(flatEntries);
+            }
         }
 
         /// <summary>
@@ -214,6 +385,108 @@ namespace BusinessEntity.Services
             return GetChunkWindowAsync(entityId, startSortOrder, normalizedBefore + 1 + normalizedAfter, ct);
         }
 
+        /// <summary>
+        /// Saves dirty chunks from rich-document edit mode without replacing the whole chunk set.
+        /// </summary>
+        public async Task<int> SaveEditedChunksAsync(
+            Guid entityId,
+            IReadOnlyList<RichTextDocumentChunkEditDraft> drafts,
+            CancellationToken ct = default)
+        {
+            if (entityId == Guid.Empty)
+            {
+                throw new ArgumentException("Entity id is required.", nameof(entityId));
+            }
+
+            if (drafts == null || drafts.Count == 0)
+            {
+                return 0;
+            }
+
+            var savedCount = 0;
+            foreach (var draft in drafts
+                .Where(x => x != null)
+                .GroupBy(x => x.ChunkId != Guid.Empty ? x.ChunkId.ToString("D") : $"sort:{x.SortOrder}")
+                .Select(group => group.Last())
+                .OrderBy(x => x.SortOrder))
+            {
+                var chunkDto = await FindChunkDtoAsync(entityId, draft, ct);
+                if (chunkDto == null)
+                {
+                    continue;
+                }
+
+                var converted = await _htmlToRichTextBlocksConverter.ConvertHtmlAsync(draft.Html ?? string.Empty, ct);
+                var blocks = converted.Blocks ?? new List<RichTextBlock>();
+                var dataJson = RichTextChunkStorageSerializer.SerializeChunkData(blocks);
+
+                chunkDto.Data = dataJson;
+                chunkDto.PlainText = RichTextChunkStorageSerializer.BuildPlainText(blocks);
+                chunkDto.HtmlCache = RichTextChunkStorageSerializer.BuildHtmlCache(entityId, chunkDto.Id, blocks);
+                chunkDto.BlockCount = blocks.Count;
+                chunkDto.CharCount = RichTextChunkStorageSerializer.BuildCharCount(blocks);
+                chunkDto.DataSizeBytes = DataPayloadEnvelopeSerializer.GetJsonLength(dataJson);
+                chunkDto.Version = chunkDto.Version <= 0 ? 1 : chunkDto.Version + 1;
+                chunkDto.Checksum = RichTextChunkStorageSerializer.BuildChecksum(dataJson);
+                chunkDto.LastModifiedDate = DateTime.UtcNow;
+
+                await _businessEntityDataChunkRepository.UpdateAsync(chunkDto, ct);
+                await RebuildTableOfContentsPropertyAsync(chunkDto, blocks, ct);
+                savedCount++;
+            }
+
+            if (savedCount > 0)
+            {
+                var entity = await _businessEntityHelper.GetBusinessEntityById(entityId);
+                if (entity != null)
+                {
+                    entity.LastModifiedDate = DateTime.UtcNow;
+                    await _dataProviderConnector.UpdateAsync(entity, ct);
+                }
+            }
+
+            return savedCount;
+        }
+
+        private async Task<BusinessEntityDataChunkDto?> FindChunkDtoAsync(
+            Guid entityId,
+            RichTextDocumentChunkEditDraft draft,
+            CancellationToken ct)
+        {
+            if (draft.ChunkId != Guid.Empty)
+            {
+                var byId = await _businessEntityDataChunkRepository.GetByIdAsync(draft.ChunkId, ct);
+                if (byId != null && byId.BusinessEntityId == entityId)
+                {
+                    return byId;
+                }
+            }
+
+            var bySortOrder = await _businessEntityDataChunkRepository.GetAllAsync(
+                x => x.BusinessEntityId == entityId && x.SortOrder == draft.SortOrder,
+                take: 1,
+                ct: ct);
+            return bySortOrder.FirstOrDefault();
+        }
+
+        private async Task RebuildTableOfContentsPropertyAsync(
+            BusinessEntityDataChunkDto chunkDto,
+            IReadOnlyList<RichTextBlock> blocks,
+            CancellationToken ct)
+        {
+            await DeletePropertiesAsync(
+                _businessEntityDataChunkPropertyRepository,
+                chunkDto.Id,
+                (int)BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents,
+                ct);
+
+            var tableOfContentsProperty = BuildTableOfContentsProperty(chunkDto, blocks);
+            if (tableOfContentsProperty != null)
+            {
+                await _businessEntityDataChunkPropertyRepository.AddAsync(tableOfContentsProperty, ct);
+            }
+        }
+
         // Логирует каждое фактическое чтение rich-text chunk DTO для наблюдения за virtual viewport.
         private async Task LogChunkWindowReadAsync(
             Guid entityId,
@@ -231,7 +504,6 @@ namespace BusinessEntity.Services
             {
                 await _webLogger.Information(
                     "[rich-doc-chunk-read] " +
-                    $"documentId={entityId:D} " +
                     $"chunkId={chunkDto.Id:D} " +
                     $"sortOrder={chunkDto.SortOrder} " +
                     $"windowStart={normalizedStart} " +
@@ -433,6 +705,130 @@ namespace BusinessEntity.Services
             };
         }
 
+        private static async Task DeletePropertiesAsync<TProperty>(
+            IAsyncRepository<TProperty> repository,
+            Guid parentEntityId,
+            int propertyType,
+            CancellationToken cancellationToken)
+            where TProperty : class, IPropertyDto
+        {
+            var properties = await repository.GetAllAsync(
+                p => p.ParentEntityId == parentEntityId && p.PropertyType == propertyType,
+                ct: cancellationToken);
+            foreach (var property in properties)
+            {
+                await repository.DeleteAsync(property.Id, cancellationToken);
+            }
+        }
+
+        // Собирает property-строку с оглавлением чанка, если в нём есть heading-блоки H1-H3.
+        private static BusinessEntityDataChunkPropertyDto? BuildTableOfContentsProperty(
+            BusinessEntityDataChunkDto chunkDto,
+            IReadOnlyList<RichTextBlock>? blocks)
+        {
+            if (blocks == null || blocks.Count == 0)
+            {
+                return null;
+            }
+
+            var entries = new List<RichTextDocumentTableOfContentsEntry>();
+            for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
+            {
+                var block = blocks[blockIndex];
+                if (!string.Equals(block.Kind, "heading", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var level = block.Level;
+                if (level < 1 || level > 3)
+                {
+                    continue;
+                }
+
+                var title = RichTextChunkStorageSerializer.BuildInlineText(block.Html);
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    title = $"Heading {blockIndex + 1}";
+                }
+
+                entries.Add(new RichTextDocumentTableOfContentsEntry
+                {
+                    ChunkId = chunkDto.Id,
+                    ChunkSortOrder = chunkDto.SortOrder,
+                    BlockIndex = blockIndex,
+                    Level = level,
+                    Title = title,
+                    Anchor = RichTextChunkStorageSerializer.BuildBlockAnchor(chunkDto.Id, blockIndex)
+                });
+            }
+
+            if (entries.Count == 0)
+            {
+                return null;
+            }
+
+            var now = DateTime.UtcNow;
+            return new BusinessEntityDataChunkPropertyDto
+            {
+                Id = Guid.NewGuid(),
+                CreatedDate = now,
+                LastModifiedDate = now,
+                ParentEntityId = chunkDto.Id,
+                PropertyType = (int)BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents,
+                Data = JsonSerializer.Serialize(
+                    new RichTextTableOfContentsPayload
+                    {
+                        Entries = entries.Select(x => new RichTextTableOfContentsPayloadEntry
+                        {
+                            ChunkId = x.ChunkId,
+                            ChunkSortOrder = x.ChunkSortOrder,
+                            BlockIndex = x.BlockIndex,
+                            Level = x.Level,
+                            Title = x.Title,
+                            Anchor = x.Anchor
+                        }).ToList()
+                    },
+                    StorageJsonOptions.Default),
+                Metadata = JsonSerializer.Serialize(
+                    new RichTextTableOfContentsMetadata
+                    {
+                        EntryCount = entries.Count
+                    },
+                    StorageJsonOptions.Default)
+            };
+        }
+
+        // Читает entries оглавления из persisted chunk-property JSON.
+        private static IReadOnlyList<RichTextDocumentTableOfContentsEntry> ReadTableOfContentsEntries(BusinessEntityDataChunkPropertyDto property)
+        {
+            if (string.IsNullOrWhiteSpace(property.Data))
+            {
+                return Array.Empty<RichTextDocumentTableOfContentsEntry>();
+            }
+
+            var payload = JsonSerializer.Deserialize<RichTextTableOfContentsPayload>(property.Data, StorageJsonOptions.Default)
+                ?? new RichTextTableOfContentsPayload();
+
+            if (payload.SchemaVersion != 1 ||
+                !string.Equals(payload.Kind, "RichDocChunkTableOfContents", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Unsupported rich-text table of contents payload for property '{property.Id}'.");
+            }
+
+            return payload.Entries
+                .Select(x => new RichTextDocumentTableOfContentsEntry
+                {
+                    ChunkId = x.ChunkId,
+                    ChunkSortOrder = x.ChunkSortOrder,
+                    BlockIndex = x.BlockIndex,
+                    Level = x.Level,
+                    Title = x.Title ?? string.Empty,
+                    Anchor = x.Anchor ?? string.Empty
+                })
+                .ToList();
+        }
+
         // Преобразует DTO-строку чанка в runtime-объект rich-text чанка.
         private static RichTextDocumentChunk MapChunkDtoToRuntime(BusinessEntityDataChunkDto dto)
         {
@@ -516,6 +912,51 @@ namespace BusinessEntity.Services
                 Anchor = source.Anchor,
                 Children = new List<RichTextDocumentTableOfContentsEntry>()
             };
+        }
+
+        private sealed class RichTextTableOfContentsPayload
+        {
+            [JsonPropertyName("schemaVersion")]
+            public int SchemaVersion { get; set; } = 1;
+
+            [JsonPropertyName("kind")]
+            public string Kind { get; set; } = "RichDocChunkTableOfContents";
+
+            [JsonPropertyName("entries")]
+            public List<RichTextTableOfContentsPayloadEntry> Entries { get; set; } = new();
+        }
+
+        private sealed class RichTextTableOfContentsPayloadEntry
+        {
+            [JsonPropertyName("chunkId")]
+            public Guid ChunkId { get; set; }
+
+            [JsonPropertyName("chunkSortOrder")]
+            public long ChunkSortOrder { get; set; }
+
+            [JsonPropertyName("blockIndex")]
+            public int BlockIndex { get; set; }
+
+            [JsonPropertyName("level")]
+            public int Level { get; set; }
+
+            [JsonPropertyName("title")]
+            public string? Title { get; set; }
+
+            [JsonPropertyName("anchor")]
+            public string? Anchor { get; set; }
+        }
+
+        private sealed class RichTextTableOfContentsMetadata
+        {
+            [JsonPropertyName("schemaVersion")]
+            public int SchemaVersion { get; set; } = 1;
+
+            [JsonPropertyName("kind")]
+            public string Kind { get; set; } = "RichDocChunkTableOfContentsMetadata";
+
+            [JsonPropertyName("entryCount")]
+            public int EntryCount { get; set; }
         }
     }
 }

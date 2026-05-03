@@ -196,6 +196,93 @@ window.richTextViewport = (() => {
         return true;
     }
 
+    function scrollToChunk(viewportElementId, sortOrder) {
+        const viewport = document.getElementById(viewportElementId);
+        if (!viewport) {
+            return false;
+        }
+
+        const target = viewport.querySelector(`[data-rich-text-chunk][data-chunk-sort-order="${sortOrder}"]`);
+        if (!target) {
+            return false;
+        }
+
+        const viewportRect = viewport.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const nextScrollTop = viewport.scrollTop + (targetRect.top - viewportRect.top) - 12;
+
+        viewport.scrollTo({
+            top: Math.max(nextScrollTop, 0),
+            behavior: "auto",
+        });
+
+        return true;
+    }
+
+    function ensureChunkVisible(viewportElementId, sortOrder) {
+        const viewport = document.getElementById(viewportElementId);
+        if (!viewport) {
+            return false;
+        }
+
+        const target = viewport.querySelector(`[data-rich-text-chunk][data-chunk-sort-order="${sortOrder}"]`);
+        if (!target) {
+            return false;
+        }
+
+        const viewportRect = viewport.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const topLimit = viewportRect.top + 8;
+        const bottomLimit = viewportRect.bottom - 8;
+
+        if (targetRect.bottom < topLimit || targetRect.top > bottomLimit) {
+            return scrollToChunk(viewportElementId, sortOrder);
+        }
+
+        return true;
+    }
+
+    function getCurrentChunkSortOrder(viewportElementId) {
+        const viewport = document.getElementById(viewportElementId);
+        if (!viewport) {
+            return null;
+        }
+
+        const chunks = Array.from(viewport.querySelectorAll("[data-rich-text-chunk]"))
+            .map((element) => {
+                const sortOrder = Number(element.getAttribute("data-chunk-sort-order"));
+                return {
+                    element,
+                    sortOrder,
+                    rect: element.getBoundingClientRect()
+                };
+            })
+            .filter((item) => Number.isFinite(item.sortOrder));
+
+        if (chunks.length === 0) {
+            return null;
+        }
+
+        const viewportRect = viewport.getBoundingClientRect();
+        const anchorY = viewportRect.top + viewportRect.height * 0.35;
+
+        const intersecting = chunks
+            .filter((item) => item.rect.bottom >= viewportRect.top && item.rect.top <= viewportRect.bottom)
+            .sort((left, right) =>
+                Math.abs((left.rect.top + left.rect.bottom) / 2 - anchorY) -
+                Math.abs((right.rect.top + right.rect.bottom) / 2 - anchorY));
+
+        if (intersecting.length > 0) {
+            return intersecting[0].sortOrder;
+        }
+
+        chunks.sort((left, right) =>
+            Math.abs((left.rect.top + left.rect.bottom) / 2 - anchorY) -
+            Math.abs((right.rect.top + right.rect.bottom) / 2 - anchorY));
+
+        return chunks[0].sortOrder;
+    }
+
     function measureChunks(viewportElementId) {
         const viewport = document.getElementById(viewportElementId);
         const entry = registry.get(viewportElementId);
@@ -223,6 +310,9 @@ window.richTextViewport = (() => {
         registerVirtualViewport,
         unregisterViewport,
         scrollToHeading,
+        scrollToChunk,
+        ensureChunkVisible,
+        getCurrentChunkSortOrder,
         measureChunks
     };
 })();

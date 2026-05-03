@@ -22,6 +22,9 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
             RichTextTableOfContentsAfterBuffer = data.RichTextTableOfContentsAfterBuffer,
             RichTextScrollPreviousChunkCount = data.RichTextScrollPreviousChunkCount,
             RichTextHideTableOfContentsScrollbar = data.RichTextHideTableOfContentsScrollbar,
+            RichTextEditChunksBeforeFocused = data.RichTextEditChunksBeforeFocused,
+            RichTextEditChunksAfterFocused = data.RichTextEditChunksAfterFocused,
+            RichTextEditChunksOnOpen = data.RichTextEditChunksOnOpen,
             Tag = data.Tag
         });
     }
@@ -39,6 +42,9 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
             RichTextTableOfContentsAfterBuffer = body.RichTextTableOfContentsAfterBuffer < 0 ? 5 : body.RichTextTableOfContentsAfterBuffer,
             RichTextScrollPreviousChunkCount = body.RichTextScrollPreviousChunkCount < 0 ? 1 : body.RichTextScrollPreviousChunkCount,
             RichTextHideTableOfContentsScrollbar = body.RichTextHideTableOfContentsScrollbar,
+            RichTextEditChunksBeforeFocused = body.RichTextEditChunksBeforeFocused < 0 ? 1 : body.RichTextEditChunksBeforeFocused,
+            RichTextEditChunksAfterFocused = body.RichTextEditChunksAfterFocused < 0 ? 1 : body.RichTextEditChunksAfterFocused,
+            RichTextEditChunksOnOpen = body.RichTextEditChunksOnOpen <= 0 ? 2 : body.RichTextEditChunksOnOpen,
             Tag = body.Tag ?? string.Empty
         };
     }
@@ -69,5 +75,14 @@ internal sealed class SysParametersEntityDataStorageConverter : EntityDataStorag
 
         [JsonPropertyName("richTextHideTableOfContentsScrollbar")]
         public bool RichTextHideTableOfContentsScrollbar { get; set; } = true;
+
+        [JsonPropertyName("richTextEditChunksBeforeFocused")]
+        public int RichTextEditChunksBeforeFocused { get; set; } = 1;
+
+        [JsonPropertyName("richTextEditChunksAfterFocused")]
+        public int RichTextEditChunksAfterFocused { get; set; } = 1;
+
+        [JsonPropertyName("richTextEditChunksOnOpen")]
+        public int RichTextEditChunksOnOpen { get; set; } = 2;
     }
 }

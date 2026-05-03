@@ -36,7 +36,11 @@ namespace BusinessEntity
 			builder.Services.AddControllers();
 			builder.Services.AddRazorPages();
 			builder.Services.AddServerSideBlazor()
-				.AddCircuitOptions(options => { options.DetailedErrors = true; });
+				.AddCircuitOptions(options => { options.DetailedErrors = true; })
+				.AddHubOptions(options =>
+				{
+					options.MaximumReceiveMessageSize = 10 * 1024 * 1024;
+				});
 			builder.Services.AddEndpointsApiExplorer();
 			builder.Services.AddAutoMapper(typeof(Program));
 

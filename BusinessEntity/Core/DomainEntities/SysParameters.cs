@@ -23,5 +23,11 @@ namespace BusinessEntity.Core.DomainEntities
         public int RichTextScrollPreviousChunkCount { get; set; } = 1;
         // Скрывать визуальный scrollbar содержания rich-document, сохраняя саму прокрутку.
         public bool RichTextHideTableOfContentsScrollbar { get; set; } = true;
+        // Сколько чанков перед фокусным чанком держать в editor viewport.
+        public int RichTextEditChunksBeforeFocused { get; set; } = 1;
+        // Сколько чанков после фокусного чанка держать в editor viewport.
+        public int RichTextEditChunksAfterFocused { get; set; } = 1;
+        // Сколько чанков открывать при входе в режим редактирования.
+        public int RichTextEditChunksOnOpen { get; set; } = 2;
     }
 }

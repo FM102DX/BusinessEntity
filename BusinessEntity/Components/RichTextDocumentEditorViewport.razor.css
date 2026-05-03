@@ -1,0 +1,118 @@
+.rich-text-document-editor {
+    min-width: 0;
+}
+
+.rich-text-document-editor__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0 0.6rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #ffffff;
+}
+
+.rich-text-document-editor__toolbar .btn {
+    min-width: 2rem;
+    min-height: 1.9rem;
+    line-height: 1;
+}
+
+.rich-text-document-editor__dirty {
+    color: #7a4d00;
+    font-size: 0.9rem;
+    margin-left: 0.5rem;
+}
+
+.rich-text-document-editor__viewport {
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+    background: #ffffff;
+    padding: 0.25rem 0 0.5rem 0;
+    min-height: 0;
+}
+
+.rich-text-document-editor__viewport:focus {
+    outline: none;
+}
+
+.rich-text-document-editor__spacer {
+    flex: 0 0 auto;
+    pointer-events: none;
+}
+
+.rich-text-document-editor__chunk {
+    display: block;
+    min-height: 1px;
+    border-left: 2px solid #dbe5f0;
+    padding-left: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.rich-text-document-editor__chunk--dirty {
+    border-left-color: #d58a00;
+}
+
+.rich-text-document-editor__chunk:focus-within {
+    border-left-color: #2b6fd6;
+}
+
+.rich-text-document-editor__chunk-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #7a8aa0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+.rich-text-document-editor__chunk-dirty {
+    color: #9a6200;
+}
+
+.rich-text-document-editor__host {
+    min-height: 2.5rem;
+}
+
+.rich-text-document-editor__loading {
+    color: #6c7a89;
+    font-size: 0.95rem;
+    padding: 0.25rem 0;
+}
+
+::deep .rich-text-tiptap-content {
+    min-height: 2.5rem;
+    outline: none;
+    line-height: 1.45;
+}
+
+::deep .rich-text-tiptap-content p {
+    margin: 0 0 1rem 0;
+}
+
+::deep .rich-text-tiptap-content h1,
+::deep .rich-text-tiptap-content h2,
+::deep .rich-text-tiptap-content h3 {
+    scroll-margin-top: 12px;
+}
+
+@media (max-width: 1100px) {
+    .rich-text-document-editor__toolbar {
+        position: static;
+        flex-wrap: wrap;
+    }
+
+    .rich-text-document-editor__viewport {
+        max-height: none;
+        overflow: visible;
+        overscroll-behavior: auto;
+    }
+}

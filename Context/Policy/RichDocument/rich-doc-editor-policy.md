@@ -2,49 +2,38 @@
 
 ## 1. Назначение
 
-Этот документ фиксирует политику редактирования rich-text документов в системе `BusinessEntity`.
+Этот документ фиксирует актуальную политику редактирования rich-text документов в системе `BusinessEntity`.
 
-Документ описывает не реализацию конкретного редактора, а поведенческие и архитектурные правила edit-mode:
+Политика описывает поведение edit-mode и его связь с chunked storage:
 
-- сколько чанков загружается в редактор
-- как работает переход по содержанию
-- как работает скролл в режиме редактирования
-- как хранится несохраненное состояние
-- когда данные читаются из БД
-- когда данные пишутся в БД
-- как интегрируется Tiptap / ProseMirror
-
-Документ находится на этапе согласования политики. Он не требует немедленного изменения кода.
-
----
+- документ не загружается целиком в DOM и редактор;
+- редактирование выполняется оконно, по чанкам;
+- dirty-состояние чанков хранится отдельно от БД до явного сохранения;
+- переходы по содержанию и скролл работают по тем же принципам, что и read viewport;
+- название документа редактируется вместе с содержимым;
+- Tiptap / ProseMirror используется как UI/editor engine, но не как canonical storage format.
 
 ## 2. Базовый принцип
 
-Редактор rich-документа не открывает весь документ целиком.
+Rich document в режиме редактирования открывается не как один большой редактор.
 
-В режиме редактирования применяется тот же общий принцип, что и в режиме чтения:
-
-```text
-Документ читается и отображается оконно, чанками.
-DOM содержит только нужный локальный диапазон чанков.
-```
-
-Редактор работает с небольшим количеством чанков, которые пользователь хочет видеть сейчас.
-
-Целевое состояние для MVP:
+Основная модель:
 
 ```text
-В edit viewport одновременно находится примерно 2-3 чанка.
+Документ редактируется оконно.
+В DOM и Tiptap одновременно находятся только чанки текущего edit window.
 ```
 
-Принципиальная модель:
+Все чанки, которые находятся в editor viewport, являются редактируемыми.
 
-- все чанки, которые находятся внутри editor viewport, являются редактируемыми
-- readonly preview чанков в edit viewport не используется
-- если chunk выгружен из editor viewport, он не отображается и не редактируется
-- при выгрузке chunk editor instance может быть уничтожен, но dirty draft должен быть сохранен
+Если chunk выгружен из editor viewport:
 
----
+- он больше не отображается;
+- его Tiptap instance уничтожается;
+- если chunk был изменен, его HTML draft остается во внутреннем dirty cache;
+- если chunk не был изменен, он не остается в edit cache и при необходимости читается заново.
+
+Readonly preview чанков в edit mode не используется.
 
 ## 3. Режимы документа
 
@@ -57,334 +46,362 @@ Rich document имеет два основных UI-режима:
 
 В режиме чтения:
 
-- используется текущий read viewport
-- работает содержание
-- работает оконная подгрузка чанков
-- есть кнопка `Edit`
+- используется `RichTextDocumentViewport`;
+- работает оконная подгрузка чанков;
+- содержание читается из сохраненных chunk properties;
+- есть кнопка `Edit`;
+- при нажатии `Edit` фиксируется текущий видимый chunk `SortOrder`.
 
 ### Edit mode
 
 В режиме редактирования:
 
-- используется editor viewport
-- есть кнопка `Save`
-- желательно иметь индикатор несохраненных изменений
-- кнопки `Cancel` / `Discard` в первом MVP нет
+- используется `RichTextDocumentEditorViewport`;
+- есть кнопка `Save`;
+- есть кнопка с иконкой открытой книги для возврата в режим чтения;
+- название документа отображается как поле ввода;
+- toolbar применяется к активному Tiptap editor;
+- отображается индикатор несохраненных изменений, если есть dirty chunks.
 
-При переходе из `Read` в `Edit` редактор открывает первый чанк документа, если не задана другая стартовая позиция.
+Переход из `Read` в `Edit` должен открывать редактор не обязательно в начале документа, а в текущей позиции чтения.
 
----
+Правило:
 
-## 4. Editor viewport
+```text
+Если пользователь нажал Edit из read viewport, edit viewport открывает окно вокруг текущего видимого чанка.
+```
 
-Editor viewport должен использовать ту же концептуальную модель, что и read viewport:
+Точность текущей реализации: на уровне чанка. Точное восстановление позиции внутри чанка можно добавить отдельным этапом через block id, heading id или intra-chunk offset.
 
-- `LoadedChunks`
-- `TotalChunkCount`
-- top spacer
-- bottom spacer
-- estimated chunk height
-- загрузка окон чанков
-- переходы по `SortOrder`
+## 4. Открытие edit mode
 
-Но editor viewport добавляет edit-state:
+При открытии edit mode:
 
-- `FocusedChunkSortOrder`
-- dirty draft cache
-- editor instances для текущих отображаемых чанков
-- статус несохраненных изменений
+1. shell документа и содержание уже обслуживаются страницей документа;
+2. read viewport сообщает текущий видимый `SortOrder`, если переход выполнен из read mode;
+3. editor viewport получает `InitialTargetSortOrder`;
+4. если target chunk не входит в уже переданное начальное окно, editor viewport читает окно вокруг target chunk;
+5. после отрисовки editor viewport прокручивается так, чтобы target chunk был видим;
+6. если `InitialTargetSortOrder` не задан, используется начальное окно от первого чанка.
+
+Настройка количества чанков при открытии:
+
+```text
+RichTextEditChunksOnOpen
+```
+
+Если пользователь входит в edit mode из read mode, приоритет имеет текущий видимый chunk, а не начало документа.
+
+## 5. Editor viewport
+
+Editor viewport повторяет общую модель read viewport:
+
+- `LoadedChunks`;
+- `TotalChunkCount`;
+- top spacer;
+- bottom spacer;
+- estimated chunk height;
+- загрузка окон чанков;
+- переходы по `SortOrder`;
+- измерение фактической высоты чанков;
+- пересчет spacer-ов.
+
+Дополнительно editor viewport содержит edit-state:
+
+- dirty draft cache;
+- множество dirty sort orders;
+- JS registry активных Tiptap editors;
+- активный editor для toolbar-команд;
+- pending anchor / pending visible chunk для scroll restore;
+- защиту от конкурентных загрузок окна через load version.
 
 Editor viewport не должен грузить весь документ.
 
----
+## 6. Размер edit window
 
-## 5. Редактируемые чанки и фокус
-
-Все чанки, находящиеся в editor viewport, редактируемы.
-
-Каждый отображаемый chunk:
-
-- отображается через Tiptap / ProseMirror
-- имеет текущую editor-модель
-- может стать dirty
-- имеет собственный editor instance на время нахождения в viewport
-
-Понятие focus все равно нужно:
-
-- для текущей позиции пользователя
-- для переходов по содержанию
-- для scroll/focus restore после подгрузки окна
-- для понимания, какой chunk пользователь редактирует прямо сейчас
-
-Потеря focus сама по себе не делает chunk нередактируемым, если он остается внутри editor viewport.
-Пока chunk показан в editor viewport, его editor instance продолжает жить и он остается редактируемым.
-
-Перед тем как chunk выгружается из editor viewport, его текущее editor-состояние должно быть синхронизировано с dirty cache, если оно изменено.
-
-Это снижает стоимость DOM и JS-state.
-
----
-
-## 6. Загрузка при открытии edit mode
-
-При открытии документа для редактирования:
-
-1. читается shell документа
-2. открывается первое окно чанков
-3. все чанки первого окна загружаются как редактируемые Tiptap editors
-4. focus получает первый чанк
-5. содержание читается независимо, как и в режиме чтения
-
-Редактор не должен ждать загрузки всего содержания, чтобы показать первый чанк.
-
----
-
-## 7. Переход по содержанию
-
-Клик по пункту содержания в edit mode работает аналогично read viewport.
-
-Алгоритм:
-
-1. outline node дает `ChunkSortOrder` и anchor/block reference
-2. editor viewport проверяет, есть ли нужный чанк в текущем окне или dirty cache
-3. если чанка нет в loaded window, загружается окно вокруг target chunk
-4. все chunks нового окна отображаются как редактируемые
-5. target chunk получает focus
-6. если для любого chunk окна есть dirty draft, editor поднимает его из cache
-7. если dirty draft нет, editor использует версию из БД / loaded chunk
-
-Важно:
+Размер окна редактирования задается системными параметрами, доступными в админке:
 
 ```text
-Переход по содержанию не должен терять несохраненные изменения другого чанка.
+RichTextEditChunksBeforeFocused
+RichTextEditChunksAfterFocused
+RichTextEditChunksOnOpen
 ```
 
-Перед заменой окна нужно сохранить состояние всех выгружаемых editor chunks во внутренний cache, если они dirty.
+Расчет окна вокруг целевого чанка:
 
----
+```text
+start = targetSortOrder - RichTextEditChunksBeforeFocused
+take  = RichTextEditChunksBeforeFocused + 1 + RichTextEditChunksAfterFocused
+```
 
-## 8. Скролл в edit mode
+Границы нормализуются по диапазону документа.
 
-Скролл вверх и вниз в edit mode должен работать по тем же принципам, что и read viewport.
+Целевой режим для больших документов:
 
-При приближении к границе текущего окна:
+```text
+В editor viewport обычно находятся 2-3 чанка.
+```
 
-- вниз подгружается следующее окно чанков
-- вверх подгружается предыдущее окно чанков
+Это не жесткий лимит, а управляемая настройками политика.
 
-Все chunks, которые после подгрузки находятся в editor viewport, становятся редактируемыми.
+## 7. Источник данных для чанка
 
-Chunks, которые выходят из editor viewport:
+Когда editor viewport должен показать chunk, источник выбирается так:
 
-- синхронизируют dirty state во внутренний cache
-- уничтожают editor instance
-- исчезают из отображения
+```text
+1. Dirty cache
+2. Уже загруженные LoadedChunks
+3. Database
+```
 
-Но edit mode дополнительно обязан учитывать dirty cache.
+Если для sort order есть dirty draft, именно он показывается в редакторе.
 
-Если подгружаемый чанк есть в dirty cache, UI должен показать cached draft, а не версию из БД.
+Версия из БД не должна затирать dirty draft до явного `Save` или будущего явного discard-сценария.
 
-Если dirty draft для чанка нет, чанк можно читать из БД.
-
----
-
-## 9. Политика кеша редактирования
+## 8. Dirty cache
 
 В edit mode существует внутренний cache несохраненных изменений.
 
 Cache хранит только измененные чанки.
 
-Это принципиальное правило:
+Принципиальное правило:
 
 ```text
-Неизмененные чанки не должны оставаться в edit cache.
+Неизмененные просмотренные чанки не кешируются как edit draft.
 ```
 
-Причина:
+Причины:
 
-- документ может быть большим
-- хранить все просмотренные чанки дорого и не нужно
-- неизмененный чанк можно прочитать из БД повторно
-- измененный чанк нельзя потерять до Save/Cancel
+- документ может быть большим;
+- хранить все просмотренные чанки дорого;
+- неизмененный chunk можно прочитать из БД повторно;
+- измененный chunk нельзя потерять до сохранения.
 
----
-
-## 10. Что хранится в dirty cache
-
-Dirty cache должен хранить не живой JS editor instance, а данные draft-состояния.
-
-Рекомендуемая структура:
+Текущая draft-модель:
 
 ```text
-RichTextChunkEditDraft
+EditorChunkDraft
     ChunkId
     SortOrder
-    OriginalEditorJson
-    CurrentEditorJson
-    IsDirty
-    LastTouchedUtc
+    OriginalHtml
+    CurrentHtml
 ```
+
+Dirty cache keyed by `SortOrder`.
+
+## 9. Когда chunk становится dirty
+
+Chunk становится dirty в момент фактического изменения в Tiptap editor:
+
+- ввод текста;
+- удаление символов;
+- вставка;
+- команда форматирования;
+- изменение heading / paragraph mode.
+
+Dirty-состояние не должно ждать dispose чанка.
+
+Текущий flow:
+
+1. Tiptap `onUpdate` срабатывает при изменении editor state;
+2. JS помечает editor state как dirty;
+3. JS отправляет в Blazor snapshot текущего HTML;
+4. Blazor сразу кладет chunk в dirty cache;
+5. UI помечает документ как имеющий несохраненные изменения.
+
+Dispose чанка остается страховочным механизмом:
+
+- при смене окна;
+- при уничтожении viewport;
+- при сохранении;
+- при пересинхронизации JS editors.
+
+Но основное попадание в dirty cache происходит в момент правки.
+
+## 10. Выгрузка чанка из editor viewport
+
+Когда chunk выходит из editor viewport:
+
+1. JS сообщает о dispose editor instance;
+2. если editor был dirty, его текущее состояние уже должно быть в dirty cache;
+3. `CaptureCurrentEditorsAsync` дополнительно забирает dirty snapshots перед сменой окна;
+4. неизмененные chunks удаляются из dirty markers;
+5. Tiptap instance уничтожается.
+
+Выгрузка чанка не пишет данные в БД.
+
+БД обновляется только по `Save`.
+
+## 11. Переход по содержанию в edit mode
+
+Клик по пункту содержания работает аналогично read viewport.
+
+Алгоритм:
+
+1. outline node дает `HeadingId` и `ChunkSortOrder`;
+2. если target chunk уже загружен, выполняется scroll к heading;
+3. если heading не найден в DOM, выполняется fallback scroll к chunk;
+4. если target chunk не загружен, editor viewport читает окно вокруг target chunk;
+5. после отрисовки выполняется scroll к heading или chunk;
+6. dirty drafts подставляются вместо данных из БД.
+
+Переход по содержанию не должен терять несохраненные изменения в других чанках.
+
+## 12. Скролл в edit mode
+
+Скролл в edit mode работает по оконной модели.
+
+При приближении к нижней границе текущего окна:
+
+- вычисляется целевой sort order;
+- читается новое окно вокруг целевого чанка;
+- старые editor instances выгружаются;
+- dirty drafts сохраняются;
+- после отрисовки viewport удерживается около целевого чанка.
+
+При приближении к верхней границе текущего окна:
+
+- используется тот же принцип, но target window строится назад;
+- количество чанков перед/после target берется из тех же edit settings.
+
+Для перетаскивания scrollbar применяется отдельное правило:
 
 ```text
-CurrentEditorJson = Tiptap / ProseMirror JSON
+Во время drag scrollbar документ не читается постоянно.
+После release вычисляется примерная позиция в документе и загружается ближайший пункт содержания / chunk.
 ```
 
-В первом MVP conflict tracking не выполняется, поэтому `OriginalVersion` и `OriginalChecksum` не входят в обязательную структуру draft.
-Их можно добавить позже для optimistic locking.
+Это снижает риск зацикливания, повторных чтений и мигания editor viewport.
 
----
+## 13. PgUp / PgDn
 
-## 11. Почему не кешировать живой editor instance
+PgUp и PgDn должны работать как обычный скролл editor viewport:
 
-Живой Tiptap / ProseMirror editor instance может быть тяжелым.
+- не загружать весь документ;
+- не перечитывать уже загруженные dirty chunks из БД;
+- при достижении границы окна подгружать соседнее окно;
+- после загрузки удерживать видимую позицию на целевом chunk.
 
-Его нужно держать только для тех chunks, которые прямо сейчас находятся в editor viewport.
+## 14. Синхронизация Tiptap instances
 
-Правильная модель:
+JS-модуль `richTextEditor` владеет runtime instances Tiptap для текущего viewport.
 
-- editor instance живет, пока chunk находится в editor viewport
-- при выгрузке chunk из viewport забрать текущее состояние editor
-- если состояние изменилось, сохранить draft в cache
-- destroy/dispose JS editor instance при выгрузке chunk из viewport допустим и ожидаем
-- при возврате к чанку создать editor заново из dirty draft или из storage state
+Основные операции:
 
-Так мы сохраняем пользовательские изменения, но не держим тяжелые editor instances.
+- `syncEditors` создает editors для текущих visible chunks;
+- `collectEditors` возвращает dirty snapshots;
+- `destroyEditors` уничтожает все editors viewport;
+- `markClean` помечает сохраненные editors чистыми;
+- `runCommand` применяет toolbar command к активному editor.
 
----
+Если DOM host editor-а был пересоздан Blazor-ом, `syncEditors` должен пересоздать Tiptap instance и не оставить белый пустой editor.
 
-## 12. Правило выбора источника чанка
+## 15. Toolbar
 
-Когда editor viewport должен показать чанк, он выбирает источник в таком порядке:
+Toolbar работает с активным Tiptap editor.
 
-```text
-1. Dirty cache
-2. LoadedChunks
-3. Database
-```
+Активный editor определяется по последнему focused chunk.
 
-Расшифровка:
+Минимальный набор команд:
 
-- если чанк был изменен, показываем dirty draft
-- если не изменен, но уже есть в текущем loaded window, показываем loaded chunk
-- если чанка нет локально, читаем из БД
+- Bold;
+- Italic;
+- Underline;
+- Paragraph;
+- H1;
+- H2;
+- H3.
 
-Если dirty draft существует, версия из БД не должна затирать его до явного Save или явного discard-сценария будущих версий.
+Команда toolbar считается правкой, если она меняет состояние документа, и должна привести chunk в dirty state через Tiptap `onUpdate`.
 
----
+## 16. Название документа
 
-## 13. Выход чанка из фокуса и выгрузка из viewport
+В edit mode название rich document открывается в поле ввода.
 
-Когда редактируемый chunk выходит из фокуса, но остается внутри editor viewport:
+Название сохраняется вместе с содержимым по `Save` и при переходе из edit mode в read mode через кнопку открытой книги.
 
-1. chunk остается редактируемым
-2. его Tiptap editor instance не уничтожается
-3. можно синхронизировать draft-state в память, но это не является сохранением в БД
+Фильтрация и нормализация названия находятся в `RichTextDocumentHelper`.
 
-Когда chunk выгружается из editor viewport:
+Текущие правила:
 
-1. editor viewport забирает текущее состояние соответствующего Tiptap editor
-2. сравнивает его с исходным состоянием
-3. если изменений нет, draft не сохраняется
-4. если изменения есть, draft сохраняется в dirty cache
-5. UI помечает документ как having unsaved changes
-6. если chunk выгружается из viewport, JS editor instance уничтожается
+- максимальная длина: `120` символов;
+- управляющие символы запрещены;
+- запрещены символы: `< > : " / \ | ? *`;
+- повторяющиеся whitespace схлопываются в один пробел;
+- начальные whitespace удаляются;
+- хвостовые пробелы и точки удаляются;
+- пустое название запрещено.
 
-Выход из фокуса не пишет данные в БД.
+При изменении названия сохраняется shell entity и обновляется дерево через entity update message.
 
-Это важное правило:
+## 17. Save
 
-```text
-БД обновляется только по кнопке Save.
-```
+Кнопка `Save` сохраняет:
 
----
-
-## 14. Возврат к ранее измененному чанку
-
-Когда пользователь возвращается к измененному чанку через скролл или содержание:
-
-1. editor viewport находит dirty draft по `SortOrder` или `ChunkId`
-2. создает Tiptap editor для этого chunk из draft-состояния
-3. пользователь видит ровно то, что редактировал ранее
-
-Версия из БД при этом не перечитывается поверх draft.
-
-Версия из БД не должна автоматически заменять dirty draft.
-
----
-
-## 15. Save
-
-Кнопка `Save` сохраняет все dirty chunks текущего документа.
+- dirty chunks;
+- название документа.
 
 Save flow:
 
-1. забрать текущее состояние всех editor instances в текущем viewport
-2. обновить dirty cache для измененных chunks
-3. собрать все dirty drafts
-4. отправить drafts в application service / helper
-5. сервер конвертирует editor model в `RichTextBlock[]`
-6. сервер обновляет только измененные chunk rows, без проверки конфликтов в MVP
-7. сервер обновляет:
-   - `Data`
-   - `PlainText`
-   - `HtmlCache`
-   - `BlockCount`
-   - `CharCount`
-   - `DataSizeBytes`
-   - `Version`
-   - `Checksum`
-8. сервер пересоздает ToC-property для измененных chunks
-9. UI обновляет loaded chunks и очищает dirty cache для успешно сохраненных chunks
-10. содержание перечитывается асинхронно
+1. editor viewport вызывает `CaptureCurrentEditorsAsync`;
+2. собираются только dirty drafts;
+3. dirty drafts передаются в `RichTextDocumentHelper.SaveEditedChunksAsync`;
+4. helper обновляет только измененные chunk rows;
+5. название проходит нормализацию и сохраняется через `SaveRichTextDocumentTitleAsync`;
+6. успешно сохраненные editor instances помечаются clean через JS `markClean`;
+7. dirty cache очищается;
+8. содержание перечитывается асинхронно из БД;
+9. UI показывает статус сохранения.
 
-Save не должен полностью пересоздавать rich-text storage документа.
+Если dirty chunks нет, но изменено название, сохраняется только название.
 
----
+Save не должен полностью пересоздавать chunk storage документа.
 
-## 16. Conflict policy
+## 18. Возврат в read mode
 
-В первом MVP conflict detection не реализуется.
+В edit mode есть кнопка с иконкой открытой книги.
 
-Save просто сохраняет dirty chunks текущего пользователя.
+Правило:
 
-Это означает:
+```text
+Переход из edit mode в read mode сначала выполняет Save.
+```
 
-- `OriginalVersion` и `OriginalChecksum` не нужны для MVP-save
-- сервер не отклоняет save из-за изменения версии чанка
-- последний save выигрывает
-- conflict UI не нужен
+Если сохранение прошло успешно:
+
+- edit mode выключается;
+- editor viewport уничтожается;
+- dirty cache должен быть очищен;
+- документ открывается в режиме чтения.
+
+Если сохранение не прошло из-за ошибки валидации названия или другой ошибки, пользователь остается в edit mode.
+
+## 19. Conflict policy
+
+В текущем MVP conflict detection не реализуется.
+
+Правило:
+
+```text
+Последний Save выигрывает.
+```
+
+Следствия:
+
+- `OriginalVersion` и `OriginalChecksum` не обязательны в draft;
+- сервер не отклоняет save из-за версии чанка;
+- conflict UI отсутствует.
 
 Future extension:
 
-- добавить `OriginalVersion` и/или `OriginalChecksum` в draft
-- проверять актуальность чанка на сервере
-- отклонять сохранение конкретного чанка при конфликте
-- показывать пользователю конфликтную ситуацию
+- добавить `OriginalVersion` и/или `OriginalChecksum`;
+- проверять актуальность чанка на сервере;
+- отклонять сохранение конкретного чанка при конфликте;
+- показывать пользователю conflict resolution UI.
 
----
+## 20. Tiptap / ProseMirror integration
 
-## 17. Cancel / Exit edit
-
-В первом MVP `Cancel` / `Discard` не реализуется.
-
-Минимальное поведение:
-
-- пользователь может нажать `Save`
-- выход из edit mode без сохранения можно временно не предоставлять
-- если позже появится выход из edit mode, он должен учитывать dirty cache
-
-Future behavior:
-
-- `Save`
-- `Discard`
-- `Stay in edit mode`
-
----
-
-## 18. Tiptap / ProseMirror integration
-
-Tiptap / ProseMirror используется как editor engine для чанков текущего editor viewport.
+Tiptap / ProseMirror используется как editor engine для текущих visible chunks.
 
 Tiptap не является storage format системы.
 
@@ -393,126 +410,133 @@ Tiptap не является storage format системы.
 ```text
 BusinessEntityDataChunkDto.Data = canonical chunk storage
 RichTextBlock[] = canonical chunk domain model
-Tiptap JSON = temporary editor model
-HtmlCache = readonly render cache
+Tiptap editor state = temporary UI/editor model
+HtmlCache = render cache and current MVP edit transport
 PlainText = search/read helper cache
 ```
 
-Нужен стабильный adapter:
+Текущий MVP редактирует HTML чанка через Tiptap и сохраняет его обратно через helper, который конвертирует HTML в rich-text blocks и обновляет chunk metadata.
+
+Долгосрочно нужен стабильный adapter:
 
 ```text
 RichTextDocumentChunk <-> Tiptap JSON
 ```
 
-Этот adapter должен сохранять:
+Adapter должен сохранять:
 
-- block identity
-- block kind
-- heading level
-- inline formatting
-- links
-- image references
-- table structure, когда таблицы будут поддержаны
+- block identity;
+- block kind;
+- heading level;
+- inline formatting;
+- links;
+- image references;
+- table structure, когда таблицы будут поддержаны.
 
----
+## 21. Block identity
 
-## 19. Block identity
+Для долгосрочного редактирования каждому блоку нужен стабильный `blockId`.
 
-Для нормального редактирования каждому блоку нужен стабильный `blockId`.
-
-Текущая модель с `blockIndex` недостаточна для долгосрочного редактирования, потому что при вставке/удалении блоков индексы меняются.
+Текущая модель с `blockIndex` годится как fallback, но недостаточна для сложного редактирования, потому что при вставке/удалении блоков индексы меняются.
 
 Policy:
 
-- добавить стабильный `Id` в `RichTextBlock`
-- существующие блоки без `Id` получают его при нормализации
-- новые блоки получают новые ids
-- heading anchors должны опираться на `blockId`, а не только на `blockIndex`
-- `blockIndex` можно оставить как fallback для старых данных
+- добавить стабильный `Id` в `RichTextBlock`;
+- существующие блоки без `Id` получают его при нормализации;
+- новые блоки получают новые ids;
+- heading anchors должны опираться на `blockId`, а не только на `blockIndex`;
+- `blockIndex` можно оставить как fallback для старых данных.
 
----
+## 22. Table of Contents после редактирования
 
-## 20. DOM size policy
+Содержание строится не из DOM, а из сохраненных chunk properties.
 
-В editor viewport одновременно должно быть мало реальных чанков.
+После сохранения измененных chunks:
 
-Целевой MVP:
+- ToC properties для измененных chunks должны быть актуализированы;
+- страница перечитывает содержание из БД асинхронно;
+- UI обновляет outline без полной перезагрузки документа.
+
+В read и edit mode используется одно и то же persisted outline.
+
+## 23. Логирование
+
+Для отладки edit viewport используются специальные web-logger tags:
 
 ```text
-2-3 чанка в отображении.
+[rich-doc-edit-window-request]
+[rich-doc-edit-window-loaded]
+[rich-doc-edit-chunk-cache-put]
+[rich-doc-edit-chunk-dispose]
+[rich-doc-edit-capture]
 ```
 
-Например:
+Правила логов:
 
-- previous editable chunk
-- focused editable chunk
-- next editable chunk
+- для cache/dispose сообщений `chunkId` должен быть в начале полезной части сообщения;
+- `documentId` в этих сообщениях не нужен, если пользователь отлаживает конкретный открытый документ;
+- логи должны помогать видеть, когда chunk попал в dirty cache и когда был уничтожен editor instance.
 
-Это не жесткое техническое ограничение, а целевая UX/performance policy.
+Логирование является диагностическим инструментом и не должно управлять бизнес-логикой.
 
-Настройки edit viewport должны быть полноценными sys parameters, а не временным hardcode:
-
-- `RichTextEditChunksBeforeFocused`, default `1`
-- `RichTextEditChunksAfterFocused`, default `1`
-- `RichTextEditChunksOnOpen`, default `2`
-
-На первом чанке фактическое количество чанков до focus равно `0`, даже если настройка `RichTextEditChunksBeforeFocused = 1`.
-Окно открытия строится от первого chunk вперед.
-
----
-
-## 21. Что не делать
+## 24. Что не делать
 
 Не делать:
 
-- не загружать весь документ в editor
-- не создавать Tiptap editor для каждого чанка большого документа
-- не отправлять каждое нажатие клавиши в Blazor Server
-- не писать в БД при blur/focus lost
-- не терять dirty draft при скролле
-- не затирать dirty draft версией из БД
-- не использовать `ReplaceRichTextChunksAsync` для сохранения edit changes
-- не перестраивать все содержание документа при сохранении одного чанка
-- не считать `HtmlCache` canonical editable format
-- не показывать readonly preview chunks внутри edit viewport
-- не использовать временный hardcode для размеров edit window
+- не загружать весь документ в editor;
+- не создавать Tiptap editor для каждого чанка большого документа;
+- не писать в БД при каждом нажатии клавиши;
+- не писать в БД при blur/focus lost;
+- не ждать dispose чанка, чтобы пометить его dirty;
+- не терять dirty draft при скролле;
+- не затирать dirty draft версией из БД;
+- не использовать `ReplaceRichTextChunksAsync` для сохранения edit changes;
+- не перестраивать все chunk storage документа при сохранении одного чанка;
+- не считать Tiptap JSON canonical storage;
+- не считать `HtmlCache` долгосрочным canonical editable format;
+- не показывать readonly preview chunks внутри edit viewport;
+- не использовать временный hardcode для размеров edit window;
+- не читать чанки непрерывно во время drag scrollbar.
 
----
+## 25. Текущий MVP scope
 
-## 22. MVP scope
+Текущий MVP edit mode:
 
-Первый согласованный MVP edit mode:
+1. Read mode имеет кнопку `Edit`.
+2. Edit mode имеет кнопку `Save`.
+3. Edit mode имеет кнопку возврата в read mode с сохранением.
+4. При входе в edit mode из read mode открывается текущий видимый chunk.
+5. При входе без стартовой позиции открывается начальное окно документа.
+6. Клик по содержанию открывает target chunk в editor viewport.
+7. Скролл вверх/вниз подгружает соседние chunks.
+8. Drag scrollbar читает документ после release, а не во время движения.
+9. В editor viewport находятся только chunks текущего окна, и все они редактируемые.
+10. Каждый отображаемый chunk редактируется через Tiptap.
+11. Dirty chunk попадает в cache в момент фактической правки.
+12. Dispose/capture используются как страховка для dirty-состояния.
+13. Возврат к dirty chunk показывает cached draft.
+14. В БД изменения пишутся только по `Save`.
+15. Save обновляет только dirty chunks.
+16. Save сохраняет название документа.
+17. Содержание перечитывается после Save асинхронно из БД.
+18. Conflict detection и Discard не входят в текущий MVP.
+19. Размеры edit window задаются через sys parameters в админке.
 
-```text
-1. Read mode имеет кнопку Edit.
-2. Edit mode имеет кнопку Save.
-3. При входе в edit mode открывается первый chunk.
-4. Клик по содержанию открывает target chunk в editor viewport.
-5. Скролл вверх/вниз подгружает соседние chunks.
-6. В отображении находятся примерно 2-3 chunks, и все они редактируемые.
-7. Каждый отображаемый chunk редактируется через Tiptap.
-8. Dirty chunk сохраняется во внутренний cache при выходе из фокуса или выгрузке из viewport.
-9. Возврат к dirty chunk показывает cached draft.
-10. В БД изменения пишутся только по Save.
-11. Save обновляет только dirty chunks.
-12. ToC для измененных chunks пересоздается после Save.
-13. Cancel/Discard и conflict detection не входят в первый MVP.
-14. Edit-window размеры задаются через sys parameters.
-```
+## 26. Зафиксированные решения
 
----
+Зафиксированные решения на текущий момент:
 
-## 23. Зафиксированные решения
-
-Перед реализацией зафиксированы такие решения:
-
-1. Cancel/Discard в первом MVP не включается.
+1. Cancel/Discard пока не реализуется.
 2. Все, что находится в editor viewport, является редактируемым.
 3. Preview chunks в edit mode не используются.
 4. Если chunk выгружен из editor viewport, его в редакторе нет.
-5. Первый MVP поддерживает paragraphs, headings и inline formatting.
-6. Таблицы, картинки и сложные embedded-элементы добавляются отдельным этапом.
-7. Conflict tracking в первом MVP не выполняется.
-8. Save сохраняет dirty chunks поверх текущего состояния БД.
-9. Временные hardcoded-настройки размера edit window не используются.
-10. Размер editor viewport задается через sys parameters с первой реализации.
+5. Dirty cache хранит только измененные chunks.
+6. Dirty state выставляется в момент правки, а не только при dispose.
+7. Первый MVP поддерживает paragraphs, headings H1-H3 и inline formatting.
+8. Таблицы, картинки и сложные embedded-элементы добавляются отдельным этапом.
+9. Conflict tracking в первом MVP не выполняется.
+10. Save сохраняет dirty chunks поверх текущего состояния БД.
+11. Название документа сохраняется вместе с edit save.
+12. Возврат в read mode сохраняет изменения перед переключением.
+13. Старт edit mode из read mode сохраняет позицию на уровне текущего видимого chunk.
+14. Размер editor viewport задается через sys parameters.

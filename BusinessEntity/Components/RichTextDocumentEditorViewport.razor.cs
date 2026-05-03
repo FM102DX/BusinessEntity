@@ -7,19 +7,22 @@ using Microsoft.JSInterop;
 
 namespace BusinessEntity.Components
 {
-    public partial class RichTextDocumentViewport : ComponentBase, IAsyncDisposable
+    public partial class RichTextDocumentEditorViewport : ComponentBase, IAsyncDisposable
     {
         private const double DefaultEstimatedChunkHeight = 1400;
         private const double MinEstimatedChunkHeight = 360;
         private const double MaxEstimatedChunkHeight = 8000;
 
         private readonly Dictionary<long, double> _chunkHeights = new();
-        private DotNetObjectReference<RichTextDocumentViewport>? _dotNetReference;
+        private readonly Dictionary<long, EditorChunkDraft> _dirtyDrafts = new();
+        private readonly HashSet<long> _dirtySortOrders = new();
+        private DotNetObjectReference<RichTextDocumentEditorViewport>? _dotNetReference;
         private RichTextDocumentChunkWindow? _appliedInitialWindow;
         private RichTextDocumentSettings _settings = new();
         private bool _viewportRegistered;
         private bool _isLoadingWindow;
-        private bool _pendingLoadedChunksLog;
+        private bool _pendingEditorSync;
+        private bool _initialEditWindowChecked;
         private long _loadVersion;
         private double? _lastScrollTop;
         private string? _pendingAnchor;
@@ -30,6 +33,7 @@ namespace BusinessEntity.Components
         [Parameter] public RichTextDocumentChunkWindow? InitialWindow { get; set; }
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode> OutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         [Parameter] public bool IsInitialContentLoading { get; set; }
+        [Parameter] public long? InitialTargetSortOrder { get; set; }
 
         [Inject] public IJSRuntime JS { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
@@ -41,6 +45,7 @@ namespace BusinessEntity.Components
         private double EstimatedChunkHeight { get; set; } = DefaultEstimatedChunkHeight;
         private double TopSpacerPx { get; set; }
         private double BottomSpacerPx { get; set; }
+        private bool HasDirtyDrafts => _dirtyDrafts.Count > 0 || _dirtySortOrders.Count > 0;
         private string TopSpacerStyle => $"height: {Math.Max(TopSpacerPx, 0):0.##}px;";
         private string BottomSpacerStyle => $"height: {Math.Max(BottomSpacerPx, 0):0.##}px;";
 
@@ -78,6 +83,37 @@ namespace BusinessEntity.Components
                 await JS.InvokeVoidAsync("richTextViewport.syncViewportSize", ViewportElementId);
             }
 
+            if (!_initialEditWindowChecked)
+            {
+                _initialEditWindowChecked = true;
+                if (InitialTargetSortOrder.HasValue)
+                {
+                    var targetSortOrder = Math.Max(InitialTargetSortOrder.Value, 0);
+                    if (!IsChunkLoaded(targetSortOrder) && BusinessEntityId != Guid.Empty && !_isLoadingWindow)
+                    {
+                        await LoadWindowAroundAsync(targetSortOrder, pendingAnchor: null);
+                        return;
+                    }
+
+                    _pendingVisibleChunkSortOrder = targetSortOrder;
+                }
+
+                if (BusinessEntityId != Guid.Empty &&
+                    !InitialTargetSortOrder.HasValue &&
+                    LoadedChunks.Count < _settings.GetEditChunksOnOpen() &&
+                    !_isLoadingWindow)
+                {
+                    await LoadWindowAsync(0, _settings.GetEditChunksOnOpen(), pendingAnchor: null);
+                    return;
+                }
+            }
+
+            if (_pendingEditorSync)
+            {
+                _pendingEditorSync = false;
+                await SyncEditorsAsync();
+            }
+
             await JS.InvokeVoidAsync("richTextViewport.measureChunks", ViewportElementId);
 
             if (!string.IsNullOrWhiteSpace(_pendingAnchor))
@@ -102,12 +138,38 @@ namespace BusinessEntity.Components
             }
 
             _pendingVisibleChunkSortOrder = null;
+        }
 
-            if (_pendingLoadedChunksLog)
+        public async Task<int> SaveAsync()
+        {
+            await CaptureCurrentEditorsAsync();
+            if (_dirtyDrafts.Count == 0)
             {
-                _pendingLoadedChunksLog = false;
-                await LogLoadedChunksStateAsync();
+                return 0;
             }
+
+            var drafts = _dirtyDrafts.Values
+                .OrderBy(x => x.SortOrder)
+                .Select(x => new RichTextDocumentChunkEditDraft
+                {
+                    ChunkId = x.ChunkId,
+                    SortOrder = x.SortOrder,
+                    Html = x.CurrentHtml
+                })
+                .ToList();
+
+            var savedCount = await RichTextDocumentHelper.SaveEditedChunksAsync(BusinessEntityId, drafts);
+            var savedSortOrders = drafts.Select(x => x.SortOrder).ToArray();
+            _dirtyDrafts.Clear();
+            _dirtySortOrders.Clear();
+
+            if (_viewportRegistered)
+            {
+                await JS.InvokeVoidAsync("richTextEditor.markClean", ViewportElementId, savedSortOrders);
+            }
+
+            await InvokeAsync(StateHasChanged);
+            return savedCount;
         }
 
         public async Task ScrollToHeadingAsync(string headingId, long chunkSortOrder)
@@ -131,25 +193,54 @@ namespace BusinessEntity.Components
             await LoadWindowAroundAsync(chunkSortOrder, headingId);
         }
 
-        public async Task<long?> GetCurrentVisibleChunkSortOrderAsync()
+        private Task RunEditorCommandAsync(string command)
         {
-            if (!_viewportRegistered || string.IsNullOrWhiteSpace(ViewportElementId))
+            return JS.InvokeVoidAsync("richTextEditor.runCommand", ViewportElementId, command).AsTask();
+        }
+
+        [JSInvokable]
+        public Task OnEditorChunkDirty(long sortOrder)
+        {
+            if (sortOrder >= 0)
             {
-                return LoadedChunks.Count == 0 ? null : LoadedChunks[0].SortOrder;
+                _dirtySortOrders.Add(sortOrder);
             }
 
-            try
+            return Task.CompletedTask;
+        }
+
+        [JSInvokable]
+        public async Task OnEditorChunkEdited(EditorChunkSnapshot snapshot, bool shouldRefreshDirtyState)
+        {
+            if (snapshot == null || snapshot.SortOrder < 0 || !snapshot.IsDirty)
             {
-                return await JS.InvokeAsync<long?>("richTextViewport.getCurrentChunkSortOrder", ViewportElementId);
+                return;
             }
-            catch (JSException)
+
+            var wasAlreadyCached = _dirtyDrafts.ContainsKey(snapshot.SortOrder);
+            PutDirtyDraft(snapshot);
+
+            await LogEditorViewportAsync(
+                "[rich-doc-edit-chunk-cache-put] " +
+                $"chunkId={snapshot.ChunkId:D} sortOrder={snapshot.SortOrder} " +
+                $"htmlLength={(snapshot.Html?.Length ?? 0)} originalHtmlLength={(snapshot.OriginalHtml?.Length ?? 0)} " +
+                $"source=edit wasAlreadyCached={wasAlreadyCached} dirtyCache={_dirtyDrafts.Count}");
+
+            if (shouldRefreshDirtyState)
             {
-                return LoadedChunks.Count == 0 ? null : LoadedChunks[0].SortOrder;
+                _pendingEditorSync = true;
+                await InvokeAsync(StateHasChanged);
             }
-            catch (InvalidOperationException)
-            {
-                return LoadedChunks.Count == 0 ? null : LoadedChunks[0].SortOrder;
-            }
+        }
+
+        [JSInvokable]
+        public Task OnEditorChunkDisposed(string chunkId, long sortOrder, bool isDirty, string reason)
+        {
+            return LogEditorViewportAsync(
+                "[rich-doc-edit-chunk-dispose] " +
+                $"chunkId={chunkId} sortOrder={sortOrder} " +
+                $"isDirty={isDirty} reason={reason} dirtyCache={_dirtyDrafts.Count} " +
+                $"dirtySortOrders={FormatDirtySortOrders()}");
         }
 
         [JSInvokable]
@@ -176,14 +267,13 @@ namespace BusinessEntity.Components
             }
 
             var desiredStart = ClampStartSortOrder(
-                targetSortOrder - GetScrollPreviousChunkCount(),
-                GetScrollWindowChunkCount());
+                targetSortOrder - _settings.GetEditChunksBeforeFocused(),
+                _settings.GetEditWindowChunkCount());
             await LoadWindowAsync(
                 desiredStart,
-                GetScrollWindowChunkCount(),
+                _settings.GetEditWindowChunkCount(),
                 pendingAnchor: null,
-                pendingVisibleChunkSortOrder: targetSortOrder,
-                mergeAdjacentWindow: ShouldMergeAdjacentWindow(desiredStart, GetScrollWindowChunkCount()));
+                pendingVisibleChunkSortOrder: targetSortOrder);
         }
 
         [JSInvokable]
@@ -208,41 +298,8 @@ namespace BusinessEntity.Components
             await LoadWindowAroundAsync(targetSortOrder, pendingAnchor: null);
         }
 
-        private async Task<bool> TryLoadPreviousWindowAsync(double scrollTop, double clientHeight)
-        {
-            if (LoadedChunks.Count == 0)
-            {
-                return false;
-            }
-
-            var firstLoadedSortOrder = LoadedChunks[0].SortOrder;
-            if (firstLoadedSortOrder <= 0)
-            {
-                return false;
-            }
-
-            var firstLoadedOffset = EstimateRangeHeight(0, firstLoadedSortOrder);
-            var preloadThreshold = Math.Max(clientHeight * 0.15, 48);
-            if (scrollTop > firstLoadedOffset + preloadThreshold)
-            {
-                return false;
-            }
-
-            var targetSortOrder = firstLoadedSortOrder - 1;
-            var desiredStart = ClampStartSortOrder(
-                targetSortOrder - GetScrollPreviousChunkCount(),
-                GetScrollWindowChunkCount());
-            await LoadWindowAsync(
-                desiredStart,
-                GetScrollWindowChunkCount(),
-                pendingAnchor: null,
-                pendingVisibleChunkSortOrder: targetSortOrder,
-                mergeAdjacentWindow: ShouldMergeAdjacentWindow(desiredStart, GetScrollWindowChunkCount()));
-            return true;
-        }
-
         [JSInvokable]
-        public Task OnChunkHeightsMeasured(ChunkHeightMeasurement[] measurements)
+        public Task OnChunkHeightsMeasured(RichTextDocumentViewport.ChunkHeightMeasurement[] measurements)
         {
             if (measurements == null || measurements.Length == 0)
             {
@@ -272,28 +329,59 @@ namespace BusinessEntity.Components
 
             RecalculateEstimatedChunkHeight();
             RecalculateSpacers();
+            _pendingEditorSync = true;
             return InvokeAsync(StateHasChanged);
+        }
+
+        private async Task<bool> TryLoadPreviousWindowAsync(double scrollTop, double clientHeight)
+        {
+            if (LoadedChunks.Count == 0)
+            {
+                return false;
+            }
+
+            var firstLoadedSortOrder = LoadedChunks[0].SortOrder;
+            if (firstLoadedSortOrder <= 0)
+            {
+                return false;
+            }
+
+            var firstLoadedOffset = EstimateRangeHeight(0, firstLoadedSortOrder);
+            var preloadThreshold = Math.Max(clientHeight * 0.15, 48);
+            if (scrollTop > firstLoadedOffset + preloadThreshold)
+            {
+                return false;
+            }
+
+            var targetSortOrder = firstLoadedSortOrder - 1;
+            var desiredStart = ClampStartSortOrder(
+                targetSortOrder - _settings.GetEditChunksBeforeFocused(),
+                _settings.GetEditWindowChunkCount());
+            await LoadWindowAsync(
+                desiredStart,
+                _settings.GetEditWindowChunkCount(),
+                pendingAnchor: null,
+                pendingVisibleChunkSortOrder: targetSortOrder);
+            return true;
         }
 
         private async Task LoadWindowAroundAsync(long targetSortOrder, string? pendingAnchor)
         {
             var start = ClampStartSortOrder(
-                targetSortOrder - GetTableOfContentsBeforeBuffer(),
-                GetTableOfContentsWindowChunkCount());
+                targetSortOrder - _settings.GetEditChunksBeforeFocused(),
+                _settings.GetEditWindowChunkCount());
             await LoadWindowAsync(
                 start,
-                GetTableOfContentsWindowChunkCount(),
+                _settings.GetEditWindowChunkCount(),
                 pendingAnchor,
-                pendingVisibleChunkSortOrder: targetSortOrder,
-                mergeAdjacentWindow: false);
+                pendingVisibleChunkSortOrder: targetSortOrder);
         }
 
         private async Task LoadWindowAsync(
             long startSortOrder,
             int take,
             string? pendingAnchor,
-            long? pendingVisibleChunkSortOrder,
-            bool mergeAdjacentWindow)
+            long? pendingVisibleChunkSortOrder = null)
         {
             if (_isLoadingWindow)
             {
@@ -305,6 +393,12 @@ namespace BusinessEntity.Components
 
             try
             {
+                await LogEditorViewportAsync(
+                    "[rich-doc-edit-window-request] " +
+                    $"startSortOrder={startSortOrder} take={take} " +
+                    $"loaded={FormatLoadedWindow()} dirtyCache={_dirtyDrafts.Count}");
+
+                await CaptureCurrentEditorsAsync();
                 var window = await GetChunkWindowWithCacheAsync(startSortOrder, take);
 
                 if (version != _loadVersion)
@@ -312,9 +406,14 @@ namespace BusinessEntity.Components
                     return;
                 }
 
-                ApplyWindow(window, mergeAdjacentWindow);
+                ApplyWindow(window);
                 _pendingAnchor = pendingAnchor;
                 _pendingVisibleChunkSortOrder = pendingVisibleChunkSortOrder;
+                await LogEditorViewportAsync(
+                    "[rich-doc-edit-window-loaded] " +
+                    $"startSortOrder={window.StartSortOrder} " +
+                    $"chunks={string.Join(",", window.Chunks.Select(chunk => chunk.SortOrder))} " +
+                    $"totalChunks={window.TotalChunkCount} dirtyCache={_dirtyDrafts.Count}");
                 await InvokeAsync(StateHasChanged);
             }
             finally
@@ -359,7 +458,7 @@ namespace BusinessEntity.Components
             long? missingStart = null;
             for (var sortOrder = startSortOrder; sortOrder < endExclusive; sortOrder++)
             {
-                if (!cachedChunks.ContainsKey(sortOrder))
+                if (!cachedChunks.ContainsKey(sortOrder) && !_dirtyDrafts.ContainsKey(sortOrder))
                 {
                     missingStart ??= sortOrder;
                     continue;
@@ -380,7 +479,18 @@ namespace BusinessEntity.Components
             var chunks = new List<RichTextDocumentChunk>();
             for (var sortOrder = startSortOrder; sortOrder < endExclusive; sortOrder++)
             {
-                if (cachedChunks.TryGetValue(sortOrder, out var cachedChunk))
+                if (_dirtyDrafts.TryGetValue(sortOrder, out var draft))
+                {
+                    chunks.Add(new RichTextDocumentChunk
+                    {
+                        Id = draft.ChunkId,
+                        BusinessEntityId = BusinessEntityId,
+                        SortOrder = sortOrder,
+                        HtmlCache = draft.CurrentHtml,
+                        CharCount = draft.CurrentHtml.Length
+                    });
+                }
+                else if (cachedChunks.TryGetValue(sortOrder, out var cachedChunk))
                 {
                     chunks.Add(cachedChunk);
                 }
@@ -424,7 +534,7 @@ namespace BusinessEntity.Components
             return window.TotalChunkCount > 0 ? window.TotalChunkCount : fallbackTotalChunkCount;
         }
 
-        private void ApplyWindow(RichTextDocumentChunkWindow? window, bool mergeAdjacentWindow = false)
+        private void ApplyWindow(RichTextDocumentChunkWindow? window)
         {
             if (window == null)
             {
@@ -433,127 +543,109 @@ namespace BusinessEntity.Components
                 TopSpacerPx = 0;
                 BottomSpacerPx = 0;
                 _lastScrollTop = null;
+                _pendingEditorSync = true;
                 return;
             }
 
-            LoadedChunks = mergeAdjacentWindow
-                ? MergeLoadedChunks(window.Chunks ?? Array.Empty<RichTextDocumentChunk>())
-                : window.Chunks ?? Array.Empty<RichTextDocumentChunk>();
+            LoadedChunks = window.Chunks ?? Array.Empty<RichTextDocumentChunk>();
             TotalChunkCount = window.TotalChunkCount;
             RecalculateSpacers();
-            if (!mergeAdjacentWindow)
-            {
-                _lastScrollTop = null;
-            }
-
-            _pendingLoadedChunksLog = true;
+            _lastScrollTop = null;
+            _pendingEditorSync = true;
         }
 
-        private IReadOnlyList<RichTextDocumentChunk> MergeLoadedChunks(IReadOnlyList<RichTextDocumentChunk> incomingChunks)
+        private async Task CaptureCurrentEditorsAsync()
         {
-            if (LoadedChunks.Count == 0)
-            {
-                return incomingChunks;
-            }
-
-            if (incomingChunks.Count == 0)
-            {
-                return LoadedChunks;
-            }
-
-            return LoadedChunks
-                .Concat(incomingChunks)
-                .GroupBy(chunk => chunk.SortOrder)
-                .Select(group => group.Last())
-                .OrderBy(chunk => chunk.SortOrder)
-                .ToArray();
-        }
-
-        private bool ShouldMergeAdjacentWindow(long startSortOrder, int take)
-        {
-            if (LoadedChunks.Count == 0 || take <= 0)
-            {
-                return false;
-            }
-
-            var firstLoaded = LoadedChunks[0].SortOrder;
-            var lastLoaded = LoadedChunks[^1].SortOrder;
-            var endSortOrder = startSortOrder + take - 1;
-
-            return endSortOrder >= firstLoaded - 1 && startSortOrder <= lastLoaded + 1;
-        }
-
-        private async Task LogLoadedChunksStateAsync()
-        {
-            if (WebLogger == null || BusinessEntityId == Guid.Empty)
+            if (!_viewportRegistered || string.IsNullOrWhiteSpace(ViewportElementId))
             {
                 return;
             }
 
-            var loadedBySortOrder = LoadedChunks
-                .GroupBy(chunk => chunk.SortOrder)
-                .ToDictionary(group => group.Key, group => group.Last());
-            var loadedStart = LoadedChunks.Count == 0 ? -1 : LoadedChunks.Min(chunk => chunk.SortOrder);
-            var loadedEnd = LoadedChunks.Count == 0 ? -1 : LoadedChunks.Max(chunk => chunk.SortOrder);
-
-            await WebLogger.Information(
-                "[rich-doc-loaded-chunks] " +
-                $"totalChunks={TotalChunkCount} " +
-                $"loadedWindow={loadedStart}..{loadedEnd} " +
-                $"chunks={BuildLoadedChunksMap(loadedBySortOrder)}");
-        }
-
-        private string BuildLoadedChunksMap(IReadOnlyDictionary<long, RichTextDocumentChunk> loadedBySortOrder)
-        {
-            if (TotalChunkCount <= 0)
+            EditorChunkSnapshot[] snapshots;
+            try
             {
-                return "none";
+                snapshots = await JS.InvokeAsync<EditorChunkSnapshot[]>("richTextEditor.collectEditors", ViewportElementId);
+            }
+            catch (JSException)
+            {
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (InvalidOperationException)
+            {
+                return;
             }
 
-            if (TotalChunkCount <= 200)
+            var dirtySnapshotCount = 0;
+            foreach (var snapshot in snapshots ?? Array.Empty<EditorChunkSnapshot>())
             {
-                var values = new List<string>(TotalChunkCount);
-                for (var sortOrder = 0L; sortOrder < TotalChunkCount; sortOrder++)
+                if (snapshot.SortOrder < 0)
                 {
-                    values.Add(loadedBySortOrder.TryGetValue(sortOrder, out var chunk)
-                        ? chunk.CharCount.ToString()
-                        : "0");
-                }
-
-                return string.Join(",", values);
-            }
-
-            return BuildCompactLoadedChunksMap(loadedBySortOrder);
-        }
-
-        private string BuildCompactLoadedChunksMap(IReadOnlyDictionary<long, RichTextDocumentChunk> loadedBySortOrder)
-        {
-            var parts = new List<string>();
-            var missingCount = 0;
-
-            for (var sortOrder = 0L; sortOrder < TotalChunkCount; sortOrder++)
-            {
-                if (loadedBySortOrder.TryGetValue(sortOrder, out var chunk))
-                {
-                    if (missingCount > 0)
-                    {
-                        parts.Add($"0x{missingCount}");
-                        missingCount = 0;
-                    }
-
-                    parts.Add(chunk.CharCount.ToString());
                     continue;
                 }
 
-                missingCount++;
+                if (snapshot.IsDirty)
+                {
+                    dirtySnapshotCount++;
+                    var wasAlreadyCached = _dirtyDrafts.ContainsKey(snapshot.SortOrder);
+                    PutDirtyDraft(snapshot);
+
+                    await LogEditorViewportAsync(
+                        "[rich-doc-edit-chunk-cache-put] " +
+                        $"chunkId={snapshot.ChunkId:D} sortOrder={snapshot.SortOrder} " +
+                        $"htmlLength={(snapshot.Html?.Length ?? 0)} originalHtmlLength={(snapshot.OriginalHtml?.Length ?? 0)} " +
+                        $"source=capture wasAlreadyCached={wasAlreadyCached} dirtyCache={_dirtyDrafts.Count}");
+                }
+                else
+                {
+                    _dirtySortOrders.Remove(snapshot.SortOrder);
+                    _dirtyDrafts.Remove(snapshot.SortOrder);
+                }
             }
 
-            if (missingCount > 0)
+            await LogEditorViewportAsync(
+                "[rich-doc-edit-capture] " +
+                $"snapshots={(snapshots?.Length ?? 0)} " +
+                $"dirtySnapshots={dirtySnapshotCount} dirtyCache={_dirtyDrafts.Count} " +
+                $"dirtySortOrders={FormatDirtySortOrders()}");
+        }
+
+        private void PutDirtyDraft(EditorChunkSnapshot snapshot)
+        {
+            _dirtySortOrders.Add(snapshot.SortOrder);
+            _dirtyDrafts[snapshot.SortOrder] = new EditorChunkDraft
             {
-                parts.Add($"0x{missingCount}");
+                ChunkId = snapshot.ChunkId,
+                SortOrder = snapshot.SortOrder,
+                OriginalHtml = snapshot.OriginalHtml ?? string.Empty,
+                CurrentHtml = snapshot.Html ?? string.Empty
+            };
+        }
+
+        private Task SyncEditorsAsync()
+        {
+            if (!_viewportRegistered || string.IsNullOrWhiteSpace(ViewportElementId))
+            {
+                return Task.CompletedTask;
             }
 
-            return string.Join(",", parts);
+            var payload = LoadedChunks.Select(chunk =>
+            {
+                var hasDraft = _dirtyDrafts.TryGetValue(chunk.SortOrder, out var draft);
+                return new
+                {
+                    chunkId = chunk.Id,
+                    sortOrder = chunk.SortOrder,
+                    html = hasDraft ? draft!.CurrentHtml : chunk.HtmlCache,
+                    originalHtml = hasDraft ? draft!.OriginalHtml : chunk.HtmlCache,
+                    isDraft = hasDraft
+                };
+            }).ToArray();
+
+            return JS.InvokeVoidAsync("richTextEditor.syncEditors", ViewportElementId, payload, _dotNetReference).AsTask();
         }
 
         private void RecalculateSpacers()
@@ -627,12 +719,7 @@ namespace BusinessEntity.Components
             }
 
             var nearestPrevious = flatNodes.LastOrDefault(node => node.ChunkSortOrder <= targetSortOrder);
-            if (nearestPrevious != null)
-            {
-                return nearestPrevious;
-            }
-
-            return flatNodes[0];
+            return nearestPrevious ?? flatNodes[0];
         }
 
         private static IEnumerable<RichTextDocumentOutlineNode> FlattenOutlineNodes(IEnumerable<RichTextDocumentOutlineNode>? nodes)
@@ -664,29 +751,45 @@ namespace BusinessEntity.Components
             return Math.Clamp(startSortOrder, 0, maxStart);
         }
 
-        private int GetTableOfContentsBeforeBuffer()
-        {
-            return _settings.GetTableOfContentsBeforeBuffer();
-        }
-
-        private int GetTableOfContentsWindowChunkCount()
-        {
-            return _settings.GetTableOfContentsWindowChunkCount();
-        }
-
-        private int GetScrollPreviousChunkCount()
-        {
-            return _settings.GetScrollPreviousChunkCount();
-        }
-
-        private int GetScrollWindowChunkCount()
-        {
-            return _settings.GetScrollWindowChunkCount();
-        }
-
         private bool IsChunkLoaded(long sortOrder)
         {
             return LoadedChunks.Any(chunk => chunk.SortOrder == sortOrder);
+        }
+
+        private bool IsChunkDirty(long sortOrder)
+        {
+            return _dirtyDrafts.ContainsKey(sortOrder) || _dirtySortOrders.Contains(sortOrder);
+        }
+
+        private string GetChunkCssClass(long sortOrder)
+        {
+            return IsChunkDirty(sortOrder)
+                ? "rich-text-document-editor__chunk rich-text-document-editor__chunk--dirty"
+                : "rich-text-document-editor__chunk";
+        }
+
+        private string FormatLoadedWindow()
+        {
+            if (LoadedChunks.Count == 0)
+            {
+                return "empty";
+            }
+
+            return $"{LoadedChunks.Min(chunk => chunk.SortOrder)}..{LoadedChunks.Max(chunk => chunk.SortOrder)}";
+        }
+
+        private string FormatDirtySortOrders()
+        {
+            return _dirtyDrafts.Count == 0 && _dirtySortOrders.Count == 0
+                ? "none"
+                : string.Join(",", _dirtyDrafts.Keys.Concat(_dirtySortOrders).Distinct().OrderBy(x => x));
+        }
+
+        private Task LogEditorViewportAsync(string message)
+        {
+            return WebLogger == null
+                ? Task.CompletedTask
+                : WebLogger.Information(message);
         }
 
         private void RecalculateEstimatedChunkHeight()
@@ -707,21 +810,38 @@ namespace BusinessEntity.Components
             {
                 try
                 {
+                    await CaptureCurrentEditorsAsync();
+                    await JS.InvokeVoidAsync("richTextEditor.destroyEditors", ViewportElementId);
                     await JS.InvokeVoidAsync("richTextViewport.unregisterViewport", ViewportElementId);
                 }
                 catch (JSDisconnectedException)
                 {
                     // Blazor Server can disconnect JS runtime during teardown.
                 }
+                catch (OperationCanceledException)
+                {
+                    // Blazor Server can cancel JS interop during teardown.
+                }
             }
 
             _dotNetReference?.Dispose();
         }
 
-        public sealed class ChunkHeightMeasurement
+        private sealed class EditorChunkDraft
         {
+            public Guid ChunkId { get; set; }
             public long SortOrder { get; set; }
-            public double Height { get; set; }
+            public string OriginalHtml { get; set; } = string.Empty;
+            public string CurrentHtml { get; set; } = string.Empty;
+        }
+
+        public sealed class EditorChunkSnapshot
+        {
+            public Guid ChunkId { get; set; }
+            public long SortOrder { get; set; }
+            public string? OriginalHtml { get; set; }
+            public string? Html { get; set; }
+            public bool IsDirty { get; set; }
         }
     }
 }

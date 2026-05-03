@@ -14,6 +14,12 @@ namespace BusinessEntity.Settings
 
         public bool HideTableOfContentsScrollbar { get; set; } = true;
 
+        public int EditChunksBeforeFocused { get; set; } = 1;
+
+        public int EditChunksAfterFocused { get; set; } = 1;
+
+        public int EditChunksOnOpen { get; set; } = 2;
+
         public int GetInitialChunkCount()
         {
             return Math.Max(InitialChunkCount, 1);
@@ -37,6 +43,26 @@ namespace BusinessEntity.Settings
         public int GetScrollWindowChunkCount()
         {
             return GetScrollPreviousChunkCount() + 1 + Math.Max(TableOfContentsAfterBuffer, 0);
+        }
+
+        public int GetEditChunksBeforeFocused()
+        {
+            return Math.Max(EditChunksBeforeFocused, 0);
+        }
+
+        public int GetEditChunksAfterFocused()
+        {
+            return Math.Max(EditChunksAfterFocused, 0);
+        }
+
+        public int GetEditWindowChunkCount()
+        {
+            return GetEditChunksBeforeFocused() + 1 + GetEditChunksAfterFocused();
+        }
+
+        public int GetEditChunksOnOpen()
+        {
+            return Math.Max(EditChunksOnOpen, 1);
         }
     }
 }

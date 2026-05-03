@@ -5,6 +5,7 @@ using BusinessEntity.Components;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using ReactiveUI;
 
 namespace BusinessEntity.Pages
 {
@@ -15,6 +16,7 @@ namespace BusinessEntity.Pages
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public RichTextDocumentImportService ImportService { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
+        [Inject] public IMessageBus MessageBus { get; set; } = default!;
 
         private BusinessEntity.Core.Classes.BusinessEntity? Entity;
         private RichTextDocument? Manifest;
@@ -29,6 +31,7 @@ namespace BusinessEntity.Pages
         private string? StatusMessage;
         private CancellationTokenSource? LoadCancellationTokenSource { get; set; }
         private long LoadVersion { get; set; }
+        private const int OutlineChunkBatchSize = 5;
 
         protected override async Task OnParametersSetAsync()
         {
@@ -133,8 +136,24 @@ namespace BusinessEntity.Pages
         {
             try
             {
-                var tableOfContents = await RichTextDocumentHelper.GetTableOfContentsAsync(documentId, cancellationToken);
-                var outlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
+                await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
+                    documentId,
+                    OutlineChunkBatchSize,
+                    cancellationToken))
+                {
+                    var outlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
+
+                    await InvokeAsync(() =>
+                    {
+                        if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        OutlineNodes = outlineNodes;
+                        StateHasChanged();
+                    });
+                }
 
                 await InvokeAsync(() =>
                 {
@@ -143,7 +162,6 @@ namespace BusinessEntity.Pages
                         return;
                     }
 
-                    OutlineNodes = outlineNodes;
                     IsOutlineLoading = false;
                     StateHasChanged();
                 });
@@ -255,6 +273,60 @@ namespace BusinessEntity.Pages
             finally
             {
                 IsRebuildingTableOfContents = false;
+            }
+        }
+
+        private async Task OnEditorSavedAsync(RichTextDocumentEditorSaveRequest request)
+        {
+            Error = null;
+
+            try
+            {
+                var titleResult = await RichTextDocumentHelper.SaveRichTextDocumentTitleAsync(Id, request.Title);
+                Entity = titleResult.Entity;
+                if (Manifest != null)
+                {
+                    Manifest.Name = titleResult.Title;
+                    Manifest.LastModifiedDate = Entity.LastModifiedDate;
+                }
+
+                if (titleResult.TitleChanged)
+                {
+                    MessageBus.SendMessage(new EntityUpdatedMessage(Entity));
+                }
+
+                var statusParts = new List<string>();
+                if (request.SavedChunkCount > 0)
+                {
+                    statusParts.Add($"Сохранено чанков: {request.SavedChunkCount}");
+                }
+
+                if (titleResult.TitleChanged)
+                {
+                    statusParts.Add("название сохранено");
+                }
+
+                StatusMessage = statusParts.Count == 0
+                    ? "Нет изменений для сохранения."
+                    : string.Join("; ", statusParts) + ".";
+
+                IsOutlineLoading = true;
+                await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
+                    Id,
+                    OutlineChunkBatchSize))
+                {
+                    OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+                StatusMessage = null;
+            }
+            finally
+            {
+                IsOutlineLoading = false;
             }
         }
 

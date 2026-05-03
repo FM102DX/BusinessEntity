@@ -42,7 +42,16 @@ namespace BusinessEntity.Services
                 ScrollPreviousChunkCount = sysParameters.RichTextScrollPreviousChunkCount < 0
                     ? fallback.ScrollPreviousChunkCount
                     : sysParameters.RichTextScrollPreviousChunkCount,
-                HideTableOfContentsScrollbar = sysParameters.RichTextHideTableOfContentsScrollbar
+                HideTableOfContentsScrollbar = sysParameters.RichTextHideTableOfContentsScrollbar,
+                EditChunksBeforeFocused = sysParameters.RichTextEditChunksBeforeFocused < 0
+                    ? fallback.EditChunksBeforeFocused
+                    : sysParameters.RichTextEditChunksBeforeFocused,
+                EditChunksAfterFocused = sysParameters.RichTextEditChunksAfterFocused < 0
+                    ? fallback.EditChunksAfterFocused
+                    : sysParameters.RichTextEditChunksAfterFocused,
+                EditChunksOnOpen = sysParameters.RichTextEditChunksOnOpen <= 0
+                    ? fallback.EditChunksOnOpen
+                    : sysParameters.RichTextEditChunksOnOpen
             };
         }
     }

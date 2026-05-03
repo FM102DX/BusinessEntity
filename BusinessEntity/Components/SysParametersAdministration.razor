@@ -75,6 +75,30 @@
                         </label>
                     </div>
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label">RichDocument editor: чанков перед фокусом</label>
+                    <input class="form-control"
+                           type="number"
+                           min="0"
+                           step="1"
+                           @bind="RichTextEditChunksBeforeFocused" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">RichDocument editor: чанков после фокуса</label>
+                    <input class="form-control"
+                           type="number"
+                           min="0"
+                           step="1"
+                           @bind="RichTextEditChunksAfterFocused" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">RichDocument editor: чанков при открытии</label>
+                    <input class="form-control"
+                           type="number"
+                           min="1"
+                           step="1"
+                           @bind="RichTextEditChunksOnOpen" />
+                </div>
                 <div class="col-md-auto">
                     <button class="btn btn-primary"
                             @onclick="SaveSysParametersAsync"
@@ -108,6 +132,9 @@
     private int RichTextTableOfContentsAfterBuffer { get; set; } = 5;
     private int RichTextScrollPreviousChunkCount { get; set; } = 1;
     private bool RichTextHideTableOfContentsScrollbar { get; set; } = true;
+    private int RichTextEditChunksBeforeFocused { get; set; } = 1;
+    private int RichTextEditChunksAfterFocused { get; set; } = 1;
+    private int RichTextEditChunksOnOpen { get; set; } = 2;
     private string? StatusMessage { get; set; }
     private string? ErrorMessage { get; set; }
 
@@ -143,6 +170,15 @@
                 ? 1
                 : SysParametersEntity.Data.RichTextScrollPreviousChunkCount;
             RichTextHideTableOfContentsScrollbar = SysParametersEntity.Data.RichTextHideTableOfContentsScrollbar;
+            RichTextEditChunksBeforeFocused = SysParametersEntity.Data.RichTextEditChunksBeforeFocused < 0
+                ? 1
+                : SysParametersEntity.Data.RichTextEditChunksBeforeFocused;
+            RichTextEditChunksAfterFocused = SysParametersEntity.Data.RichTextEditChunksAfterFocused < 0
+                ? 1
+                : SysParametersEntity.Data.RichTextEditChunksAfterFocused;
+            RichTextEditChunksOnOpen = SysParametersEntity.Data.RichTextEditChunksOnOpen <= 0
+                ? 2
+                : SysParametersEntity.Data.RichTextEditChunksOnOpen;
         }
         catch (Exception ex)
         {
@@ -187,6 +223,15 @@
                 ? 0
                 : RichTextScrollPreviousChunkCount;
             SysParametersEntity.Data.RichTextHideTableOfContentsScrollbar = RichTextHideTableOfContentsScrollbar;
+            SysParametersEntity.Data.RichTextEditChunksBeforeFocused = RichTextEditChunksBeforeFocused < 0
+                ? 0
+                : RichTextEditChunksBeforeFocused;
+            SysParametersEntity.Data.RichTextEditChunksAfterFocused = RichTextEditChunksAfterFocused < 0
+                ? 0
+                : RichTextEditChunksAfterFocused;
+            SysParametersEntity.Data.RichTextEditChunksOnOpen = RichTextEditChunksOnOpen <= 0
+                ? 1
+                : RichTextEditChunksOnOpen;
 
             await BusinessEntityHelper.SaveEntityAsync(SysParametersEntity);
             StatusMessage = "Параметры системы сохранены.";

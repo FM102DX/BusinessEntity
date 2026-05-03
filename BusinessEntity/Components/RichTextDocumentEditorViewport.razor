@@ -1,0 +1,60 @@
+@using BusinessEntity.Core.RichText
+@using Microsoft.AspNetCore.Components
+@implements IAsyncDisposable
+
+<div class="rich-text-document-editor">
+    <div class="rich-text-document-editor__toolbar" role="toolbar" aria-label="Rich text editor toolbar">
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Bold" @onclick='@(() => RunEditorCommandAsync("toggleBold"))'>
+            <span class="oi oi-bold" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Italic" @onclick='@(() => RunEditorCommandAsync("toggleItalic"))'>
+            <span class="oi oi-italic" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Underline" @onclick='@(() => RunEditorCommandAsync("toggleUnderline"))'>
+            <span class="oi oi-underline" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Paragraph" @onclick='@(() => RunEditorCommandAsync("setParagraph"))'>P</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 1" @onclick='@(() => RunEditorCommandAsync("toggleHeading1"))'>H1</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 2" @onclick='@(() => RunEditorCommandAsync("toggleHeading2"))'>H2</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 3" @onclick='@(() => RunEditorCommandAsync("toggleHeading3"))'>H3</button>
+
+        @if (HasDirtyDrafts)
+        {
+            <span class="rich-text-document-editor__dirty">Есть несохраненные изменения</span>
+        }
+    </div>
+
+    <div id="@ViewportElementId" class="rich-text-document-editor__viewport" tabindex="0">
+        @if (IsInitialContentLoading && LoadedChunks.Count == 0)
+        {
+            <div class="rich-text-document-editor__loading">Загрузка текста...</div>
+        }
+
+        <div class="rich-text-document-editor__spacer" style="@TopSpacerStyle"></div>
+
+        @foreach (var chunk in LoadedChunks)
+        {
+            <article @key="chunk.Id"
+                     class="@GetChunkCssClass(chunk.SortOrder)"
+                     data-rich-text-chunk="true"
+                     data-rich-text-editor-chunk="true"
+                     data-chunk-id="@chunk.Id"
+                     data-chunk-sort-order="@chunk.SortOrder">
+                <div class="rich-text-document-editor__chunk-meta">
+                    <span>Chunk @chunk.SortOrder</span>
+                    @if (IsChunkDirty(chunk.SortOrder))
+                    {
+                        <span class="rich-text-document-editor__chunk-dirty">Dirty</span>
+                    }
+                </div>
+                <div class="rich-text-document-editor__host"
+                     data-rich-text-editor-host="true"
+                     data-chunk-id="@chunk.Id"
+                     data-chunk-sort-order="@chunk.SortOrder">
+                </div>
+            </article>
+        }
+
+        <div class="rich-text-document-editor__spacer" style="@BottomSpacerStyle"></div>
+    </div>
+</div>
