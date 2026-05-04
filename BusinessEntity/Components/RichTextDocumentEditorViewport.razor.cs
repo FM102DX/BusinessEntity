@@ -29,13 +29,14 @@ namespace BusinessEntity.Components
         private double? _lastScrollTop;
         private string? _pendingAnchor;
         private long? _pendingVisibleChunkSortOrder;
+        private RichTextDocumentViewportPosition? _pendingViewportPosition;
 
         [Parameter] public string ViewportElementId { get; set; } = string.Empty;
         [Parameter] public Guid BusinessEntityId { get; set; }
         [Parameter] public RichTextDocumentChunkWindow? InitialWindow { get; set; }
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode> OutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         [Parameter] public bool IsInitialContentLoading { get; set; }
-        [Parameter] public long? InitialTargetSortOrder { get; set; }
+        [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
 
         [Inject] public IJSRuntime JS { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
@@ -88,20 +89,20 @@ namespace BusinessEntity.Components
             if (!_initialEditWindowChecked)
             {
                 _initialEditWindowChecked = true;
-                if (InitialTargetSortOrder.HasValue)
+                if (InitialTargetPosition != null)
                 {
-                    var targetSortOrder = Math.Max(InitialTargetSortOrder.Value, 0);
+                    var targetSortOrder = Math.Max(InitialTargetPosition.ChunkSortOrder, 0);
                     if (!IsChunkLoaded(targetSortOrder) && BusinessEntityId != Guid.Empty && !_isLoadingWindow)
                     {
-                        await LoadWindowAroundAsync(targetSortOrder, pendingAnchor: null);
+                        await LoadWindowAroundAsync(targetSortOrder, pendingAnchor: null, pendingViewportPosition: InitialTargetPosition);
                         return;
                     }
 
-                    _pendingVisibleChunkSortOrder = targetSortOrder;
+                    _pendingViewportPosition = InitialTargetPosition;
                 }
 
                 if (BusinessEntityId != Guid.Empty &&
-                    !InitialTargetSortOrder.HasValue &&
+                    InitialTargetPosition == null &&
                     LoadedChunks.Count < _settings.GetEditChunksOnOpen() &&
                     !_isLoadingWindow)
                 {
@@ -132,8 +133,13 @@ namespace BusinessEntity.Components
             {
                 await EnsureChunkVisibleInViewportAsync(_pendingVisibleChunkSortOrder.Value);
             }
+            else if (_pendingViewportPosition != null)
+            {
+                await ScrollToBlockInViewportAsync(_pendingViewportPosition);
+            }
 
             _pendingVisibleChunkSortOrder = null;
+            _pendingViewportPosition = null;
         }
 
         public async Task<int> SaveAsync()
@@ -187,6 +193,29 @@ namespace BusinessEntity.Components
             }
 
             await LoadWindowAroundAsync(chunkSortOrder, headingId);
+        }
+
+        public async Task<RichTextDocumentViewportPosition?> GetCurrentViewportPositionAsync()
+        {
+            if (!_viewportRegistered || string.IsNullOrWhiteSpace(ViewportElementId))
+            {
+                return null;
+            }
+
+            try
+            {
+                return await JS.InvokeAsync<RichTextDocumentViewportPosition?>(
+                    "richTextEditViewport.getCurrentViewportPosition",
+                    ViewportElementId);
+            }
+            catch (JSException)
+            {
+                return null;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
         }
 
         private Task RunEditorCommandAsync(string command)
@@ -269,7 +298,8 @@ namespace BusinessEntity.Components
                 desiredStart,
                 _settings.GetEditWindowChunkCount(),
                 pendingAnchor: null,
-                pendingVisibleChunkSortOrder: targetSortOrder);
+                pendingVisibleChunkSortOrder: targetSortOrder,
+                pendingViewportPosition: null);
         }
 
         [JSInvokable]
@@ -357,11 +387,20 @@ namespace BusinessEntity.Components
                 desiredStart,
                 _settings.GetEditWindowChunkCount(),
                 pendingAnchor: null,
-                pendingVisibleChunkSortOrder: targetSortOrder);
+                pendingVisibleChunkSortOrder: targetSortOrder,
+                pendingViewportPosition: null);
             return true;
         }
 
-        private async Task LoadWindowAroundAsync(long targetSortOrder, string? pendingAnchor)
+        private Task LoadWindowAroundAsync(long targetSortOrder, string? pendingAnchor)
+        {
+            return LoadWindowAroundAsync(targetSortOrder, pendingAnchor, pendingViewportPosition: null);
+        }
+
+        private async Task LoadWindowAroundAsync(
+            long targetSortOrder,
+            string? pendingAnchor,
+            RichTextDocumentViewportPosition? pendingViewportPosition)
         {
             var start = ClampStartSortOrder(
                 targetSortOrder - _settings.GetEditChunksBeforeFocused(),
@@ -370,14 +409,16 @@ namespace BusinessEntity.Components
                 start,
                 _settings.GetEditWindowChunkCount(),
                 pendingAnchor,
-                pendingVisibleChunkSortOrder: targetSortOrder);
+                pendingVisibleChunkSortOrder: pendingViewportPosition == null ? targetSortOrder : null,
+                pendingViewportPosition: pendingViewportPosition);
         }
 
         private async Task LoadWindowAsync(
             long startSortOrder,
             int take,
             string? pendingAnchor,
-            long? pendingVisibleChunkSortOrder = null)
+            long? pendingVisibleChunkSortOrder = null,
+            RichTextDocumentViewportPosition? pendingViewportPosition = null)
         {
             if (_isLoadingWindow)
             {
@@ -405,6 +446,7 @@ namespace BusinessEntity.Components
                 ApplyWindow(window);
                 _pendingAnchor = pendingAnchor;
                 _pendingVisibleChunkSortOrder = pendingVisibleChunkSortOrder;
+                _pendingViewportPosition = pendingViewportPosition;
                 await LogEditorViewportAsync(
                     "[rich-doc-edit-window-loaded] " +
                     $"startSortOrder={window.StartSortOrder} " +
@@ -650,6 +692,18 @@ namespace BusinessEntity.Components
                 "richTextEditViewport.ensureChunkVisible",
                 ViewportElementId,
                 sortOrder,
+                ProgrammaticScrollBehavior,
+                ProgrammaticScrollSuppressionMs);
+        }
+
+        private async Task<bool> ScrollToBlockInViewportAsync(RichTextDocumentViewportPosition position)
+        {
+            _lastScrollTop = null;
+            return await JS.InvokeAsync<bool>(
+                "richTextEditViewport.scrollToBlock",
+                ViewportElementId,
+                position.ChunkSortOrder,
+                position.BlockIndex,
                 ProgrammaticScrollBehavior,
                 ProgrammaticScrollSuppressionMs);
         }

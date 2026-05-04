@@ -23,7 +23,8 @@ namespace BusinessEntity.Components
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
         [Parameter] public EventCallback<InputFileChangeEventArgs> OnImportSelected { get; set; }
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
-        [Parameter] public EventCallback<long?> OnEditRequested { get; set; }
+        [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
+        [Parameter] public EventCallback<RichTextDocumentViewportPosition?> OnEditRequested { get; set; }
 
         [Inject] public IJSRuntime JS { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
@@ -95,10 +96,10 @@ namespace BusinessEntity.Components
 
         private async Task HandleEditAsync()
         {
-            var sortOrder = Viewport == null
+            var position = Viewport == null
                 ? null
-                : await Viewport.GetCurrentVisibleChunkSortOrderAsync();
-            await OnEditRequested.InvokeAsync(sortOrder);
+                : await Viewport.GetCurrentViewportPositionAsync();
+            await OnEditRequested.InvokeAsync(position);
         }
 
         private static IReadOnlyList<RichTextDocumentOutlineNode> FilterOutlineNodes(

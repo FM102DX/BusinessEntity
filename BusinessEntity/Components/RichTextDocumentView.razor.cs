@@ -25,7 +25,8 @@ namespace BusinessEntity.Components
         private bool IsSaving { get; set; }
         private string EditableEntityName { get; set; } = string.Empty;
         private string? TitleValidationMessage { get; set; }
-        private long? EditInitialChunkSortOrder { get; set; }
+        private RichTextDocumentViewportPosition? EditInitialPosition { get; set; }
+        private RichTextDocumentViewportPosition? ReadInitialPosition { get; set; }
 
         protected override void OnParametersSet()
         {
@@ -36,9 +37,10 @@ namespace BusinessEntity.Components
             }
         }
 
-        private Task HandleEditRequestedAsync(long? visibleChunkSortOrder)
+        private Task HandleEditRequestedAsync(RichTextDocumentViewportPosition? visiblePosition)
         {
-            EditInitialChunkSortOrder = visibleChunkSortOrder;
+            EditInitialPosition = visiblePosition;
+            ReadInitialPosition = null;
             IsEditMode = true;
             EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(EntityName);
             TitleValidationMessage = null;
@@ -59,13 +61,14 @@ namespace BusinessEntity.Components
             await SaveEditorChangesAsync();
         }
 
-        private async Task HandleReadModeAsync()
+        private async Task HandleReadModeAsync(RichTextDocumentViewportPosition? visiblePosition)
         {
             if (await SaveEditorChangesAsync())
             {
+                ReadInitialPosition = visiblePosition;
                 IsEditMode = false;
                 EditView = null;
-                EditInitialChunkSortOrder = null;
+                EditInitialPosition = null;
                 TitleValidationMessage = null;
             }
         }

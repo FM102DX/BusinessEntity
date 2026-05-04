@@ -1,5 +1,6 @@
 function createRichTextViewportRuntime() {
     const registry = new Map();
+    const blockSelector = "h1,h2,h3,h4,h5,h6,p,blockquote,pre,ul,ol,table,hr";
 
     function syncViewportSize(viewportElementId) {
         const viewport = document.getElementById(viewportElementId);
@@ -195,6 +196,117 @@ function createRichTextViewportRuntime() {
         registry.delete(viewportElementId);
     }
 
+    function getChunkBlocks(chunk) {
+        const editorHost = chunk.querySelector("[data-rich-text-editor-host]");
+        if (editorHost) {
+            const editorRoot = editorHost.querySelector(".ProseMirror");
+            return Array.from((editorRoot || editorHost).children)
+                .filter(element => element.matches(blockSelector));
+        }
+
+        return Array.from(chunk.children)
+            .filter(element => element.matches(blockSelector));
+    }
+
+    function annotateChunkBlocks(viewportElementId) {
+        const viewport = document.getElementById(viewportElementId);
+        if (!viewport) {
+            return;
+        }
+
+        viewport.querySelectorAll("[data-rich-text-chunk]").forEach(chunk => {
+            getChunkBlocks(chunk).forEach((block, index) => {
+                block.setAttribute("data-rich-text-block-index", String(index));
+            });
+        });
+    }
+
+    function getCurrentViewportPosition(viewportElementId) {
+        annotateChunkBlocks(viewportElementId);
+
+        const viewport = document.getElementById(viewportElementId);
+        if (!viewport) {
+            return null;
+        }
+
+        const viewportRect = viewport.getBoundingClientRect();
+        const anchorY = viewportRect.top + viewportRect.height * 0.30;
+        const blocks = [];
+
+        viewport.querySelectorAll("[data-rich-text-chunk]").forEach(chunk => {
+            const sortOrder = Number(chunk.getAttribute("data-chunk-sort-order"));
+            if (!Number.isFinite(sortOrder)) {
+                return;
+            }
+
+            getChunkBlocks(chunk).forEach((block, index) => {
+                const rect = block.getBoundingClientRect();
+                blocks.push({
+                    chunkSortOrder: sortOrder,
+                    blockIndex: index,
+                    rect
+                });
+            });
+        });
+
+        if (blocks.length === 0) {
+            return null;
+        }
+
+        const visible = blocks
+            .filter(item => item.rect.bottom >= viewportRect.top && item.rect.top <= viewportRect.bottom)
+            .sort((left, right) =>
+                Math.abs((left.rect.top + left.rect.bottom) / 2 - anchorY) -
+                Math.abs((right.rect.top + right.rect.bottom) / 2 - anchorY));
+
+        const selected = visible.length > 0 ? visible[0] : null;
+        if (!selected) {
+            return null;
+        }
+
+        return {
+            chunkSortOrder: selected.chunkSortOrder,
+            blockIndex: selected.blockIndex
+        };
+    }
+
+    function scrollToBlock(viewportElementId, chunkSortOrder, blockIndex, behavior = "auto", suppressScrollMs = 0) {
+        annotateChunkBlocks(viewportElementId);
+
+        const viewport = document.getElementById(viewportElementId);
+        if (!viewport) {
+            return false;
+        }
+
+        const sortOrder = Number(chunkSortOrder);
+        const normalizedBlockIndex = Number(blockIndex);
+        if (!Number.isFinite(sortOrder) || !Number.isFinite(normalizedBlockIndex)) {
+            return false;
+        }
+
+        const chunk = viewport.querySelector(`[data-rich-text-chunk][data-chunk-sort-order="${sortOrder}"]`);
+        if (!chunk) {
+            return false;
+        }
+
+        const target = getChunkBlocks(chunk)[normalizedBlockIndex];
+        if (!target) {
+            return false;
+        }
+
+        const viewportRect = viewport.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const nextScrollTop = viewport.scrollTop + (targetRect.top - viewportRect.top) - 12;
+
+        suppressScrollNotifications(viewportElementId, suppressScrollMs);
+        viewport.scrollTo({
+            top: Math.max(nextScrollTop, 0),
+            behavior: behavior || "auto",
+        });
+
+        return true;
+    }
+
     function scrollToHeading(viewportElementId, headingId, behavior = "smooth", suppressScrollMs = 0) {
         const viewport = document.getElementById(viewportElementId);
         if (!viewport) {
@@ -318,6 +430,8 @@ function createRichTextViewportRuntime() {
             return;
         }
 
+        annotateChunkBlocks(viewportElementId);
+
         const measurements = Array.from(viewport.querySelectorAll("[data-rich-text-chunk]"))
             .map((element) => ({
                 sortOrder: Number(element.getAttribute("data-chunk-sort-order")),
@@ -341,6 +455,8 @@ function createRichTextViewportRuntime() {
         scrollToChunk,
         ensureChunkVisible,
         suppressScrollNotifications,
+        getCurrentViewportPosition,
+        scrollToBlock,
         getCurrentChunkSortOrder,
         measureChunks
     };

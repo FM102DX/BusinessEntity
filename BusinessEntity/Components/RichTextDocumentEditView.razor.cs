@@ -21,11 +21,11 @@ namespace BusinessEntity.Components
         [Parameter] public bool IsSaving { get; set; }
         [Parameter] public bool IsRebuildingTableOfContents { get; set; }
         [Parameter] public string? StatusMessage { get; set; }
-        [Parameter] public long? InitialTargetSortOrder { get; set; }
+        [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
         [Parameter] public EventCallback<string?> OnTitleChanged { get; set; }
         [Parameter] public EventCallback OnSaveRequested { get; set; }
-        [Parameter] public EventCallback OnReadModeRequested { get; set; }
+        [Parameter] public EventCallback<RichTextDocumentViewportPosition?> OnReadModeRequested { get; set; }
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
 
         [Inject] public IJSRuntime JS { get; set; } = default!;
@@ -82,9 +82,12 @@ namespace BusinessEntity.Components
             return OnSaveRequested.InvokeAsync();
         }
 
-        private Task HandleReadModeAsync()
+        private async Task HandleReadModeAsync()
         {
-            return OnReadModeRequested.InvokeAsync();
+            var position = EditorViewport == null
+                ? null
+                : await EditorViewport.GetCurrentViewportPositionAsync();
+            await OnReadModeRequested.InvokeAsync(position);
         }
 
         private Task HandleRebuildTableOfContentsAsync()
