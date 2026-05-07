@@ -218,6 +218,51 @@ namespace BusinessEntity.Components
             }
         }
 
+        public async Task<RichTextDocumentTextSelection?> GetCurrentTextSelectionAsync()
+        {
+            if (!_viewportRegistered || string.IsNullOrWhiteSpace(ViewportElementId))
+            {
+                return null;
+            }
+
+            try
+            {
+                return await JS.InvokeAsync<RichTextDocumentTextSelection?>(
+                    "richTextEditViewport.getCurrentTextSelection",
+                    ViewportElementId);
+            }
+            catch (JSException)
+            {
+                return null;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        public async Task ScrollToPositionAsync(RichTextDocumentViewportPosition? position)
+        {
+            if (position == null)
+            {
+                return;
+            }
+
+            var targetSortOrder = Math.Max(position.ChunkSortOrder, 0);
+            if (IsChunkLoaded(targetSortOrder))
+            {
+                var scrolled = await ScrollToBlockInViewportAsync(position);
+                if (!scrolled)
+                {
+                    await ScrollToChunkInViewportAsync(targetSortOrder);
+                }
+
+                return;
+            }
+
+            await LoadWindowAroundAsync(targetSortOrder, pendingAnchor: null, pendingViewportPosition: position);
+        }
+
         private Task RunEditorCommandAsync(string command)
         {
             return JS.InvokeVoidAsync("richTextEditor.runCommand", ViewportElementId, command).AsTask();

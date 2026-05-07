@@ -71,6 +71,16 @@
                                                 InitialTargetPosition="@InitialTargetPosition"
                                                 InitialWindow="@InitialChunkWindow" />
             </div>
+            <div class="rich-text-document-layout__widgets">
+                <RichTextDocumentWidgets Bookmarks="@Bookmarks"
+                                         ActiveBookmarkId="@ActiveBookmarkId"
+                                         StatusMessage="@WidgetStatusMessage"
+                                         OnSearchNext="HandleSearchNextAsync"
+                                         OnSearchPrevious="HandleSearchPreviousAsync"
+                                         OnCreateBookmark="HandleCreateBookmarkAsync"
+                                         OnBookmarkSelected="HandleBookmarkSelectedAsync"
+                                         OnBookmarkDeleted="HandleBookmarkDeletedAsync" />
+            </div>
         </div>
     }
 </div>

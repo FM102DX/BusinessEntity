@@ -1,0 +1,113 @@
+.rich-text-document-widgets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.rich-text-document-widget {
+    border: 1px solid #d8e1ec;
+    background: #ffffff;
+    padding: 0.75rem;
+    border-radius: 6px;
+}
+
+.rich-text-document-widget__header,
+.rich-text-document-widget__header-row {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6f7f95;
+}
+
+.rich-text-document-widget__header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.65rem;
+}
+
+.rich-text-document-widget__counter {
+    color: #2f6ec8;
+    font-size: 0.78rem;
+}
+
+.rich-text-document-search {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.rich-text-document-search__buttons,
+.rich-text-document-bookmarks__nav {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.rich-text-document-bookmarks__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.65rem;
+}
+
+.rich-text-document-bookmarks__empty {
+    color: #718096;
+    font-size: 0.9rem;
+    padding: 0.45rem 0;
+}
+
+.rich-text-document-bookmarks__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: min(42vh, 26rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.rich-text-document-bookmarks__item {
+    display: grid;
+    gap: 0.15rem;
+    width: 100%;
+    border: 1px solid #dbe5f0;
+    background: #f8fbff;
+    color: #1f3855;
+    text-align: left;
+    border-radius: 6px;
+    padding: 0.45rem 0.5rem;
+}
+
+.rich-text-document-bookmarks__item:hover {
+    border-color: #8fb7ea;
+    background: #eef6ff;
+}
+
+.rich-text-document-bookmarks__item--selected {
+    border-color: #2f6ec8;
+    background: #e8f1ff;
+}
+
+.rich-text-document-bookmarks__label {
+    font-size: 0.9rem;
+    line-height: 1.25;
+}
+
+.rich-text-document-bookmarks__position {
+    color: #6f7f95;
+    font-size: 0.72rem;
+}
+
+.rich-text-document-bookmarks__delete {
+    width: 100%;
+    margin-top: 0.65rem;
+}
+
+.rich-text-document-widgets__status {
+    color: #526173;
+    font-size: 0.86rem;
+    line-height: 1.35;
+}

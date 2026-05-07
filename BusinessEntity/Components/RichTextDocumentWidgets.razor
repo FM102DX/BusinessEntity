@@ -1,0 +1,93 @@
+@using BusinessEntity.Core.RichText
+
+<aside class="rich-text-document-widgets" aria-label="Rich-text document widgets">
+    <section class="rich-text-document-widget">
+        <div class="rich-text-document-widget__header">Поиск</div>
+        <div class="rich-text-document-search">
+            <input class="form-control form-control-sm rich-text-document-search__input"
+                   value="@SearchQuery"
+                   @oninput="HandleSearchInput"
+                   placeholder="Слово или фраза" />
+            <div class="rich-text-document-search__buttons">
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        title="Искать вверх"
+                        disabled="@IsSearchDisabled"
+                        @onclick="HandleSearchPreviousAsync">
+                    ↑
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        title="Искать вниз"
+                        disabled="@IsSearchDisabled"
+                        @onclick="HandleSearchNextAsync">
+                    ↓
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section class="rich-text-document-widget rich-text-document-widget--bookmarks">
+        <div class="rich-text-document-widget__header-row">
+            <div class="rich-text-document-widget__header">Закладки</div>
+            <span class="rich-text-document-widget__counter">@Bookmarks.Count</span>
+        </div>
+
+        <div class="rich-text-document-bookmarks__actions">
+            <button type="button"
+                    class="btn btn-sm btn-primary"
+                    title="Создать закладку из выделенного текста"
+                    @onclick="HandleCreateBookmarkAsync">
+                Создать
+            </button>
+            <div class="rich-text-document-bookmarks__nav">
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        title="Предыдущая закладка"
+                        disabled="@(!CanNavigateBookmarks)"
+                        @onclick="HandlePreviousBookmarkAsync">
+                    ↑
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        title="Следующая закладка"
+                        disabled="@(!CanNavigateBookmarks)"
+                        @onclick="HandleNextBookmarkAsync">
+                    ↓
+                </button>
+            </div>
+        </div>
+
+        @if (Bookmarks.Count == 0)
+        {
+            <div class="rich-text-document-bookmarks__empty">Нет закладок</div>
+        }
+        else
+        {
+            <div class="rich-text-document-bookmarks__list">
+                @foreach (var bookmark in Bookmarks)
+                {
+                    <button type="button"
+                            class="@GetBookmarkButtonClass(bookmark)"
+                            title="@bookmark.SelectedText"
+                            @onclick="@(() => SelectBookmarkAsync(bookmark))">
+                        <span class="rich-text-document-bookmarks__label">@bookmark.Label</span>
+                        <span class="rich-text-document-bookmarks__position">chunk @bookmark.ChunkSortOrder, block @bookmark.BlockIndex</span>
+                    </button>
+                }
+            </div>
+        }
+
+        <button type="button"
+                class="btn btn-sm btn-outline-danger rich-text-document-bookmarks__delete"
+                disabled="@(!SelectedBookmarkId.HasValue)"
+                @onclick="HandleDeleteBookmarkAsync">
+            Удалить выбранную
+        </button>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+    {
+        <div class="rich-text-document-widgets__status">@StatusMessage</div>
+    }
+</aside>

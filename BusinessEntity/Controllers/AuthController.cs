@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 
 namespace BusinessEntity.Controllers
 {
@@ -14,26 +15,30 @@ namespace BusinessEntity.Controllers
     {
         private readonly ILogger<AuthController> _logger;
         private readonly AuthentikSessionManager _authService;
+        private readonly IUserConnector _userConnector;
 
         public AuthController(
             ILogger<AuthController> logger,
-            AuthentikSessionManager authService)
+            AuthentikSessionManager authService,
+            IUserConnector userConnector)
         {
             _logger = logger;
             _authService = authService;
+            _userConnector = userConnector;
         }
 
         /// <summary>
         /// Перенаправляет браузер на Authentik authorize endpoint.
         /// </summary>
         [HttpGet("login")]
-        public IActionResult Login(string? returnUrl = null)
+        public async Task<IActionResult> Login(string? returnUrl = null)
         {
             _logger.LogInformation("[AuthController.Login] Processing login request for returnUrl: {ReturnUrl}", returnUrl);
             
             // Если пользователь уже авторизован, перенаправляем
             if (User.Identity?.IsAuthenticated == true)
             {
+                await _userConnector.EnsureCurrentUserAsync(HttpContext.RequestAborted);
                 _logger.LogInformation("[AuthController.Login] User already authenticated, redirecting to: {ReturnUrl}", returnUrl ?? "/");
                 return LocalRedirect(returnUrl ?? "/");
             }
@@ -64,6 +69,11 @@ namespace BusinessEntity.Controllers
             try
             {
                 var returnUrl = await _authService.CompleteLoginAsync(code, state, HttpContext.RequestAborted);
+                var localUser = await _userConnector.EnsureCurrentUserAsync(HttpContext.RequestAborted);
+                _logger.LogInformation(
+                    "[AuthController.Callback] Local user ensured. localUserId={LocalUserId} name={LocalUserName}",
+                    localUser?.Id,
+                    localUser?.ExternalId);
                 return LocalRedirect(returnUrl);
             }
             catch (Exception ex)

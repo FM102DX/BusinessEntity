@@ -1,6 +1,8 @@
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Messages;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
+using BusinessEntity.Core.RichText;
 using ReactiveUI;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
@@ -9,11 +11,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
     public sealed class UserConnector : IUserConnector
     {
         private readonly IMessageBus _messageBus;
+        private readonly IUserMiniApp _userMiniApp;
 
         // Инициализирует connector и гарантирует материализацию mini-app перед первым запросом.
         public UserConnector(IMessageBus messageBus, IUserMiniApp userMiniApp)
         {
             _messageBus = messageBus;
+            _userMiniApp = userMiniApp;
             userMiniApp.EnsureInitialized();
         }
 
@@ -48,6 +52,17 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
             return await completion.Task;
         }
 
+        public Task<UserDto?> EnsureCurrentUserAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.EnsureCurrentUserAsync(cancellationToken);
+        }
+
+        // Удаляет локальную учетную запись текущего пользователя через публичный контракт mini-app.
+        public Task<bool> DeleteCurrentUserAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.DeleteCurrentUserAsync(cancellationToken);
+        }
+
         // Возвращает только список групп поверх общего объекта пользователя.
         public async Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default)
         {
@@ -60,6 +75,26 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
         {
             var user = await GetCurrentUserAsync(cancellationToken);
             return user?.HasGroup(groupName) == true;
+        }
+
+        public Task<IReadOnlyList<RichTextDocumentBookmark>> GetRichDocBookmarksAsync(
+            Guid documentId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetRichDocBookmarksAsync(documentId, cancellationToken);
+        }
+
+        public Task<RichTextDocumentBookmark?> AddRichDocBookmarkAsync(
+            Guid documentId,
+            RichTextDocumentTextSelection? selection,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.AddRichDocBookmarkAsync(documentId, selection, cancellationToken);
+        }
+
+        public Task<bool> DeleteRichDocBookmarkAsync(Guid bookmarkId, CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.DeleteRichDocBookmarkAsync(bookmarkId, cancellationToken);
         }
     }
 }

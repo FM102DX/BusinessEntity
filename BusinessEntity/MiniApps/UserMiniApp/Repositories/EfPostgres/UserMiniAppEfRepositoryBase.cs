@@ -1,0 +1,65 @@
+using System.Linq.Expressions;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Repositories;
+using BusinessEntity.MiniApps.UserMiniApp.Storage;
+using Microsoft.EntityFrameworkCore;
+
+namespace BusinessEntity.MiniApps.UserMiniApp.Repositories.EfPostgres;
+
+// Базовый EF/Postgres repository user mini-app поверх собственного DbContext.
+public abstract class UserMiniAppEfRepositoryBase<T> : IUserMiniAppRepository<T> where T : class
+{
+    private readonly DbContextOptions<UserMiniAppDbContext> _options;
+
+    protected UserMiniAppEfRepositoryBase(DbContextOptions<UserMiniAppDbContext> options)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    public async Task<IReadOnlyList<T>> GetAllAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+    {
+        await using var context = new UserMiniAppDbContext(_options);
+        context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        IQueryable<T> query = context.Set<T>();
+        if (filter != null)
+        {
+            query = query.Where(filter);
+        }
+
+        return await query.ToListAsync(ct);
+    }
+
+    public async Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var context = new UserMiniAppDbContext(_options);
+        context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        return await context.Set<T>().FindAsync(new object?[] { id }, ct);
+    }
+
+    public async Task<T> AddAsync(T entity, CancellationToken ct = default)
+    {
+        await using var context = new UserMiniAppDbContext(_options);
+        await context.Set<T>().AddAsync(entity, ct);
+        await context.SaveChangesAsync(ct);
+        return entity;
+    }
+
+    public async Task UpdateAsync(T entity, CancellationToken ct = default)
+    {
+        await using var context = new UserMiniAppDbContext(_options);
+        context.Entry(entity).State = EntityState.Modified;
+        await context.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var context = new UserMiniAppDbContext(_options);
+        var entity = await context.Set<T>().FindAsync(new object?[] { id }, ct);
+        if (entity == null)
+        {
+            return;
+        }
+
+        context.Set<T>().Remove(entity);
+        await context.SaveChangesAsync(ct);
+    }
+}

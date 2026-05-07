@@ -129,6 +129,7 @@ namespace BusinessEntity.Services
 
             var context = _httpContextAccessor.HttpContext ?? throw new InvalidOperationException("HTTP context is not available.");
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
+            context.User = principal;
 
             return ReadReturnUrl(state);
         }

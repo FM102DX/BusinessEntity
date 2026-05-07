@@ -1,7 +1,7 @@
 .rich-text-document-layout {
     display: grid;
-    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-    gap: 1.5rem;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(240px, 320px);
+    gap: 1.25rem;
     align-items: start;
 }
 
@@ -19,6 +19,13 @@
 .rich-text-document-layout__content {
     min-width: 0;
     min-height: 0;
+}
+
+.rich-text-document-layout__widgets {
+    position: sticky;
+    top: 0.5rem;
+    align-self: start;
+    min-width: 0;
 }
 
 ::deep .rich-text-outline {
@@ -155,6 +162,10 @@
     }
 
     .rich-text-document-layout__outline {
+        position: static;
+    }
+
+    .rich-text-document-layout__widgets {
         position: static;
     }
 

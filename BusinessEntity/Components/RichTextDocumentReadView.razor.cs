@@ -1,4 +1,5 @@
 using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
@@ -28,12 +29,18 @@ namespace BusinessEntity.Components
 
         [Inject] public IJSRuntime JS { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
+        [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
+        [Inject] public IUserConnector UserConnector { get; set; } = default!;
 
         private IReadOnlyList<RichTextDocumentOutlineNode> LocalOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         private IReadOnlyList<RichTextDocumentOutlineNode> VisibleOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
+        private IReadOnlyList<RichTextDocumentBookmark> Bookmarks { get; set; } = Array.Empty<RichTextDocumentBookmark>();
         private RichTextDocumentViewport? Viewport { get; set; }
         private int DisplayLevelCount { get; set; } = 2;
         private bool HideTableOfContentsScrollbar { get; set; } = true;
+        private Guid _bookmarksLoadedForEntityId;
+        private Guid? ActiveBookmarkId { get; set; }
+        private string? WidgetStatusMessage { get; set; }
 
         private bool IsDocumentEmpty =>
             !IsInitialContentLoading &&
@@ -52,6 +59,14 @@ namespace BusinessEntity.Components
         {
             LocalOutlineNodes = OutlineNodes ?? Array.Empty<RichTextDocumentOutlineNode>();
             VisibleOutlineNodes = FilterOutlineNodes(LocalOutlineNodes, DisplayLevelCount);
+        }
+
+        protected override async Task OnParametersSetAsync()
+        {
+            if (BusinessEntityId != Guid.Empty && BusinessEntityId != _bookmarksLoadedForEntityId)
+            {
+                await LoadBookmarksAsync();
+            }
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -100,6 +115,94 @@ namespace BusinessEntity.Components
                 ? null
                 : await Viewport.GetCurrentViewportPositionAsync();
             await OnEditRequested.InvokeAsync(position);
+        }
+
+        private Task HandleSearchNextAsync(string query)
+        {
+            return HandleSearchAsync(query, searchDown: true);
+        }
+
+        private Task HandleSearchPreviousAsync(string query)
+        {
+            return HandleSearchAsync(query, searchDown: false);
+        }
+
+        private async Task HandleSearchAsync(string query, bool searchDown)
+        {
+            WidgetStatusMessage = null;
+            if (Viewport == null || BusinessEntityId == Guid.Empty)
+            {
+                return;
+            }
+
+            var origin = await Viewport.GetCurrentViewportPositionAsync();
+            var result = await RichTextDocumentHelper.FindTextAsync(BusinessEntityId, query, origin, searchDown);
+            if (result == null)
+            {
+                WidgetStatusMessage = "Ничего не найдено.";
+                return;
+            }
+
+            await Viewport.ScrollToPositionAsync(result.Position);
+            WidgetStatusMessage = string.IsNullOrWhiteSpace(result.Preview)
+                ? "Найдено."
+                : result.Preview;
+        }
+
+        private async Task HandleCreateBookmarkAsync()
+        {
+            WidgetStatusMessage = null;
+            if (Viewport == null || BusinessEntityId == Guid.Empty)
+            {
+                return;
+            }
+
+            var selection = await Viewport.GetCurrentTextSelectionAsync();
+            var bookmark = await UserConnector.AddRichDocBookmarkAsync(BusinessEntityId, selection);
+            if (bookmark == null)
+            {
+                WidgetStatusMessage = "Выделите текст в документе.";
+                return;
+            }
+
+            ActiveBookmarkId = bookmark.Id;
+            await LoadBookmarksAsync();
+            WidgetStatusMessage = "Закладка создана.";
+        }
+
+        private async Task HandleBookmarkSelectedAsync(RichTextDocumentBookmark bookmark)
+        {
+            ActiveBookmarkId = bookmark.Id;
+            WidgetStatusMessage = null;
+            if (Viewport != null)
+            {
+                await Viewport.ScrollToPositionAsync(bookmark.Position);
+            }
+        }
+
+        private async Task HandleBookmarkDeletedAsync(Guid bookmarkId)
+        {
+            var deleted = await UserConnector.DeleteRichDocBookmarkAsync(bookmarkId);
+            if (deleted && ActiveBookmarkId == bookmarkId)
+            {
+                ActiveBookmarkId = null;
+            }
+
+            await LoadBookmarksAsync();
+            WidgetStatusMessage = deleted ? "Закладка удалена." : "Закладка не найдена.";
+        }
+
+        private async Task LoadBookmarksAsync()
+        {
+            if (BusinessEntityId == Guid.Empty)
+            {
+                Bookmarks = Array.Empty<RichTextDocumentBookmark>();
+                _bookmarksLoadedForEntityId = Guid.Empty;
+                return;
+            }
+
+            Bookmarks = await UserConnector.GetRichDocBookmarksAsync(BusinessEntityId);
+            _bookmarksLoadedForEntityId = BusinessEntityId;
         }
 
         private static IReadOnlyList<RichTextDocumentOutlineNode> FilterOutlineNodes(

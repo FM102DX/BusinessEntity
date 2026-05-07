@@ -1,3 +1,4 @@
+using BusinessEntity.Core.RichText;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Internal;
 
@@ -29,6 +30,37 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
         public Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
         {
             return _userMiniAppService.GetCurrentUserAsync(cancellationToken);
+        }
+
+        public Task<Contracts.Dtos.UserDto?> EnsureCurrentUserAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.EnsureCurrentUserAsync(cancellationToken);
+        }
+
+        // Делегирует удаление локальной учетной записи текущего пользователя во внутренний сервис mini-app.
+        public Task<bool> DeleteCurrentUserAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.DeleteCurrentUserAsync(cancellationToken);
+        }
+
+        public Task<IReadOnlyList<RichTextDocumentBookmark>> GetRichDocBookmarksAsync(
+            Guid documentId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetRichDocBookmarksAsync(documentId, cancellationToken);
+        }
+
+        public Task<RichTextDocumentBookmark?> AddRichDocBookmarkAsync(
+            Guid documentId,
+            RichTextDocumentTextSelection? selection,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.AddRichDocBookmarkAsync(documentId, selection, cancellationToken);
+        }
+
+        public Task<bool> DeleteRichDocBookmarkAsync(Guid bookmarkId, CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.DeleteRichDocBookmarkAsync(bookmarkId, cancellationToken);
         }
     }
 }

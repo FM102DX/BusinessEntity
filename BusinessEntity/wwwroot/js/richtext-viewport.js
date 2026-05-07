@@ -270,6 +270,57 @@ function createRichTextViewportRuntime() {
         };
     }
 
+    function getCurrentTextSelection(viewportElementId) {
+        annotateChunkBlocks(viewportElementId);
+
+        const viewport = document.getElementById(viewportElementId);
+        const selection = window.getSelection();
+        if (!viewport || !selection || selection.rangeCount === 0) {
+            return null;
+        }
+
+        const text = selection.toString();
+        if (!text || text.trim().length === 0) {
+            return null;
+        }
+
+        const range = selection.getRangeAt(0);
+        if (!viewport.contains(range.commonAncestorContainer)) {
+            return null;
+        }
+
+        const element = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+            ? range.commonAncestorContainer
+            : range.commonAncestorContainer.parentElement;
+        const chunk = element ? element.closest("[data-rich-text-chunk]") : null;
+        if (!chunk || !viewport.contains(chunk)) {
+            return null;
+        }
+
+        const sortOrder = Number(chunk.getAttribute("data-chunk-sort-order"));
+        if (!Number.isFinite(sortOrder)) {
+            return null;
+        }
+
+        const blocks = getChunkBlocks(chunk);
+        let blockIndex = 0;
+        const selectedBlock = element ? element.closest(blockSelector) : null;
+        if (selectedBlock) {
+            const foundIndex = blocks.indexOf(selectedBlock);
+            if (foundIndex >= 0) {
+                blockIndex = foundIndex;
+            }
+        }
+
+        return {
+            text,
+            position: {
+                chunkSortOrder: sortOrder,
+                blockIndex
+            }
+        };
+    }
+
     function scrollToBlock(viewportElementId, chunkSortOrder, blockIndex, behavior = "auto", suppressScrollMs = 0) {
         annotateChunkBlocks(viewportElementId);
 
@@ -456,6 +507,7 @@ function createRichTextViewportRuntime() {
         ensureChunkVisible,
         suppressScrollNotifications,
         getCurrentViewportPosition,
+        getCurrentTextSelection,
         scrollToBlock,
         getCurrentChunkSortOrder,
         measureChunks

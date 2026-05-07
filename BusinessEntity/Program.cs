@@ -10,6 +10,7 @@ using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
 using BusinessEntity.MiniApps.TreeMiniApp.Registration;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Registration;
+using BusinessEntity.MiniApps.UserMiniApp.Storage;
 using BusinessEntity.Service;
 using BusinessEntity.Service.WebLogging;
 using BusinessEntity.Services;
@@ -145,14 +146,22 @@ namespace BusinessEntity
             var connectionString = builder.Configuration.GetConnectionString("DockerConnection");
 			var optionsBuilder = new DbContextOptionsBuilder<KmsBusinessEntityDbContext>();
 			optionsBuilder.UseNpgsql(connectionString);
+            var userMiniAppOptionsBuilder = new DbContextOptionsBuilder<UserMiniAppDbContext>();
+            userMiniAppOptionsBuilder.UseNpgsql(connectionString);
 
 			builder.Services.AddSingleton(provider => optionsBuilder.Options);
+            builder.Services.AddSingleton(provider => userMiniAppOptionsBuilder.Options);
             builder.Services.AddSingleton<ThreadSafeDbContextFactory>();
 
 			using (var context = new KmsBusinessEntityDbContext(optionsBuilder.Options))
 			{
 				EnsureBusinessEntityStorageSchema(context);
 			}
+
+            using (var userMiniAppContext = new UserMiniAppDbContext(userMiniAppOptionsBuilder.Options))
+            {
+                UserMiniAppStorageSchema.EnsureSchema(userMiniAppContext);
+            }
 
 			// Подключает Swagger для диагностики API.
 			builder.Services.AddSwaggerGen();

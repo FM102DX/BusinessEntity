@@ -1,9 +1,11 @@
 @using Microsoft.Extensions.Configuration
 @using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
 @using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
 @inject IConfiguration Configuration
 @inject IDataProviderConnector DataProviderConnector
 @inject ISampleDataMiniApp SampleDataMiniApp
+@inject IUserConnector UserConnector
 
 <div class="card mt-3">
     <div class="card-body">
@@ -66,10 +68,13 @@
         {
             IsReseeding = true;
             ReSeedError = null;
-            ReSeedStatus = "Очищаем хранилище и запускаем seed заново...";
+            ReSeedStatus = "Очищаем текущего пользователя, хранилище и запускаем seed заново...";
+            var userDeleted = await UserConnector.DeleteCurrentUserAsync();
             await DataProviderConnector.ClearAllAsync();
             await SampleDataMiniApp.ForceReseedAsync();
-            ReSeedStatus = "Re-seed завершен.";
+            ReSeedStatus = userDeleted
+                ? "Re-seed завершен. Текущий локальный пользователь удален."
+                : "Re-seed завершен. Локальная запись текущего пользователя не была найдена.";
         }
         catch (Exception ex)
         {

@@ -3,10 +3,12 @@
 @using BusinessEntity.Core.Classes
 @using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
 @using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
 @using global::BusinessEntity.Core.Classes
 @inject global::BusinessEntity.Core.Services.BusinessEntityHelper Helper
 @inject IDataProviderConnector DataProviderConnector
 @inject ISampleDataMiniApp SampleDataMiniApp
+@inject IUserConnector UserConnector
 
 
 <PageTitle>Диагностика</PageTitle>
@@ -184,12 +186,16 @@ else
         {
             IsReseeding = true;
             Error = null;
-            OperationStatus = "Очищаем хранилище и запускаем seed заново...";
+            OperationStatus = "Очищаем текущего пользователя, хранилище и запускаем seed заново...";
 
+            var userDeleted = await UserConnector.DeleteCurrentUserAsync();
             await DataProviderConnector.ClearAllAsync();
             await SampleDataMiniApp.ForceReseedAsync();
             await LoadDiagnosticsAsync();
-            OperationStatus = $"Re-seed завершен. Сущностей: {Entities.Count}, связей: {Relations.Count}.";
+            var userStatus = userDeleted
+                ? "Текущий локальный пользователь удален."
+                : "Локальная запись текущего пользователя не была найдена.";
+            OperationStatus = $"Re-seed завершен. {userStatus} Сущностей: {Entities.Count}, связей: {Relations.Count}.";
         }
         catch (Exception ex)
         {
