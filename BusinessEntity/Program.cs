@@ -259,6 +259,7 @@ namespace BusinessEntity
                     ""CreatedDate"" timestamp with time zone NOT NULL,
                     ""LastModifiedDate"" timestamp with time zone NOT NULL,
                     ""BusinessEntityId"" uuid NOT NULL,
+                    ""Version"" integer NOT NULL DEFAULT 1,
                     ""Data"" text NOT NULL,
                     CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"")
                 );
@@ -315,8 +316,12 @@ namespace BusinessEntity
 
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectAId"" ON ""BusinessEntityRelations"" (""ObjectAId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectBId"" ON ""BusinessEntityRelations"" (""ObjectBId"");
+                ALTER TABLE ""BusinessEntityDataItems"" ADD COLUMN IF NOT EXISTS ""Version"" integer NOT NULL DEFAULT 1;
+                ALTER TABLE ""BusinessEntityDataChunks"" ADD COLUMN IF NOT EXISTS ""Version"" integer NOT NULL DEFAULT 1;
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataItems_BusinessEntityId"" ON ""BusinessEntityDataItems"" (""BusinessEntityId"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataItems_BusinessEntityId_Version"" ON ""BusinessEntityDataItems"" (""BusinessEntityId"", ""Version"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunks_BusinessEntityId_SortOrder"" ON ""BusinessEntityDataChunks"" (""BusinessEntityId"", ""SortOrder"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunks_BusinessEntityId_SortOrder_Version"" ON ""BusinessEntityDataChunks"" (""BusinessEntityId"", ""SortOrder"", ""Version"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityProperties_ParentEntityId"" ON ""BusinessEntityProperties"" (""ParentEntityId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityProperties_ParentEntityId_PropertyType"" ON ""BusinessEntityProperties"" (""ParentEntityId"", ""PropertyType"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataProperties_ParentEntityId"" ON ""BusinessEntityDataProperties"" (""ParentEntityId"");

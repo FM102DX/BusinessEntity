@@ -71,6 +71,7 @@ internal static class DataProviderMapper
             Id = dto.Id,
             CreatedDate = dto.CreatedDate,
             LastModifiedDate = dto.LastModifiedDate,
+            Version = dto.Version <= 0 ? 1 : dto.Version,
             Tag = string.Empty
         };
     }

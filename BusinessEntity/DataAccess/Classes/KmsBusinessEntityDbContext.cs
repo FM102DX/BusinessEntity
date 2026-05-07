@@ -26,11 +26,13 @@ public class KmsBusinessEntityDbContext : DbContext
         modelBuilder.Entity<BusinessEntityRelationDto>().ToTable("BusinessEntityRelations");
         modelBuilder.Entity<BusinessEntityDataDto>().ToTable("BusinessEntityDataItems");
         modelBuilder.Entity<BusinessEntityDataDto>().Property(x => x.Data).HasColumnType("text");
+        modelBuilder.Entity<BusinessEntityDataDto>().HasIndex(x => new { x.BusinessEntityId, x.Version });
         modelBuilder.Entity<BusinessEntityDataChunkDto>().ToTable("BusinessEntityDataChunks");
         modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.Data).HasColumnType("text");
         modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.PlainText).HasColumnType("text");
         modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.HtmlCache).HasColumnType("text");
         modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.Checksum).HasColumnType("text");
+        modelBuilder.Entity<BusinessEntityDataChunkDto>().HasIndex(x => new { x.BusinessEntityId, x.SortOrder, x.Version });
         modelBuilder.Entity<BusinessEntityPropertyDto>().ToTable("BusinessEntityProperties");
         modelBuilder.Entity<BusinessEntityPropertyDto>().Property(x => x.Data).HasColumnType("text");
         modelBuilder.Entity<BusinessEntityPropertyDto>().Property(x => x.Metadata).HasColumnType("text");

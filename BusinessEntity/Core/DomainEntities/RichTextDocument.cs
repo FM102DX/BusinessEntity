@@ -11,6 +11,9 @@ namespace BusinessEntity.Core.DomainEntities
         // Тип business-объекта rich-text документа.
         public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.RichTextDocument;
 
+        // Rich-text manifest и chunk-body сохраняются версиями.
+        public override bool HasVersions => true;
+
         // Способ физического хранения содержимого документа.
         public string ContentStorage { get; set; } = "ChunkedBlocks";
 

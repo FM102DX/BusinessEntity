@@ -14,6 +14,8 @@ namespace BusinessEntity.Core.DomainEntities
     {
         // Документ всегда имеет тип Document
         public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Document;
+        // Обычный документ сохраняет историю payload при каждом сохранении.
+        public override bool HasVersions => true;
         // Основной текст документа
         public string Text { get; set; } = string.Empty;
     }

@@ -78,7 +78,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
                 return default;
             }
 
-            return _entityDataStorageCodec.DeserializeEnvelope<TData>(response.Data);
+            var data = _entityDataStorageCodec.DeserializeEnvelope<TData>(response.Data);
+            data.Version = response.Version <= 0 ? 1 : response.Version;
+            return data;
         }
 
         // Сериализует payload в raw JSON и отправляет команду на сохранение envelope.
@@ -88,7 +90,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             var requestId = Guid.NewGuid();
             var payload = _entityDataStorageCodec.SerializePayload(data);
             var response = await SendAndReceiveAsync<UpdateBusinessEntityDataRequest, UpdateBusinessEntityDataResponse>(
-                new UpdateBusinessEntityDataRequest(requestId, id, payload),
+                new UpdateBusinessEntityDataRequest(requestId, id, payload, data.HasVersions),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);

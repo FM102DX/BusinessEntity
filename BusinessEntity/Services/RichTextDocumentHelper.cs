@@ -285,12 +285,13 @@ namespace BusinessEntity.Services
             {
                 ct.ThrowIfCancellationRequested();
 
-                var chunkDtos = await _businessEntityDataChunkRepository.GetPageAsync(
+                var allChunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
                     d => d.BusinessEntityId == entityId,
-                    d => d.SortOrder,
-                    skip: skip,
-                    take: normalizedBatchSize,
                     ct: ct);
+                var chunkDtos = SelectLatestChunkVersions(allChunkDtos)
+                    .Skip(skip)
+                    .Take(normalizedBatchSize)
+                    .ToList();
 
                 foreach (var chunkDto in chunkDtos.OrderBy(d => d.SortOrder))
                 {
@@ -323,11 +324,13 @@ namespace BusinessEntity.Services
         /// <summary>
         /// Returns the number of persisted chunks for virtualized reading.
         /// </summary>
-        public Task<int> GetChunkCountAsync(Guid entityId, CancellationToken ct = default)
+        public async Task<int> GetChunkCountAsync(Guid entityId, CancellationToken ct = default)
         {
-            return _businessEntityDataChunkRepository.GetCountAsync(
+            var chunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
                 d => d.BusinessEntityId == entityId,
-                ct);
+                ct: ct);
+
+            return SelectLatestChunkVersions(chunkDtos).Count;
         }
 
         /// <summary>
@@ -351,12 +354,13 @@ namespace BusinessEntity.Services
             }
 
             var normalizedStart = Math.Clamp(startSortOrder, 0, Math.Max(totalCount - 1, 0));
-            var dtos = await _businessEntityDataChunkRepository.GetPageAsync(
-                d => d.BusinessEntityId == entityId && d.SortOrder >= normalizedStart,
-                d => d.SortOrder,
-                skip: 0,
-                take: take,
+            var allDtos = await _businessEntityDataChunkRepository.GetAllAsync(
+                d => d.BusinessEntityId == entityId,
                 ct: ct);
+            var dtos = SelectLatestChunkVersions(allDtos)
+                .Where(d => d.SortOrder >= normalizedStart)
+                .Take(take)
+                .ToList();
 
             await LogChunkWindowReadAsync(entityId, normalizedStart, take, totalCount, dtos);
 
@@ -489,18 +493,27 @@ namespace BusinessEntity.Services
                 var blocks = converted.Blocks ?? new List<RichTextBlock>();
                 var dataJson = RichTextChunkStorageSerializer.SerializeChunkData(blocks);
 
-                chunkDto.Data = dataJson;
-                chunkDto.PlainText = RichTextChunkStorageSerializer.BuildPlainText(blocks);
-                chunkDto.HtmlCache = RichTextChunkStorageSerializer.BuildHtmlCache(entityId, chunkDto.Id, blocks);
-                chunkDto.BlockCount = blocks.Count;
-                chunkDto.CharCount = RichTextChunkStorageSerializer.BuildCharCount(blocks);
-                chunkDto.DataSizeBytes = DataPayloadEnvelopeSerializer.GetJsonLength(dataJson);
-                chunkDto.Version = chunkDto.Version <= 0 ? 1 : chunkDto.Version + 1;
-                chunkDto.Checksum = RichTextChunkStorageSerializer.BuildChecksum(dataJson);
-                chunkDto.LastModifiedDate = DateTime.UtcNow;
+                var now = DateTime.UtcNow;
+                var newChunkDto = new BusinessEntityDataChunkDto
+                {
+                    Id = Guid.NewGuid(),
+                    CreatedDate = now,
+                    LastModifiedDate = now,
+                    BusinessEntityId = entityId,
+                    SortOrder = chunkDto.SortOrder,
+                    Data = dataJson,
+                    PlainText = RichTextChunkStorageSerializer.BuildPlainText(blocks),
+                    HtmlCache = string.Empty,
+                    BlockCount = blocks.Count,
+                    CharCount = RichTextChunkStorageSerializer.BuildCharCount(blocks),
+                    DataSizeBytes = DataPayloadEnvelopeSerializer.GetJsonLength(dataJson),
+                    Version = chunkDto.Version <= 0 ? 1 : chunkDto.Version + 1,
+                    Checksum = RichTextChunkStorageSerializer.BuildChecksum(dataJson)
+                };
+                newChunkDto.HtmlCache = RichTextChunkStorageSerializer.BuildHtmlCache(entityId, newChunkDto.Id, blocks);
 
-                await _businessEntityDataChunkRepository.UpdateAsync(chunkDto, ct);
-                await RebuildTableOfContentsPropertyAsync(chunkDto, blocks, ct);
+                var savedChunkDto = await _businessEntityDataChunkRepository.AddAsync(newChunkDto, ct);
+                await RebuildTableOfContentsPropertyAsync(savedChunkDto, blocks, ct);
                 savedCount++;
             }
 
@@ -533,9 +546,9 @@ namespace BusinessEntity.Services
 
             var bySortOrder = await _businessEntityDataChunkRepository.GetAllAsync(
                 x => x.BusinessEntityId == entityId && x.SortOrder == draft.SortOrder,
-                take: 1,
                 ct: ct);
-            return bySortOrder.FirstOrDefault();
+
+            return SelectLatestChunkVersions(bySortOrder).FirstOrDefault();
         }
 
         private async Task RebuildTableOfContentsPropertyAsync(
@@ -1009,6 +1022,19 @@ namespace BusinessEntity.Services
                 Version = dto.Version,
                 Checksum = dto.Checksum ?? string.Empty
             };
+        }
+
+        // Выбирает актуальную chunk-запись для каждого SortOrder.
+        private static IReadOnlyList<BusinessEntityDataChunkDto> SelectLatestChunkVersions(IEnumerable<BusinessEntityDataChunkDto> chunkDtos)
+        {
+            return chunkDtos
+                .GroupBy(d => d.SortOrder)
+                .Select(group => group
+                    .OrderByDescending(d => d.Version <= 0 ? 1 : d.Version)
+                    .ThenByDescending(d => d.LastModifiedDate)
+                    .First())
+                .OrderBy(d => d.SortOrder)
+                .ToList();
         }
 
         /// <summary>

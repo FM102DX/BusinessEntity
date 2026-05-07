@@ -10,7 +10,7 @@ public sealed record GetBusinessEntityByIdRequest(Guid RequestId, Guid Id);
 public sealed record GetBusinessEntityByIdResponse(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity? Record, string? ErrorMessage = null);
 
 public sealed record GetBusinessEntityDataRequest(Guid RequestId, Guid BusinessEntityId);
-public sealed record GetBusinessEntityDataResponse(Guid RequestId, string? Data, string? ErrorMessage = null);
+public sealed record GetBusinessEntityDataResponse(Guid RequestId, string? Data, int Version = 1, string? ErrorMessage = null);
 
 public sealed record AddBusinessEntityRequest(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity Record);
 public sealed record AddBusinessEntityResponse(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity? Record, string? ErrorMessage = null);
@@ -24,7 +24,7 @@ public sealed record DeleteBusinessEntityResponse(Guid RequestId, bool Success, 
 public sealed record ClearDataProviderStorageRequest(Guid RequestId);
 public sealed record ClearDataProviderStorageResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 
-public sealed record UpdateBusinessEntityDataRequest(Guid RequestId, Guid BusinessEntityId, string Data);
+public sealed record UpdateBusinessEntityDataRequest(Guid RequestId, Guid BusinessEntityId, string Data, bool HasVersions = false);
 public sealed record UpdateBusinessEntityDataResponse(Guid RequestId, bool Success, string? ErrorMessage = null);
 
 public sealed record GetAllRelationsRequest(Guid RequestId);

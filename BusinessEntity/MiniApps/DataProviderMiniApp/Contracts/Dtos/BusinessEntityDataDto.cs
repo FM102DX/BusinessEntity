@@ -6,5 +6,6 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 public class BusinessEntityDataDto : BaseEntity
 {
     public Guid BusinessEntityId { get; set; }
+    public int Version { get; set; } = 1;
     public string Data { get; set; } = string.Empty;
 }

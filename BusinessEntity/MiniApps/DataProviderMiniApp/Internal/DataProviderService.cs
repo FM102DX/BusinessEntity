@@ -75,15 +75,16 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 return default;
             }
 
-            var payload = await GetDataPayloadAsync(id, cancellationToken);
-            if (string.IsNullOrWhiteSpace(payload))
+            var dto = await GetDataPayloadRecordAsync(id, cancellationToken);
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Data))
             {
                 return default;
             }
 
-            var envelope = DataPayloadEnvelopeSerializer.ReadEnvelope(payload);
+            var envelope = DataPayloadEnvelopeSerializer.ReadEnvelope(dto.Data);
             var data = _entityDataStorageCodec.DeserializePayloadBody<TData>(entity.EntityType, envelope.PayloadJson);
             ApplyEntityMetadata(entity, data);
+            data.Version = NormalizeVersion(dto.Version);
             return data;
         }
 
@@ -92,7 +93,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             where TData : class, IBusinessEntityData
         {
             var payload = _entityDataStorageCodec.SerializePayload(data);
-            await UpdateDataPayloadAsync(id, payload, cancellationToken);
+            await UpdateDataPayloadAsync(id, payload, data.HasVersions, cancellationToken);
         }
 
         // Возвращает канонический JSON-envelope payload без десериализации.
@@ -102,8 +103,18 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             return dto?.Data;
         }
 
+        // Возвращает актуальную storage-запись payload вместе с ее версией.
+        public Task<BusinessEntityDataDto?> GetDataPayloadRecordAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return FindDataDtoAsync(id, cancellationToken);
+        }
+
         // Создаёт или обновляет envelope payload для сущности.
-        public async Task UpdateDataPayloadAsync(Guid id, string payloadJson, CancellationToken cancellationToken = default)
+        public async Task UpdateDataPayloadAsync(
+            Guid id,
+            string payloadJson,
+            bool hasVersions = false,
+            CancellationToken cancellationToken = default)
         {
             var entity = await _businessEntityRepository.GetByIdAsync(id, cancellationToken);
             if (entity == null)
@@ -116,10 +127,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 
             if (dto == null)
             {
+                var createdId = hasVersions ? Guid.NewGuid() : id;
                 dto = new BusinessEntityDataDto
                 {
-                    Id = id,
+                    Id = createdId,
                     BusinessEntityId = id,
+                    Version = 1,
                     Data = envelopeJson
                 };
 
@@ -129,7 +142,25 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 return;
             }
 
+            if (hasVersions)
+            {
+                var newVersion = NormalizeVersion(dto.Version) + 1;
+                var versionDto = new BusinessEntityDataDto
+                {
+                    Id = Guid.NewGuid(),
+                    CreatedDate = DateTime.UtcNow,
+                    LastModifiedDate = DateTime.UtcNow,
+                    BusinessEntityId = id,
+                    Version = newVersion,
+                    Data = envelopeJson
+                };
+
+                await _businessEntityDataRepository.AddAsync(versionDto, cancellationToken);
+                return;
+            }
+
             dto.Data = envelopeJson;
+            dto.Version = NormalizeVersion(dto.Version);
             dto.LastModifiedDate = DateTime.UtcNow;
             // _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-data-dto] Обновляем DTO payload entityId={id} dtoId={dto.Id} payloadLength={DataPayloadEnvelopeSerializer.GetJsonLength(envelopeJson)}");
             await _businessEntityDataRepository.UpdateAsync(dto, cancellationToken);
@@ -160,8 +191,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         {
             await DeleteRichTextStorageAsync(id, cancellationToken);
 
-            var dataDto = await FindDataDtoAsync(id, cancellationToken);
-            if (dataDto != null)
+            var dataDtos = await _businessEntityDataRepository.GetAllAsync(d => d.BusinessEntityId == id, ct: cancellationToken);
+            foreach (var dataDto in dataDtos)
             {
                 await DeletePropertiesAsync(_businessEntityDataPropertyRepository, dataDto.Id, cancellationToken);
                 await _businessEntityDataRepository.DeleteAsync(dataDto.Id, cancellationToken);
@@ -245,8 +276,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 d => d.BusinessEntityId == businessEntityId,
                 ct: cancellationToken);
 
-            return chunkDtos
-                .OrderBy(d => d.SortOrder)
+            return SelectLatestChunkVersions(chunkDtos)
                 .Select(MapChunkDtoToRuntime)
                 .ToList();
         }
@@ -259,7 +289,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 ct: cancellationToken);
 
             var result = new List<RichTextDocumentTableOfContentsEntry>();
-            foreach (var chunkDto in chunkDtos.OrderBy(d => d.SortOrder))
+            foreach (var chunkDto in SelectLatestChunkVersions(chunkDtos))
             {
                 var properties = await _businessEntityDataChunkPropertyRepository.GetAllAsync(
                     p => p.ParentEntityId == chunkDto.Id &&
@@ -285,7 +315,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 d => d.BusinessEntityId == businessEntityId,
                 ct: cancellationToken);
 
-            foreach (var chunkDto in chunkDtos.OrderBy(d => d.SortOrder))
+            foreach (var chunkDto in SelectLatestChunkVersions(chunkDtos))
             {
                 await DeletePropertiesAsync(
                     _businessEntityDataChunkPropertyRepository,
@@ -390,11 +420,36 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             _richTextDocumentFileStorageService.DeleteDocumentFolder(businessEntityId);
         }
 
-        // Ищет первую data-запись, привязанную к конкретной сущности.
+        // Ищет актуальную data-запись с максимальной версией, привязанную к конкретной сущности.
         private async Task<BusinessEntityDataDto?> FindDataDtoAsync(Guid businessEntityId, CancellationToken cancellationToken)
         {
-            var dataItems = await _businessEntityDataRepository.GetAllAsync(d => d.BusinessEntityId == businessEntityId, 1, cancellationToken);
-            return dataItems.FirstOrDefault();
+            var dataItems = await _businessEntityDataRepository.GetAllAsync(
+                d => d.BusinessEntityId == businessEntityId,
+                ct: cancellationToken);
+
+            return dataItems
+                .OrderByDescending(d => NormalizeVersion(d.Version))
+                .ThenByDescending(d => d.LastModifiedDate)
+                .FirstOrDefault();
+        }
+
+        // Нормализует исторические storage-записи, у которых версия могла отсутствовать.
+        private static int NormalizeVersion(int version)
+        {
+            return version <= 0 ? 1 : version;
+        }
+
+        // Выбирает актуальную chunk-запись для каждого SortOrder.
+        private static IReadOnlyList<BusinessEntityDataChunkDto> SelectLatestChunkVersions(IEnumerable<BusinessEntityDataChunkDto> chunkDtos)
+        {
+            return chunkDtos
+                .GroupBy(d => d.SortOrder)
+                .Select(group => group
+                    .OrderByDescending(d => NormalizeVersion(d.Version))
+                    .ThenByDescending(d => d.LastModifiedDate)
+                    .First())
+                .OrderBy(d => d.SortOrder)
+                .ToList();
         }
 
         // Удаляет property-строки, привязанные к конкретной родительской DTO-записи.

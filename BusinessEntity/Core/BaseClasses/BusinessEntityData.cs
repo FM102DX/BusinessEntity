@@ -24,6 +24,10 @@ namespace BusinessEntity.Core.Classes
         public virtual BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Undefined;
         // Дополнительная строковая метка
         public string Tag { get; set; } = string.Empty;
+        // Номер версии payload-объекта в storage.
+        public int Version { get; set; } = 1;
+        // По умолчанию payload не версионируется.
+        public virtual bool HasVersions => false;
 
     }
 }

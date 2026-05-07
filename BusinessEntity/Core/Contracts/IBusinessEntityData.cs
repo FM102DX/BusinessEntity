@@ -19,5 +19,9 @@ namespace BusinessEntity.Core.Contracts
         BusinessEntityTypeEnum EntityType { get; set; }
         // Дополнительная строковая метка
         string Tag { get; set; }
+        // Номер версии payload-объекта в storage.
+        int Version { get; set; }
+        // Показывает, должен ли payload сохраняться append-only версиями.
+        bool HasVersions { get; }
     }
 }
