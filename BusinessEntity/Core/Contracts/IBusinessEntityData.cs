@@ -23,5 +23,7 @@ namespace BusinessEntity.Core.Contracts
         int Version { get; set; }
         // Показывает, должен ли payload сохраняться append-only версиями.
         bool HasVersions { get; }
+        // Описывает, используется ли chunk-хранение для payload.
+        BusinessEntityDataChunkStorageType ChunkStorageType { get; }
     }
 }

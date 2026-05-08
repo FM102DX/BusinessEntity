@@ -28,6 +28,8 @@ namespace BusinessEntity.Core.Classes
         public int Version { get; set; } = 1;
         // По умолчанию payload не версионируется.
         public virtual bool HasVersions => false;
+        // По умолчанию payload хранится без чанков.
+        public virtual BusinessEntityDataChunkStorageType ChunkStorageType => BusinessEntityDataChunkStorageType.None;
 
     }
 }

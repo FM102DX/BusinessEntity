@@ -14,6 +14,9 @@ namespace BusinessEntity.Core.DomainEntities
         // Rich-text manifest и chunk-body сохраняются версиями.
         public override bool HasVersions => true;
 
+        // Тело rich-text документа хранится текстовыми чанками.
+        public override BusinessEntityDataChunkStorageType ChunkStorageType => BusinessEntityDataChunkStorageType.TextChunks;
+
         // Способ физического хранения содержимого документа.
         public string ContentStorage { get; set; } = "ChunkedBlocks";
 

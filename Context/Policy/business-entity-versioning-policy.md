@@ -64,11 +64,13 @@ BusinessEntityData.HasVersions = false
 
 - `Version`
 - `HasVersions`
+- `ChunkStorageType`
 
 В базовом классе `BusinessEntityData`:
 
 - `Version = 1`
 - `HasVersions = false`
+- `ChunkStorageType = None`
 
 Конкретный payload-тип включает версионирование через override:
 
@@ -80,6 +82,14 @@ public override bool HasVersions => true;
 
 - `Document`
 - `RichTextDocument`
+
+`ChunkStorageType` описывает физическую модель хранения payload:
+
+- `None` - payload не использует chunk-хранение
+- `TextChunks` - payload хранится текстовыми чанками
+- `ByteChunks` - payload хранится бинарными чанками
+
+На текущий момент `ChunkStorageType == TextChunks` только у `RichTextDocument`. У остальных payload-типов используется значение по умолчанию `None`.
 
 ---
 
