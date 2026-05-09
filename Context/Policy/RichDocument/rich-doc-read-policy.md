@@ -17,6 +17,9 @@
 
 Цель политики: дать возможность читать большие rich-text документы без загрузки всего документа в browser DOM целиком.
 
+Для версионируемых rich-text документов все read-side операции выполняются в контексте выбранной версии документа.
+Если версия явно не выбрана, используется последняя версия `BusinessEntityDataDto`.
+
 ---
 
 ## 2. Базовая модель хранения
@@ -110,13 +113,14 @@ Read-side собирает полное outline документа чтение�
 
 1. `BusinessEntity`
 2. rich-document manifest
+3. список версий / latest version
 
 После получения shell страница может сразу render document view.
 
 Следующие операции должны выполняться асинхронно и независимо:
 
-- загрузка начального окна чанков
-- загрузка содержания
+- загрузка начального окна чанков выбранной версии
+- загрузка содержания выбранной версии
 
 Это не дает большому содержанию блокировать первый видимый экран документа.
 
@@ -139,6 +143,16 @@ UI использует отдельные loading-состояния:
 
 Начальное окно передается в `RichTextDocumentViewport` как `InitialWindow`. Viewport применяет его к `LoadedChunks`.
 
+Начальное окно всегда читается по текущей просматриваемой версии:
+
+```text
+documentVersion = ViewedVersion
+startSortOrder = 0
+take = RichTextInitialChunkCount
+```
+
+Нельзя читать все chunks документа при открытии. Документ считается потенциально бесконечным.
+
 ---
 
 ## 8. Загрузка содержания
@@ -151,7 +165,17 @@ Read-side outline является деревом `RichTextDocumentOutlineNode`.
 
 Загрузка outline должна быть независимой от загрузки начальных чанков.
 
+В отличие от тела документа, outline должен быть догружен по всей выбранной версии документа, потому что от него зависят:
+
+- навигация по содержанию;
+- semantic jump при отпускании scrollbar;
+- переходы в read/edit viewport.
+
+Загрузка outline выполняется итеративно, асинхронными батчами. Она не должна блокировать первичный render текста.
+
 Если outline еще не загружен, тело документа все равно должно быть доступно для чтения.
+
+При смене версии документа outline перечитывается заново для выбранной версии.
 
 ---
 
@@ -195,6 +219,8 @@ EstimatedChunkHeight
 - replace, если requested window является дальним jump
 
 Дубликаты чанков разрешаются по `SortOrder`; последняя загруженная версия побеждает.
+
+При versioned-read storage сначала выбирает chunk rows с `Version <= ViewedVersion`, затем оставляет последнюю запись по logical chunk `Id`, и только после этого упорядочивает результат по `SortOrder`.
 
 ---
 
@@ -323,22 +349,38 @@ Diagnostic tags не должны содержать динамические ch
 
 ## 19. Пересоздание содержания
 
-Содержание пересоздается явно.
+Содержание обновляется явно или как часть операций записи chunks.
 
-Оно должно запускаться:
+Оно должно быть актуально после:
 
 - после import
-- после нажатия кнопки rebuild table-of-contents
+- после сохранения измененных chunks
+- после нажатия кнопки обновления/перечитывания table-of-contents
 
 Открытие документа не должно пересоздавать содержание.
 
 Открытие документа только читает сохраненные table-of-contents properties.
 
+Для больших документов запрещено пересоздавать содержание путем чтения всего документа в память. Допустима только итеративная обработка chunk windows / chunk batches выбранной версии.
+
 ---
 
 ## 20. Import policy
 
-Import создает или append-ит чанки и создает table-of-contents properties для этих чанков.
+Import считается правкой rich-text документа.
+
+Import append-ит chunks и создает новую версию документа:
+
+```text
+targetVersion = currentLatestVersion + 1
+```
+
+Все chunks, полученные импортом, сохраняются с `Version = targetVersion`.
+Manifest документа сохраняется как новая `BusinessEntityDataDto` версия с тем же `targetVersion`.
+
+Для нового пустого rich-document стартовый пустой chunk может быть удален, чтобы импорт не создавал пустую строку сверху, но сам импорт все равно остается новой версией.
+
+Import создает table-of-contents properties для импортированных chunks.
 
 Нарезка чанков управляется настройками размера.
 
@@ -349,6 +391,13 @@ Read-side предполагает, что imported chunks уже имеют:
 - table-of-contents properties, если внутри есть headings
 
 Если в chunk нет H1-H3 headings, table-of-contents property не требуется.
+
+После успешного импорта UI должен перечитать документ тем же flow, что и при открытии:
+
+1. сбросить просматриваемую версию на latest;
+2. прочитать shell и версии;
+3. загрузить начальное окно chunks новой версии;
+4. итеративно догрузить полный outline новой версии.
 
 ---
 
@@ -400,6 +449,7 @@ Data provider может предоставлять generic storage operations �
 Текущая read policy не требует:
 
 - загружать весь rich document в DOM
+- читать все chunks документа при открытии
 - пересоздавать содержание при каждом открытии
 - парсить browser DOM для поиска headings
 - трактовать chunks как business entities
@@ -427,12 +477,14 @@ Data provider может предоставлять generic storage operations �
 - render page frame сразу после получения shell
 - загружать initial chunk window асинхронно
 - загружать table of contents асинхронно
+- загружать table of contents по всей выбранной версии итеративными батчами
 - держать отдельные loading states для body и outline
 
 Избегать:
 
 - ожидания всех чанков перед render
 - ожидания содержания перед показом первого текста
+- ограничения outline только начальными chunks
 - одного global loading flag для всех этапов чтения
 
 ### 25.2. Чтение тела документа
@@ -526,7 +578,8 @@ Data provider может предоставлять generic storage operations �
 Принципиальный подход:
 
 - rebuild только по explicit events
-- выполнять rebuild после import
+- после import создавать/обновлять table-of-contents properties для импортированных chunks
+- после import перечитывать outline по всей новой версии
 - выполнять rebuild по кнопке пользователя
 - при открытии документа только читать persisted properties
 
@@ -535,6 +588,7 @@ Data provider может предоставлять generic storage operations �
 - rebuild при каждом open
 - rebuild как side effect чтения
 - скрытия rebuild cost внутри generic data-provider reads
+- full-document read ради rebuild или outline load
 
 ### 25.7. Выбор merge или replace
 

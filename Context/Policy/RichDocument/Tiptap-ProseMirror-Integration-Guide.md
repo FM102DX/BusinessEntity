@@ -107,13 +107,15 @@ ChunkEditor
 ├─ конвертирует его в Tiptap JSON
 ├─ создаёт Tiptap editor
 ├─ пользователь редактирует
-├─ по debounce / blur / save получает editor.getJSON()
+├─ по явному Save получает editor.getJSON()
 ├─ конвертирует обратно в RichTextDocumentChunk
 └─ отправляет на сервер только изменённый chunk
 ```
 
 Не отправлять изменения в Blazor Server на каждый keypress.  
-Нужно держать состояние редактора в JS и отправлять данные на сервер только по debounce, blur, Ctrl+S или явной кнопке Save.
+Нужно держать состояние редактора в JS / dirty cache и отправлять данные на сервер по явной кнопке Save или будущему явно спроектированному autosave-сценарию.
+
+Редактировать можно только последнюю версию rich-text документа. Старые версии открываются read-only.
 
 ---
 
@@ -296,21 +298,18 @@ Components/RichText/TiptapChunkEditor.razor
 
 Не сохранять весь документ.
 
-Сохранять только изменённый чанк:
+Сохранять только изменённые chunks текущего editor window:
 
 ```text
 on editor update:
     mark chunk as dirty
 
-after debounce 1000-2000 ms:
-    get current chunk from editor
-    send SaveChunkCommand
-
-on blur:
-    force save dirty chunk
-
 on Ctrl+S:
-    force save dirty chunk
+    trigger document Save
+
+on Save button:
+    collect dirty editors
+    send dirty chunks to server
 ```
 
 Save pipeline:
@@ -322,9 +321,13 @@ Save pipeline:
 4. extract plain_text
 5. update chunk_json
 6. update plain_text
-7. increment version
-8. update outline/search cache if needed
+7. create new versioned chunk row
+8. set chunk Version = new document version
+9. update outline/search cache if needed
+10. save manifest as new BusinessEntityData version
 ```
+
+Tiptap layer не определяет номер версии сам. Номер новой версии вычисляется серверным rich-document save/import flow.
 
 ---
 

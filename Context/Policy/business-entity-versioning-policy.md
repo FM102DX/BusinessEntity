@@ -19,9 +19,12 @@
 
 Каждая новая версия payload хранится отдельной storage-записью с:
 
-- новым `Id`
+- тем же logical `Id` payload-записи
 - тем же `BusinessEntityId`
 - увеличенным `Version`
+
+Уникальность versioned storage-записи определяется парой logical `Id + Version`, а не одним `Id`.
+Это правило нужно и для `BusinessEntityDataDto`, и для `BusinessEntityDataChunkDto`.
 
 ---
 
@@ -29,15 +32,23 @@
 
 Новая версия создается при редактировании и сохранении business entity payload.
 
+Для `RichTextDocument` импорт также считается правкой. Поэтому импорт всегда создает новую версию:
+
+```text
+targetVersion = currentLatestVersion + 1
+```
+
+После импорта новая запись `BusinessEntityDataDto` получает `targetVersion`, а все импортированные chunks получают тот же `targetVersion`.
+
 Если payload-тип поддерживает версии, сохранение работает append-only:
 
 ```text
 BusinessEntity.Id = A
 
 BusinessEntityDataDto:
-  Id = D1, BusinessEntityId = A, Version = 1
-  Id = D2, BusinessEntityId = A, Version = 2
-  Id = D3, BusinessEntityId = A, Version = 3
+  Id = D, BusinessEntityId = A, Version = 1
+  Id = D, BusinessEntityId = A, Version = 2
+  Id = D, BusinessEntityId = A, Version = 3
 ```
 
 Чтение обычного payload всегда возвращает актуальную версию с максимальным `Version`.
@@ -101,8 +112,8 @@ public override bool HasVersions => true;
 
 - при первом сохранении создается `Version = 1`
 - при каждом следующем сохранении создается новая запись
+- `Id` остается logical id payload-записи
 - `BusinessEntityId` остается тем же
-- `Id` новой записи генерируется заново
 - чтение берет запись с максимальным `Version`
 
 Для неверсионируемых payload:
@@ -119,20 +130,27 @@ public override bool HasVersions => true;
 
 Для rich-text dirty-save измененный chunk сохраняется как новая строка:
 
-- новый `Id`
+- тот же logical chunk `Id`
 - тот же `BusinessEntityId`
 - тот же `SortOrder`
 - `Version = previous.Version + 1`
 
 Старый chunk не удаляется, чтобы история chunk-содержимого оставалась в storage.
 
-Чтение актуального rich-text содержимого выбирает последнюю chunk-запись по каждому `SortOrder`:
+Чтение rich-text содержимого для версии `N` выбирает chunk-записи с `Version <= N`, затем оставляет последнюю запись по каждому logical chunk `Id`:
 
 ```text
-Group by BusinessEntityId + SortOrder
+Where BusinessEntityId = A
+  and Version <= N
+Group by Chunk.Id
 Order by Version desc, LastModifiedDate desc
 Take first
+Order result by SortOrder
 ```
+
+Открытие rich-text документа без явно выбранной версии использует максимальную версию `BusinessEntityDataDto`.
+
+Импорт rich-text документа append-ит новые chunks. Все chunks, созданные импортом, должны иметь один и тот же `Version`, равный новой версии документа. После импорта документ перечитывается так же, как при обычном открытии.
 
 ---
 
@@ -148,14 +166,15 @@ Storage-таблицы должны содержать:
 Рекомендуемые indexes:
 
 - `(BusinessEntityId, Version)` для `BusinessEntityDataItems`
-- `(BusinessEntityId, SortOrder, Version)` для `BusinessEntityDataChunks`
+- `(BusinessEntityId, Id, Version)` для выбора версий chunks
+- `(BusinessEntityId, SortOrder, Version)` для оконного чтения chunks
 
 ---
 
 ## 9. Ограничения текущей реализации
 
-Текущий базовый read-path возвращает актуальную версию. API просмотра списка всех версий и восстановления старой версии пока не вводится.
+Текущий базовый read-path возвращает актуальную версию. Для rich-text UI список версий показывается в виджете документа; восстановление старой версии пока не вводится.
 
-Chunk-версии сейчас выбираются по `SortOrder`. Отдельной связи chunk с конкретным `BusinessEntityDataDto.Id` пока нет.
+Chunk-версии сейчас выбираются по logical chunk `Id` и ограничению `Version <= selectedDocumentVersion`. Отдельной связи chunk с конкретным `BusinessEntityDataDto.Id` пока нет.
 
 Если в будущем понадобится строгий снимок всего rich-text документа на конкретную версию manifest-а, нужно будет добавить явную связь chunk-записей с data-version id или отдельный version-set/snapshot id.

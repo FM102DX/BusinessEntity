@@ -764,7 +764,7 @@ namespace BusinessEntity.Services
             if (manifest == null) throw new ArgumentNullException(nameof(manifest));
 
             var latestDocumentVersion = await GetLatestDocumentVersionAsync(entity.Id, ct);
-            var nextDocumentVersion = latestDocumentVersion == int.MaxValue
+            var targetDocumentVersion = latestDocumentVersion == int.MaxValue
                 ? 1
                 : latestDocumentVersion + 1;
             var firstWindow = await GetChunkWindowAsync(entity.Id, 0, 2, latestDocumentVersion, ct);
@@ -803,7 +803,7 @@ namespace BusinessEntity.Services
             foreach (var chunk in chunksToAppend.OrderBy(x => x.SortOrder))
             {
                 var dto = MapChunkRuntimeToDto(entity.Id, chunk, chunk.SortOrder);
-                dto.Version = nextDocumentVersion;
+                dto.Version = targetDocumentVersion;
                 var savedDto = await _businessEntityDataChunkRepository.AddAsync(dto, ct);
                 var tableOfContentsProperty = BuildTableOfContentsProperty(savedDto, chunk.Blocks);
                 if (tableOfContentsProperty != null)
@@ -818,6 +818,7 @@ namespace BusinessEntity.Services
             manifest.Id = entity.Id;
             manifest.Name = entity.Name;
             manifest.EntityType = BusinessEntityTypeEnum.RichTextDocument;
+            manifest.Version = targetDocumentVersion;
             manifest.LastModifiedDate = entity.LastModifiedDate;
             if (manifest.CreatedDate == default)
             {
@@ -830,6 +831,7 @@ namespace BusinessEntity.Services
             }
 
             await _businessEntityHelper.SaveEntity(entity, manifest);
+
             await _dataProviderConnector.SaveRichTextEmbeddedFilesAsync(
                 entity.Id,
                 appendedFiles ?? Array.Empty<RichTextEmbeddedFile>(),

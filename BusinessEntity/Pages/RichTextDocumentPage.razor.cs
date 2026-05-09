@@ -168,12 +168,10 @@ namespace BusinessEntity.Pages
         {
             try
             {
-                var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync(cancellationToken);
                 await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
                     documentId,
                     OutlineChunkBatchSize,
                     documentVersion,
-                    richTextDocumentSettings.GetInitialChunkCount(),
                     cancellationToken))
                 {
                     var outlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
@@ -263,6 +261,7 @@ namespace BusinessEntity.Pages
 
                 SetStatusMessage($"Импорт файла '{file.Name}' добавлен в конец документа.");
                 VersionsRefreshToken++;
+                ViewedVersion = 0;
                 await LoadAsync();
             }
             catch (Exception ex)
@@ -300,14 +299,13 @@ namespace BusinessEntity.Pages
                 await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
                     Id,
                     OutlineChunkBatchSize,
-                    ViewedVersion,
-                    richTextDocumentSettings.GetInitialChunkCount()))
+                    ViewedVersion))
                 {
                     OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
                     await InvokeAsync(StateHasChanged);
                 }
 
-                SetStatusMessage("Содержание обновлено для загруженного окна документа.");
+                SetStatusMessage("Содержание обновлено.");
             }
             catch (Exception ex)
             {
@@ -363,12 +361,10 @@ namespace BusinessEntity.Pages
                 ViewedVersion = LatestVersion;
 
                 IsOutlineLoading = true;
-                var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync();
                 await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
                     Id,
                     OutlineChunkBatchSize,
-                    ViewedVersion,
-                    richTextDocumentSettings.GetInitialChunkCount()))
+                    ViewedVersion))
                 {
                     OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
                     await InvokeAsync(StateHasChanged);

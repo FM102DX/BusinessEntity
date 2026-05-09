@@ -242,7 +242,7 @@ Checksum            text null
 
 | Поле | Назначение |
 |---|---|
-| `Id` | identity технической строки чанка |
+| `Id` | logical id чанка; в versioned storage может повторяться в нескольких строках с разным `Version` |
 | `BusinessEntityId` | id владельца-документа |
 | `SortOrder` | порядок чанков внутри документа |
 | `Data` | minified JSON envelope чанка |
@@ -251,7 +251,7 @@ Checksum            text null
 | `BlockCount` | количество блоков в чанке |
 | `CharCount` | количество текстовых символов |
 | `DataSizeBytes` | размер JSON-строки |
-| `Version` | оптимистичная блокировка |
+| `Version` | версия chunk-содержимого |
 | `Checksum` | контроль изменения содержимого |
 
 Индексы:
@@ -260,12 +260,16 @@ Checksum            text null
 create index ix_business_entity_data_chunks_entity_sort
 on "BusinessEntityDataChunks" ("BusinessEntityId", "SortOrder");
 
-create unique index ux_business_entity_data_chunks_entity_sort
-on "BusinessEntityDataChunks" ("BusinessEntityId", "SortOrder");
+create index ix_business_entity_data_chunks_entity_chunk_version
+on "BusinessEntityDataChunks" ("BusinessEntityId", "Id", "Version");
 
 create index ix_business_entity_data_chunks_entity
 on "BusinessEntityDataChunks" ("BusinessEntityId");
 ```
+
+Для rich-text versioning нельзя делать `ChunkId` или пару `(BusinessEntityId, SortOrder)` уникальными без учета `Version`.
+Один logical chunk может иметь несколько строк с одним `Id` и разными `Version`.
+Один `SortOrder` также может встречаться в нескольких версиях.
 
 Если используется полнотекстовый поиск PostgreSQL:
 
@@ -1261,33 +1265,26 @@ Endpoint обязан:
 6. сериализовать chunk envelope через `StorageJsonOptions.Default`;
 7. извлечь `PlainText`;
 8. пересчитать `BlockCount`, `CharCount`, `DataSizeBytes`, `Checksum`;
-9. проверить `Version`;
-10. обновить строку `BusinessEntityDataChunks`;
-11. увеличить `Version`;
+9. определить новую версию документа;
+10. добавить новую строку `BusinessEntityDataChunks` с тем же logical chunk `Id`;
+11. записать `Version = newDocumentVersion`;
 12. обновить `LastModifiedDate` чанка;
-13. обновить `LastModifiedDate` документа;
+13. сохранить manifest как новую строку `BusinessEntityDataItems` той же версии;
 14. пересчитать outline/search-cache для затронутого чанка.
 
-Пример SQL:
+Versioned save является append-only для payload. Старые строки chunks не обновляются in-place и не удаляются.
 
-```sql
-update "BusinessEntityDataChunks"
-set
-    "Data" = @data,
-    "PlainText" = @plainText,
-    "HtmlCache" = @htmlCache,
-    "BlockCount" = @blockCount,
-    "CharCount" = @charCount,
-    "DataSizeBytes" = @dataSizeBytes,
-    "Checksum" = @checksum,
-    "Version" = "Version" + 1,
-    "LastModifiedDate" = now()
-where "Id" = @chunkId
-  and "BusinessEntityId" = @documentId
-  and "Version" = @expectedVersion;
+Пример логической операции:
+
+```text
+old row:
+  Id = C1, BusinessEntityId = D1, SortOrder = 10, Version = 3
+
+new row after edit:
+  Id = C1, BusinessEntityId = D1, SortOrder = 10, Version = 4
 ```
 
-Если обновлено 0 строк, значит произошел конфликт версий.
+При чтении версии `N` выбирается последняя строка по каждому logical chunk `Id`, где `Version <= N`.
 
 ---
 
@@ -1347,35 +1344,35 @@ Storage-слой решает:
 
 ## 23. Версионирование
 
-MVP-вариант:
+Текущий MVP использует append-only versioned storage.
+
+`BusinessEntityDataItems` хранит версии manifest-а:
 
 ```text
-текущие чанки mutable
-старая версия чанка перед обновлением копируется в history
+BusinessEntityId = D1, Id = M1, Version = 1
+BusinessEntityId = D1, Id = M1, Version = 2
+BusinessEntityId = D1, Id = M1, Version = 3
 ```
 
-Рекомендуемая техническая таблица:
+`BusinessEntityDataChunks` хранит версии chunks:
 
 ```text
-BusinessEntityDataChunkHistory
+BusinessEntityId = D1, Id = C1, SortOrder = 0, Version = 1
+BusinessEntityId = D1, Id = C1, SortOrder = 0, Version = 2
+BusinessEntityId = D1, Id = C2, SortOrder = 1, Version = 2
 ```
 
-Поля:
+Правила:
 
-```text
-Id
-ChunkId
-BusinessEntityId
-OldData
-OldPlainText
-Version
-CreatedDate
-CreatedBy
-```
+- новая версия документа создается при save и import;
+- import считается правкой;
+- `targetVersion = currentLatestVersion + 1`;
+- все chunks, созданные import-ом, получают `Version = targetVersion`;
+- измененный существующий chunk сохраняется новой строкой с тем же logical chunk `Id` и новой `Version`;
+- старые строки chunks не удаляются;
+- чтение версии `N` берет chunks с `Version <= N`, выбирает последнюю строку по каждому chunk `Id`, затем сортирует по `SortOrder`.
 
-История чанков также не является частью бизнес-графа.
-
-Она обслуживается `DataProviderMiniApp`.
+Отдельная таблица `BusinessEntityDataChunkHistory` для текущего MVP не нужна. История уже выражается строками `BusinessEntityDataChunks` с разными версиями.
 
 Файлы изображений в MVP можно не версионировать.
 
@@ -1398,7 +1395,7 @@ images/{imageId}/revisions/{revisionId}/...
 
 ## 24. Оглавление
 
-Для больших документов нельзя каждый раз строить оглавление путем чтения всех чанков.
+Для больших документов нельзя строить оглавление путем чтения всех чанков одним запросом или одной full-document операцией.
 
 Рекомендуется технический кеш:
 
@@ -1427,6 +1424,17 @@ SortOrder
 Outline-кеш не является источником истины.
 
 Источник истины — chunk data.
+
+Read-side outline должен загружаться итеративно по всей выбранной версии документа.
+Это отличается от тела документа: тело при открытии читает только начальное окно chunks, а outline догружается батчами до конца версии.
+
+Причина:
+
+- навигация по содержанию должна видеть весь документ;
+- scrollbar-release jump использует ближайший outline node;
+- старые версии должны иметь собственный outline, соответствующий выбранной версии.
+
+При смене просматриваемой версии outline перечитывается заново по этой версии.
 
 ---
 
@@ -1518,12 +1526,12 @@ Connector
 - сериализацию manifest envelope;
 - сериализацию chunk envelope;
 - `StorageJsonOptions.Default`;
-- optimistic concurrency по `Version`;
+- append-only versioned storage по `Version`;
 - split / merge / rebalance чанков;
 - пересчет `PlainText`;
 - пересчет `HtmlCache`, если используется;
 - обновление outline-cache;
-- обновление history;
+- сохранение истории через versioned rows;
 - создание папки `RichDocumentData/{documentId}`;
 - сохранение original image;
 - генерацию display / preview / thumb variants;
@@ -1950,6 +1958,26 @@ copy
 
 Для больших вставок не нужно сначала собирать один огромный HTML.
 
+## 38.1. Import большого документа
+
+Import считается versioned edit operation.
+
+Алгоритм:
+
+1. importer разбирает вход в blocks;
+2. storage слой определяет `currentLatestVersion`;
+3. вычисляет `targetVersion = currentLatestVersion + 1`;
+4. при необходимости удаляет стартовый пустой chunk нового документа;
+5. создает новые chunks с `Version = targetVersion`;
+6. сохраняет manifest как новую `BusinessEntityDataItems` версию с `Version = targetVersion`;
+7. создает table-of-contents properties для импортированных chunks;
+8. сохраняет embedded files;
+9. UI сбрасывает выбранную версию на latest;
+10. UI перечитывает документ тем же flow, что и при открытии.
+
+После import нельзя локально продолжать показывать старую версию документа.
+Нужно заново прочитать shell, latest version, initial chunk window и итеративный outline новой версии.
+
 ---
 
 ## 39. Запреты
@@ -1986,7 +2014,7 @@ copy
 - хранить `PlainText` как производное поле;
 - хранить `HtmlCache` как производный кеш;
 - использовать `SortOrder` с промежутками;
-- использовать optimistic concurrency по `Version`;
+- использовать append-only versioned rows по `Version`;
 - хранить вставленные изображения в файловой папке документа;
 - хранить original image в полном разрешении;
 - хранить адаптированные варианты изображения;
@@ -2293,9 +2321,11 @@ load manifest
 load initial chunks
 load next chunks
 save dirty chunks
+import as new version
+load full outline iteratively by selected version
 extract plain text
-optimistic version check
-basic outline cache
+versioned chunk selection
+basic outline properties
 insert image
 store original image
 generate adapted image variants
@@ -2360,6 +2390,17 @@ Chunk payload
 
 PlainText / HtmlCache / Outline
     являются производными кешами
+
+Открытие документа
+    читает только shell и начальное окно chunks
+    не читает все chunks документа
+    догружает outline итеративно по выбранной версии
+
+Import
+    считается правкой
+    создает новую версию manifest-а
+    сохраняет импортированные chunks с той же новой версией
+    после завершения перечитывает документ как при открытии
 
 DataProviderMiniApp
     владеет storage-логикой, chunk-логикой и файловым хранилищем документа
