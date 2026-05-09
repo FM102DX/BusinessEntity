@@ -4,5 +4,6 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 public enum UserPropertyTypeEnum
 {
     Undefined = 0,
-    RichDocBookmarks = 100
+    RichDocBookmarks = 100,
+    RichDocDisplayedLevelProperty = 101
 }

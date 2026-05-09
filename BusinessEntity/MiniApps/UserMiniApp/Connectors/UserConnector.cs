@@ -96,5 +96,20 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
         {
             return _userMiniApp.DeleteRichDocBookmarkAsync(bookmarkId, cancellationToken);
         }
+
+        public Task<int> GetRichDocDisplayedLevelAsync(
+            Guid documentId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetRichDocDisplayedLevelAsync(documentId, cancellationToken);
+        }
+
+        public Task SaveRichDocDisplayedLevelAsync(
+            Guid documentId,
+            int displayLevelCount,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
+        }
     }
 }

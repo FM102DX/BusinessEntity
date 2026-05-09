@@ -229,6 +229,51 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             return true;
         }
 
+        public async Task<int> GetRichDocDisplayedLevelAsync(
+            Guid documentId,
+            CancellationToken cancellationToken = default)
+        {
+            if (documentId == Guid.Empty)
+            {
+                return 1;
+            }
+
+            var user = await EnsureCurrentUserAsync(cancellationToken);
+            if (user == null)
+            {
+                return 1;
+            }
+
+            var property = await ReadDisplayedLevelPropertyAsync(user.Id, documentId, cancellationToken);
+            return NormalizeDisplayedLevel(property?.DisplayLevelCount ?? 1);
+        }
+
+        public async Task SaveRichDocDisplayedLevelAsync(
+            Guid documentId,
+            int displayLevelCount,
+            CancellationToken cancellationToken = default)
+        {
+            if (documentId == Guid.Empty)
+            {
+                return;
+            }
+
+            var user = await EnsureCurrentUserAsync(cancellationToken);
+            if (user == null)
+            {
+                return;
+            }
+
+            await UpsertDisplayedLevelPropertyAsync(
+                user.Id,
+                new RichDocDisplayedLevelProperty
+                {
+                    DocumentId = documentId,
+                    DisplayLevelCount = NormalizeDisplayedLevel(displayLevelCount)
+                },
+                cancellationToken);
+        }
+
         private static UserData ReadUserData(UserDto user)
         {
             if (string.IsNullOrWhiteSpace(user.Payload))
@@ -299,6 +344,30 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             return new RichTextDocumentBookmarksPayload();
         }
 
+        private async Task<RichDocDisplayedLevelProperty?> ReadDisplayedLevelPropertyAsync(
+            Guid userId,
+            Guid documentId,
+            CancellationToken cancellationToken)
+        {
+            var properties = (await _userPropertyRepository.GetAllAsync(
+                    x => x.ParentEntityId == userId &&
+                         x.PropertyType == (int)UserPropertyTypeEnum.RichDocDisplayedLevelProperty,
+                    cancellationToken))
+                .OrderByDescending(x => x.DateLastModified)
+                .ToList();
+
+            foreach (var property in properties)
+            {
+                var payload = TryReadDisplayedLevelProperty(property.Data);
+                if (payload?.DocumentId == documentId)
+                {
+                    return payload;
+                }
+            }
+
+            return null;
+        }
+
         private async Task UpsertBookmarksPayloadAsync(
             Guid userId,
             RichTextDocumentBookmarksPayload payload,
@@ -349,6 +418,98 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             {
                 await _userPropertyRepository.DeleteAsync(duplicate.Id, cancellationToken);
             }
+        }
+
+        private async Task UpsertDisplayedLevelPropertyAsync(
+            Guid userId,
+            RichDocDisplayedLevelProperty payload,
+            CancellationToken cancellationToken)
+        {
+            var properties = (await _userPropertyRepository.GetAllAsync(
+                    x => x.ParentEntityId == userId &&
+                         x.PropertyType == (int)UserPropertyTypeEnum.RichDocDisplayedLevelProperty,
+                    cancellationToken))
+                .OrderByDescending(x => x.DateLastModified)
+                .ToList();
+
+            payload.DisplayLevelCount = NormalizeDisplayedLevel(payload.DisplayLevelCount);
+
+            var matchingProperties = properties
+                .Where(property => TryReadDisplayedLevelProperty(property.Data)?.DocumentId == payload.DocumentId)
+                .ToList();
+
+            var now = DateTime.UtcNow;
+            var data = JsonSerializer.Serialize(payload, UserMiniAppJsonOptions.Default);
+            var metadata = JsonSerializer.Serialize(
+                new
+                {
+                    schemaVersion = 1,
+                    kind = "RichDocDisplayedLevelPropertyMetadata",
+                    documentId = payload.DocumentId,
+                    displayLevelCount = payload.DisplayLevelCount
+                },
+                UserMiniAppJsonOptions.Default);
+
+            var property = matchingProperties.FirstOrDefault();
+            if (property == null)
+            {
+                await _userPropertyRepository.AddAsync(
+                    new UserPropertyDto
+                    {
+                        Id = Guid.NewGuid(),
+                        DateCreated = now,
+                        DateLastModified = now,
+                        ParentEntityId = userId,
+                        PropertyType = (int)UserPropertyTypeEnum.RichDocDisplayedLevelProperty,
+                        Data = data,
+                        Metadata = metadata
+                    },
+                    cancellationToken);
+                return;
+            }
+
+            property.DateLastModified = now;
+            property.Data = data;
+            property.Metadata = metadata;
+            await _userPropertyRepository.UpdateAsync(property, cancellationToken);
+
+            foreach (var duplicate in matchingProperties.Skip(1))
+            {
+                await _userPropertyRepository.DeleteAsync(duplicate.Id, cancellationToken);
+            }
+        }
+
+        private static RichDocDisplayedLevelProperty? TryReadDisplayedLevelProperty(string? data)
+        {
+            if (string.IsNullOrWhiteSpace(data))
+            {
+                return null;
+            }
+
+            try
+            {
+                var payload = JsonSerializer.Deserialize<RichDocDisplayedLevelProperty>(
+                    data,
+                    UserMiniAppJsonOptions.Default);
+
+                if (payload?.SchemaVersion == 1 &&
+                    string.Equals(payload.Kind, "RichDocDisplayedLevelProperty", StringComparison.Ordinal))
+                {
+                    payload.DisplayLevelCount = NormalizeDisplayedLevel(payload.DisplayLevelCount);
+                    return payload;
+                }
+            }
+            catch (JsonException)
+            {
+                // Invalid user property payload is ignored.
+            }
+
+            return null;
+        }
+
+        private static int NormalizeDisplayedLevel(int value)
+        {
+            return Math.Clamp(value, 1, 3);
         }
 
         private static string NormalizeBookmarkText(string? text)

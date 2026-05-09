@@ -370,6 +370,65 @@ namespace BusinessEntity.Services
         }
 
         /// <summary>
+        /// Calculates chunk metrics for a specific document version without building a full document snapshot.
+        /// </summary>
+        public async Task<RichTextDocumentChunkStatistics> GetChunkStatisticsAsync(
+            Guid entityId,
+            int? documentVersion,
+            CancellationToken ct = default)
+        {
+            var resolvedDocumentVersion = await ResolveDocumentVersionAsync(entityId, documentVersion, ct);
+            var totalSortOrderUpperBound = await GetChunkSortOrderUpperBoundAsync(entityId, resolvedDocumentVersion, ct);
+            if (totalSortOrderUpperBound <= 0)
+            {
+                return new RichTextDocumentChunkStatistics();
+            }
+
+            const int chunkBatchSize = 100;
+            long totalCharacters = 0;
+            var totalChunks = 0;
+            var minCharacters = int.MaxValue;
+            var maxCharacters = 0;
+
+            for (var startSortOrder = 0; startSortOrder < totalSortOrderUpperBound; startSortOrder += chunkBatchSize)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var take = Math.Min(chunkBatchSize, totalSortOrderUpperBound - startSortOrder);
+                var chunkDtos = await GetSelectedChunkWindowDtosAsync(
+                    entityId,
+                    startSortOrder,
+                    take,
+                    resolvedDocumentVersion,
+                    ct);
+
+                foreach (var chunkDto in chunkDtos)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var charCount = Math.Max(chunkDto.CharCount, 0);
+                    totalChunks++;
+                    totalCharacters += charCount;
+                    minCharacters = Math.Min(minCharacters, charCount);
+                    maxCharacters = Math.Max(maxCharacters, charCount);
+                }
+            }
+
+            if (totalChunks == 0)
+            {
+                return new RichTextDocumentChunkStatistics();
+            }
+
+            return new RichTextDocumentChunkStatistics
+            {
+                TotalChunkCount = totalChunks,
+                AverageCharCount = totalCharacters / (double)totalChunks,
+                MinCharCount = minCharacters,
+                MaxCharCount = maxCharacters
+            };
+        }
+
+        /// <summary>
         /// Loads a sort-order window of chunks for virtualized reading.
         /// </summary>
         public Task<RichTextDocumentChunkWindow> GetChunkWindowAsync(

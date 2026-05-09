@@ -62,5 +62,20 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
         {
             return _userMiniAppService.DeleteRichDocBookmarkAsync(bookmarkId, cancellationToken);
         }
+
+        public Task<int> GetRichDocDisplayedLevelAsync(
+            Guid documentId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetRichDocDisplayedLevelAsync(documentId, cancellationToken);
+        }
+
+        public Task SaveRichDocDisplayedLevelAsync(
+            Guid documentId,
+            int displayLevelCount,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
+        }
     }
 }

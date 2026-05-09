@@ -26,6 +26,13 @@
                 Версии
                 <span class="rich-text-document-tabs__badge">@Versions.Count</span>
             </button>
+            <button type="button"
+                    class="@GetTabButtonClass(RichTextDocumentWidgetTab.Statistics)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Statistics)"
+                    @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Statistics))">
+                Стат.
+            </button>
         </div>
 
         <div class="rich-text-document-tabs__panel" role="tabpanel">
@@ -108,7 +115,7 @@
                     Удалить выбранную
                 </button>
             }
-            else
+            else if (ActiveTab == RichTextDocumentWidgetTab.Versions)
             {
                 @if (IsVersionsLoading)
                 {
@@ -151,6 +158,59 @@
                             </tbody>
                         </table>
                     </div>
+                }
+            }
+            else
+            {
+                <div class="rich-text-document-statistics__header">
+                    <span>Статистика</span>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary rich-text-document-statistics__refresh"
+                            title="Обновить статистику"
+                            aria-label="Обновить статистику"
+                            disabled="@IsStatisticsLoading"
+                            @onclick="RefreshStatisticsAsync">
+                        <span aria-hidden="true">&#8635;</span>
+                    </button>
+                </div>
+
+                @if (IsStatisticsLoading && Statistics == null)
+                {
+                    <div class="rich-text-document-statistics__empty">Загрузка статистики...</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(StatisticsError))
+                {
+                    <div class="rich-text-document-statistics__error">@StatisticsError</div>
+                }
+                else if (Statistics == null || Statistics.IsEmpty)
+                {
+                    <div class="rich-text-document-statistics__empty">Нет данных</div>
+                }
+                else
+                {
+                    <dl class="rich-text-document-statistics__list">
+                        <div class="rich-text-document-statistics__row">
+                            <dt>Чанков</dt>
+                            <dd>@FormatInteger(Statistics.TotalChunkCount)</dd>
+                        </div>
+                        <div class="rich-text-document-statistics__row">
+                            <dt>Среднее символов</dt>
+                            <dd>@FormatAverage(Statistics.AverageCharCount)</dd>
+                        </div>
+                        <div class="rich-text-document-statistics__row">
+                            <dt>Минимум символов</dt>
+                            <dd>@FormatInteger(Statistics.MinCharCount)</dd>
+                        </div>
+                        <div class="rich-text-document-statistics__row">
+                            <dt>Максимум символов</dt>
+                            <dd>@FormatInteger(Statistics.MaxCharCount)</dd>
+                        </div>
+                    </dl>
+
+                    @if (IsStatisticsLoading)
+                    {
+                        <div class="rich-text-document-statistics__hint">Обновление...</div>
+                    }
                 }
             }
         </div>

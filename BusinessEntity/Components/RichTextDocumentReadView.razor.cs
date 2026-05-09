@@ -42,9 +42,11 @@ namespace BusinessEntity.Components
         private IReadOnlyList<RichTextDocumentOutlineNode> VisibleOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         private IReadOnlyList<RichTextDocumentBookmark> Bookmarks { get; set; } = Array.Empty<RichTextDocumentBookmark>();
         private RichTextDocumentViewport? Viewport { get; set; }
-        private int DisplayLevelCount { get; set; } = 2;
+        private int DisplayLevelCount { get; set; } = 1;
         private bool HideTableOfContentsScrollbar { get; set; } = true;
         private Guid _bookmarksLoadedForEntityId;
+        private Guid _displayLevelDocumentId;
+        private Guid _displayLevelLoadedForEntityId;
         private Guid? ActiveBookmarkId { get; set; }
 
         private bool IsDocumentEmpty =>
@@ -62,6 +64,13 @@ namespace BusinessEntity.Components
 
         protected override void OnParametersSet()
         {
+            if (BusinessEntityId != _displayLevelDocumentId)
+            {
+                _displayLevelDocumentId = BusinessEntityId;
+                _displayLevelLoadedForEntityId = Guid.Empty;
+                DisplayLevelCount = 1;
+            }
+
             LocalOutlineNodes = OutlineNodes ?? Array.Empty<RichTextDocumentOutlineNode>();
             VisibleOutlineNodes = FilterOutlineNodes(LocalOutlineNodes, DisplayLevelCount);
         }
@@ -71,6 +80,11 @@ namespace BusinessEntity.Components
             if (BusinessEntityId != Guid.Empty && BusinessEntityId != _bookmarksLoadedForEntityId)
             {
                 await LoadBookmarksAsync();
+            }
+
+            if (BusinessEntityId != Guid.Empty && BusinessEntityId != _displayLevelLoadedForEntityId)
+            {
+                await LoadDisplayedLevelAsync();
             }
         }
 
@@ -112,11 +126,15 @@ namespace BusinessEntity.Components
             return OnRebuildTableOfContents.InvokeAsync();
         }
 
-        private Task HandleDisplayLevelCountChangedAsync(int value)
+        private async Task HandleDisplayLevelCountChangedAsync(int value)
         {
             DisplayLevelCount = Math.Clamp(value, 1, 3);
             VisibleOutlineNodes = FilterOutlineNodes(LocalOutlineNodes, DisplayLevelCount);
-            return Task.CompletedTask;
+            if (BusinessEntityId != Guid.Empty)
+            {
+                await UserConnector.SaveRichDocDisplayedLevelAsync(BusinessEntityId, DisplayLevelCount);
+                _displayLevelLoadedForEntityId = BusinessEntityId;
+            }
         }
 
         private Task HandleHeadingSelectedAsync(RichTextDocumentOutlineNode node)
@@ -230,6 +248,23 @@ namespace BusinessEntity.Components
 
             Bookmarks = await UserConnector.GetRichDocBookmarksAsync(BusinessEntityId);
             _bookmarksLoadedForEntityId = BusinessEntityId;
+        }
+
+        private async Task LoadDisplayedLevelAsync()
+        {
+            if (BusinessEntityId == Guid.Empty)
+            {
+                DisplayLevelCount = 1;
+                _displayLevelLoadedForEntityId = Guid.Empty;
+                return;
+            }
+
+            DisplayLevelCount = Math.Clamp(
+                await UserConnector.GetRichDocDisplayedLevelAsync(BusinessEntityId),
+                1,
+                3);
+            _displayLevelLoadedForEntityId = BusinessEntityId;
+            VisibleOutlineNodes = FilterOutlineNodes(LocalOutlineNodes, DisplayLevelCount);
         }
 
         private void AddMessage(string message)

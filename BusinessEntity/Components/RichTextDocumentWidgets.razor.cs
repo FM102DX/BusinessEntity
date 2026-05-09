@@ -1,6 +1,7 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 
 namespace BusinessEntity.Components
@@ -21,17 +22,29 @@ namespace BusinessEntity.Components
         [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
 
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
+        [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
 
         private string SearchQuery { get; set; } = string.Empty;
         private Guid? SelectedBookmarkId { get; set; }
         private RichTextDocumentWidgetTab ActiveTab { get; set; } = RichTextDocumentWidgetTab.Search;
         private IReadOnlyList<BusinessEntityDataVersionInfo> Versions { get; set; } = Array.Empty<BusinessEntityDataVersionInfo>();
+        private RichTextDocumentChunkStatistics? Statistics { get; set; }
         private bool IsVersionsLoading { get; set; }
+        private bool IsStatisticsLoading { get; set; }
         private string? VersionsError { get; set; }
+        private string? StatisticsError { get; set; }
         private Guid _versionsLoadedForEntityId;
         private int _versionsLoadedForRefreshToken = -1;
+        private Guid _statisticsLoadedForEntityId;
+        private int _statisticsLoadedForViewedVersion = -1;
+        private int _statisticsLoadedForRefreshToken = -1;
+        private Guid _statisticsLoadingForEntityId;
+        private int _statisticsLoadingForViewedVersion = -1;
+        private int _statisticsLoadingForRefreshToken = -1;
+        private long _statisticsRequestId;
         private bool IsSearchDisabled => string.IsNullOrWhiteSpace(SearchQuery);
         private bool CanNavigateBookmarks => Bookmarks.Count > 0;
+        private bool CanLoadStatistics => BusinessEntityId != Guid.Empty && ViewedVersion > 0;
 
         protected override void OnParametersSet()
         {
@@ -51,16 +64,17 @@ namespace BusinessEntity.Components
             {
                 Versions = Array.Empty<BusinessEntityDataVersionInfo>();
                 _versionsLoadedForEntityId = Guid.Empty;
+                ResetStatistics();
                 return;
             }
 
-            if (BusinessEntityId == _versionsLoadedForEntityId &&
-                VersionsRefreshToken == _versionsLoadedForRefreshToken)
+            QueueStatisticsLoad();
+
+            if (BusinessEntityId != _versionsLoadedForEntityId ||
+                VersionsRefreshToken != _versionsLoadedForRefreshToken)
             {
-                return;
+                await LoadVersionsAsync();
             }
-
-            await LoadVersionsAsync();
         }
 
         private void HandleSearchInput(ChangeEventArgs args)
@@ -129,6 +143,13 @@ namespace BusinessEntity.Components
             ActiveTab = tab;
         }
 
+        private Task RefreshStatisticsAsync()
+        {
+            return CanLoadStatistics
+                ? StartStatisticsLoadAsync(force: true)
+                : Task.CompletedTask;
+        }
+
         private async Task SelectVersionAsync(int version)
         {
             if (version <= 0 || version == ViewedVersion)
@@ -168,9 +189,133 @@ namespace BusinessEntity.Components
             }
         }
 
+        private void QueueStatisticsLoad()
+        {
+            if (!CanLoadStatistics)
+            {
+                ResetStatistics();
+                return;
+            }
+
+            if (IsStatisticsLoadedForCurrentVersion() || IsStatisticsLoadingForCurrentVersion())
+            {
+                return;
+            }
+
+            _ = StartStatisticsLoadAsync(force: false);
+        }
+
+        private async Task StartStatisticsLoadAsync(bool force)
+        {
+            if (!CanLoadStatistics)
+            {
+                ResetStatistics();
+                return;
+            }
+
+            if (!force && (IsStatisticsLoadedForCurrentVersion() || IsStatisticsLoadingForCurrentVersion()))
+            {
+                return;
+            }
+
+            var entityId = BusinessEntityId;
+            var viewedVersion = ViewedVersion;
+            var refreshToken = VersionsRefreshToken;
+            var requestId = ++_statisticsRequestId;
+
+            IsStatisticsLoading = true;
+            StatisticsError = null;
+            _statisticsLoadingForEntityId = entityId;
+            _statisticsLoadingForViewedVersion = viewedVersion;
+            _statisticsLoadingForRefreshToken = refreshToken;
+            await InvokeAsync(StateHasChanged);
+
+            try
+            {
+                var statistics = await RichTextDocumentHelper.GetChunkStatisticsAsync(entityId, viewedVersion);
+                if (!IsCurrentStatisticsRequest(entityId, viewedVersion, refreshToken, requestId))
+                {
+                    return;
+                }
+
+                Statistics = statistics;
+                _statisticsLoadedForEntityId = entityId;
+                _statisticsLoadedForViewedVersion = viewedVersion;
+                _statisticsLoadedForRefreshToken = refreshToken;
+            }
+            catch (Exception ex)
+            {
+                if (!IsCurrentStatisticsRequest(entityId, viewedVersion, refreshToken, requestId))
+                {
+                    return;
+                }
+
+                Statistics = null;
+                StatisticsError = ex.Message;
+            }
+            finally
+            {
+                if (IsCurrentStatisticsRequest(entityId, viewedVersion, refreshToken, requestId))
+                {
+                    IsStatisticsLoading = false;
+                    _statisticsLoadingForEntityId = Guid.Empty;
+                    _statisticsLoadingForViewedVersion = -1;
+                    _statisticsLoadingForRefreshToken = -1;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+
+        private bool IsStatisticsLoadedForCurrentVersion()
+        {
+            return BusinessEntityId == _statisticsLoadedForEntityId &&
+                   ViewedVersion == _statisticsLoadedForViewedVersion &&
+                   VersionsRefreshToken == _statisticsLoadedForRefreshToken &&
+                   Statistics != null;
+        }
+
+        private bool IsStatisticsLoadingForCurrentVersion()
+        {
+            return IsStatisticsLoading &&
+                   BusinessEntityId == _statisticsLoadingForEntityId &&
+                   ViewedVersion == _statisticsLoadingForViewedVersion &&
+                   VersionsRefreshToken == _statisticsLoadingForRefreshToken;
+        }
+
+        private bool IsCurrentStatisticsRequest(Guid entityId, int viewedVersion, int refreshToken, long requestId)
+        {
+            return requestId == _statisticsRequestId &&
+                   entityId == BusinessEntityId &&
+                   viewedVersion == ViewedVersion &&
+                   refreshToken == VersionsRefreshToken;
+        }
+
+        private void ResetStatistics()
+        {
+            Statistics = null;
+            StatisticsError = null;
+            IsStatisticsLoading = false;
+            _statisticsLoadedForEntityId = Guid.Empty;
+            _statisticsLoadedForViewedVersion = -1;
+            _statisticsLoadedForRefreshToken = -1;
+            _statisticsLoadingForEntityId = Guid.Empty;
+            _statisticsLoadingForViewedVersion = -1;
+            _statisticsLoadingForRefreshToken = -1;
+        }
+
         private static string FormatVersionDate(DateTime date)
         {
             return date.ToLocalTime().ToString("g");
+        }
+
+        private static string FormatInteger(int value)
+        {
+            return value.ToString("N0");
+        }
+
+        private static string FormatAverage(double value)
+        {
+            return value.ToString("N1");
         }
 
         private string GetBookmarkButtonClass(RichTextDocumentBookmark bookmark)
@@ -193,7 +338,8 @@ namespace BusinessEntity.Components
         {
             Search,
             Bookmarks,
-            Versions
+            Versions,
+            Statistics
         }
     }
 }

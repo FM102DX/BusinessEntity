@@ -28,5 +28,14 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
             CancellationToken cancellationToken = default);
 
         Task<bool> DeleteRichDocBookmarkAsync(Guid bookmarkId, CancellationToken cancellationToken = default);
+
+        Task<int> GetRichDocDisplayedLevelAsync(
+            Guid documentId,
+            CancellationToken cancellationToken = default);
+
+        Task SaveRichDocDisplayedLevelAsync(
+            Guid documentId,
+            int displayLevelCount,
+            CancellationToken cancellationToken = default);
     }
 }

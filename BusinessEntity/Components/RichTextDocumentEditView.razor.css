@@ -82,8 +82,47 @@
     padding-right: 1rem;
 }
 
-::deep .rich-text-outline__level-select {
+::deep .rich-text-outline__level-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.25rem;
+    margin: 0;
     min-height: 1.9rem;
+    padding: 0;
+}
+
+::deep .rich-text-outline__level-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #cfd8e3;
+    border-radius: 4px;
+    color: #40516a;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    min-width: 0;
+    padding: 0.35rem 0.25rem;
+}
+
+::deep .rich-text-outline__level-option:hover {
+    background: #eef4fb;
+    border-color: #98b6d8;
+}
+
+::deep .rich-text-outline__level-option--active {
+    background: #e8f1ff;
+    border-color: #2f6ec8;
+    color: #1f5ab0;
+    font-weight: 700;
+}
+
+::deep .rich-text-outline__level-option input {
+    appearance: none;
+    height: 0;
+    margin: 0;
+    position: absolute;
+    width: 0;
 }
 
 ::deep .rich-text-outline__rebuild {
