@@ -9,20 +9,17 @@
         <div class="d-flex align-items-center gap-2">
             <button type="button"
                     class="btn btn-sm btn-outline-primary"
+                    title="@(CanEdit ? "Редактировать последнюю версию" : "Редактирование доступно только для последней версии")"
+                    disabled="@(!CanEdit)"
                     @onclick="HandleEditAsync">
                 Edit
             </button>
             <label class="btn btn-sm btn-outline-secondary mb-0">
                 Импорт
-                <InputFile class="d-none" OnChange="HandleImportSelected" accept=".txt,.md,.markdown,.html,.htm" />
+                <InputFile class="d-none" OnChange="HandleImportSelected" accept=".txt,.md,.markdown,.html,.htm" disabled="@(!CanEdit)" />
             </label>
         </div>
     </div>
-
-    @if (!string.IsNullOrWhiteSpace(StatusMessage))
-    {
-        <div class="alert alert-info py-2">@StatusMessage</div>
-    }
 
     @if (IsBusy)
     {
@@ -41,6 +38,7 @@
                                          DisplayLevelCount="@DisplayLevelCount"
                                          IsLoading="@IsOutlineLoading"
                                          IsRebuilding="@IsRebuildingTableOfContents"
+                                         CanRebuild="@CanEdit"
                                          HideScrollbar="@HideTableOfContentsScrollbar"
                                          OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
                                          OnRebuildRequested="HandleRebuildTableOfContentsAsync"
@@ -50,20 +48,25 @@
                 <RichTextDocumentViewport @ref="Viewport"
                                           ViewportElementId="@ViewportElementId"
                                           BusinessEntityId="@BusinessEntityId"
+                                          DocumentVersion="@ViewedVersion"
                                           OutlineNodes="@LocalOutlineNodes"
                                           IsInitialContentLoading="@IsInitialContentLoading"
                                           InitialTargetPosition="@InitialTargetPosition"
                                           InitialWindow="@InitialChunkWindow" />
             </div>
             <div class="rich-text-document-layout__widgets">
-                <RichTextDocumentWidgets Bookmarks="@Bookmarks"
+                <RichTextDocumentWidgets BusinessEntityId="@BusinessEntityId"
+                                         Bookmarks="@Bookmarks"
                                          ActiveBookmarkId="@ActiveBookmarkId"
-                                         StatusMessage="@WidgetStatusMessage"
+                                         VersionsRefreshToken="@VersionsRefreshToken"
+                                         ViewedVersion="@ViewedVersion"
+                                         LatestVersion="@LatestVersion"
                                          OnSearchNext="HandleSearchNextAsync"
                                          OnSearchPrevious="HandleSearchPreviousAsync"
                                          OnCreateBookmark="HandleCreateBookmarkAsync"
                                          OnBookmarkSelected="HandleBookmarkSelectedAsync"
-                                         OnBookmarkDeleted="HandleBookmarkDeletedAsync" />
+                                         OnBookmarkDeleted="HandleBookmarkDeletedAsync"
+                                         OnVersionSelected="HandleVersionSelectedAsync" />
             </div>
         </div>
     }

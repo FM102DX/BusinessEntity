@@ -108,23 +108,10 @@ namespace BusinessEntity.Services
         /// <summary>
         /// Загружает readonly-снимок rich-text документа: entity, manifest и набор chunk-ов.
         /// </summary>
-        public async Task<RichTextDocumentSnapshot?> GetRichTextDocumentSnapshotAsync(Guid entityId, CancellationToken ct = default)
+        public Task<RichTextDocumentSnapshot?> GetRichTextDocumentSnapshotAsync(Guid entityId, CancellationToken ct = default)
         {
-            var shell = await GetRichTextDocumentShellAsync(entityId, ct);
-            if (shell == null)
-            {
-                return null;
-            }
-
-            // Legacy full snapshot path. The virtualized viewer uses chunk windows instead.
-            var chunks = await _dataProviderConnector.GetRichTextChunksAsync(shell.Entity.Id, ct);
-
-            return new RichTextDocumentSnapshot
-            {
-                Entity = shell.Entity,
-                Manifest = shell.Manifest,
-                Chunks = chunks
-            };
+            throw new InvalidOperationException(
+                "Full rich-text document snapshots are disabled. Use versioned chunk windows instead.");
         }
 
         /// <summary>
@@ -256,56 +243,100 @@ namespace BusinessEntity.Services
         }
 
         /// <summary>
-        /// Loads the rich-text document table of contents from persisted chunk properties and returns it as a tree.
+        /// Loads the rich-text document table of contents from the selected chunk versions and returns it as a tree.
         /// </summary>
-        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsAsync(Guid entityId, CancellationToken ct = default)
+        public Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsAsync(
+            Guid entityId,
+            CancellationToken ct = default)
         {
-            var entries = await _dataProviderConnector.GetRichTextTableOfContentsEntriesAsync(entityId, ct);
-            return BuildTableOfContentsTree(entries);
+            return GetTableOfContentsAsync(entityId, documentVersion: null, ct);
+        }
+
+        /// <summary>
+        /// Loads the rich-text document table of contents from the selected chunk versions and returns it as a tree.
+        /// </summary>
+        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsAsync(
+            Guid entityId,
+            int? documentVersion,
+            CancellationToken ct = default)
+        {
+            var flatEntries = await GetTableOfContentsEntriesFromChunksAsync(entityId, documentVersion, maxChunkCount: null, ct);
+            return BuildTableOfContentsTree(flatEntries);
         }
 
         /// <summary>
         /// Loads persisted table-of-contents entries progressively by chunk batches.
         /// </summary>
-        public async IAsyncEnumerable<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsBatchesAsync(
+        public IAsyncEnumerable<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsBatchesAsync(
             Guid entityId,
             int chunkBatchSize = 5,
+            CancellationToken ct = default)
+        {
+            return GetTableOfContentsBatchesAsync(entityId, chunkBatchSize, documentVersion: null, ct);
+        }
+
+        /// <summary>
+        /// Loads table-of-contents entries progressively from the selected chunk versions.
+        /// </summary>
+        public async IAsyncEnumerable<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsBatchesAsync(
+            Guid entityId,
+            int chunkBatchSize,
+            int? documentVersion,
+            [EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await foreach (var batch in GetTableOfContentsBatchesAsync(
+                entityId,
+                chunkBatchSize,
+                documentVersion,
+                maxChunkCount: null,
+                ct))
+            {
+                yield return batch;
+            }
+        }
+
+        /// <summary>
+        /// Loads table-of-contents entries progressively from a bounded prefix of selected chunk versions.
+        /// </summary>
+        public async IAsyncEnumerable<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsBatchesAsync(
+            Guid entityId,
+            int chunkBatchSize,
+            int? documentVersion,
+            int? maxChunkCount,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             var normalizedBatchSize = Math.Max(chunkBatchSize, 1);
-            var totalChunkCount = await GetChunkCountAsync(entityId, ct);
-            if (totalChunkCount <= 0)
+            var resolvedDocumentVersion = await ResolveDocumentVersionAsync(entityId, documentVersion, ct);
+            var totalChunkCount = await GetChunkSortOrderUpperBoundAsync(entityId, resolvedDocumentVersion, ct);
+            var effectiveChunkCount = maxChunkCount.HasValue
+                ? Math.Min(totalChunkCount, Math.Max(maxChunkCount.Value, 0))
+                : totalChunkCount;
+
+            if (effectiveChunkCount <= 0)
             {
                 yield return Array.Empty<RichTextDocumentTableOfContentsEntry>();
                 yield break;
             }
 
             var flatEntries = new List<RichTextDocumentTableOfContentsEntry>();
-            for (var skip = 0; skip < totalChunkCount; skip += normalizedBatchSize)
+            for (var startSortOrder = 0; startSortOrder < effectiveChunkCount; startSortOrder += normalizedBatchSize)
             {
                 ct.ThrowIfCancellationRequested();
 
-                var allChunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
-                    d => d.BusinessEntityId == entityId,
-                    ct: ct);
-                var chunkDtos = SelectLatestChunkVersions(allChunkDtos)
-                    .Skip(skip)
-                    .Take(normalizedBatchSize)
-                    .ToList();
+                var take = Math.Min(normalizedBatchSize, effectiveChunkCount - startSortOrder);
+                var chunkDtos = await GetSelectedChunkWindowDtosAsync(
+                    entityId,
+                    startSortOrder,
+                    take,
+                    resolvedDocumentVersion,
+                    ct);
 
                 foreach (var chunkDto in chunkDtos.OrderBy(d => d.SortOrder))
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    var properties = await _businessEntityDataChunkPropertyRepository.GetAllAsync(
-                        p => p.ParentEntityId == chunkDto.Id &&
-                             p.PropertyType == (int)BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents,
-                        ct: ct);
-
-                    foreach (var property in properties)
-                    {
-                        flatEntries.AddRange(ReadTableOfContentsEntries(property));
-                    }
+                    var blocks = RichTextChunkStorageSerializer.DeserializeChunkData(chunkDto.Data);
+                    flatEntries.AddRange(BuildTableOfContentsEntries(chunkDto, blocks));
                 }
 
                 yield return BuildTableOfContentsTree(flatEntries);
@@ -315,34 +346,53 @@ namespace BusinessEntity.Services
         /// <summary>
         /// Rebuilds persisted chunk table-of-contents properties and returns the fresh tree.
         /// </summary>
-        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildTableOfContentsAsync(Guid entityId, CancellationToken ct = default)
+        public Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildTableOfContentsAsync(Guid entityId, CancellationToken ct = default)
         {
-            var entries = await _dataProviderConnector.RebuildRichTextTableOfContentsEntriesAsync(entityId, ct);
-            return BuildTableOfContentsTree(entries);
+            throw new InvalidOperationException(
+                "Full rich-text table-of-contents rebuild is disabled. Use bounded table-of-contents loading instead.");
         }
 
         /// <summary>
         /// Returns the number of persisted chunks for virtualized reading.
         /// </summary>
-        public async Task<int> GetChunkCountAsync(Guid entityId, CancellationToken ct = default)
+        public Task<int> GetChunkCountAsync(Guid entityId, CancellationToken ct = default)
         {
-            var chunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
-                d => d.BusinessEntityId == entityId,
-                ct: ct);
+            return GetChunkCountAsync(entityId, documentVersion: null, ct);
+        }
 
-            return SelectLatestChunkVersions(chunkDtos).Count;
+        /// <summary>
+        /// Returns the number of persisted chunks for a specific document version.
+        /// </summary>
+        public async Task<int> GetChunkCountAsync(Guid entityId, int? documentVersion, CancellationToken ct = default)
+        {
+            var resolvedDocumentVersion = await ResolveDocumentVersionAsync(entityId, documentVersion, ct);
+            return await GetChunkSortOrderUpperBoundAsync(entityId, resolvedDocumentVersion, ct);
         }
 
         /// <summary>
         /// Loads a sort-order window of chunks for virtualized reading.
         /// </summary>
-        public async Task<RichTextDocumentChunkWindow> GetChunkWindowAsync(
+        public Task<RichTextDocumentChunkWindow> GetChunkWindowAsync(
             Guid entityId,
             long startSortOrder,
             int take,
             CancellationToken ct = default)
         {
-            var totalCount = await GetChunkCountAsync(entityId, ct);
+            return GetChunkWindowAsync(entityId, startSortOrder, take, documentVersion: null, ct);
+        }
+
+        /// <summary>
+        /// Loads a sort-order window of chunks for a specific document version.
+        /// </summary>
+        public async Task<RichTextDocumentChunkWindow> GetChunkWindowAsync(
+            Guid entityId,
+            long startSortOrder,
+            int take,
+            int? documentVersion,
+            CancellationToken ct = default)
+        {
+            var resolvedDocumentVersion = await ResolveDocumentVersionAsync(entityId, documentVersion, ct);
+            var totalCount = await GetChunkSortOrderUpperBoundAsync(entityId, resolvedDocumentVersion, ct);
             if (totalCount <= 0 || take <= 0)
             {
                 return new RichTextDocumentChunkWindow
@@ -354,13 +404,12 @@ namespace BusinessEntity.Services
             }
 
             var normalizedStart = Math.Clamp(startSortOrder, 0, Math.Max(totalCount - 1, 0));
-            var allDtos = await _businessEntityDataChunkRepository.GetAllAsync(
-                d => d.BusinessEntityId == entityId,
-                ct: ct);
-            var dtos = SelectLatestChunkVersions(allDtos)
-                .Where(d => d.SortOrder >= normalizedStart)
-                .Take(take)
-                .ToList();
+            var dtos = await GetSelectedChunkWindowDtosAsync(
+                entityId,
+                normalizedStart,
+                take,
+                resolvedDocumentVersion,
+                ct);
 
             await LogChunkWindowReadAsync(entityId, normalizedStart, take, totalCount, dtos);
 
@@ -383,20 +432,53 @@ namespace BusinessEntity.Services
             int after,
             CancellationToken ct = default)
         {
+            return GetChunkWindowAroundAsync(entityId, centerSortOrder, before, after, documentVersion: null, ct);
+        }
+
+        /// <summary>
+        /// Loads a chunk window centered around a target sort order for a specific document version.
+        /// </summary>
+        public Task<RichTextDocumentChunkWindow> GetChunkWindowAroundAsync(
+            Guid entityId,
+            long centerSortOrder,
+            int before,
+            int after,
+            int? documentVersion,
+            CancellationToken ct = default)
+        {
             var normalizedBefore = Math.Max(before, 0);
             var normalizedAfter = Math.Max(after, 0);
             var startSortOrder = Math.Max(centerSortOrder - normalizedBefore, 0);
-            return GetChunkWindowAsync(entityId, startSortOrder, normalizedBefore + 1 + normalizedAfter, ct);
+            return GetChunkWindowAsync(
+                entityId,
+                startSortOrder,
+                normalizedBefore + 1 + normalizedAfter,
+                documentVersion,
+                ct);
         }
 
         /// <summary>
         /// Ищет следующее или предыдущее вхождение текста по чанкам rich-text документа.
+        /// </summary>
+        public Task<RichTextDocumentSearchResult?> FindTextAsync(
+            Guid entityId,
+            string? query,
+            RichTextDocumentViewportPosition? origin,
+            bool searchDown,
+            CancellationToken ct = default)
+        {
+            return FindTextAsync(entityId, query, origin, searchDown, documentVersion: null, ct);
+        }
+
+        /// <summary>
+        /// Ищет следующее или предыдущее вхождение текста по чанкам конкретной версии rich-text документа.
         /// </summary>
         public async Task<RichTextDocumentSearchResult?> FindTextAsync(
             Guid entityId,
             string? query,
             RichTextDocumentViewportPosition? origin,
             bool searchDown,
+            int? documentVersion,
             CancellationToken ct = default)
         {
             if (entityId == Guid.Empty)
@@ -410,7 +492,7 @@ namespace BusinessEntity.Services
                 return null;
             }
 
-            var totalChunkCount = await GetChunkCountAsync(entityId, ct);
+            var totalChunkCount = await GetChunkCountAsync(entityId, documentVersion, ct);
             if (totalChunkCount <= 0)
             {
                 return null;
@@ -430,6 +512,7 @@ namespace BusinessEntity.Services
                         normalizedQuery,
                         searchDown: true,
                         sortOrder == startSortOrder && hasOrigin ? startBlockIndex + 1 : 0,
+                        documentVersion,
                         ct);
                     if (result != null)
                     {
@@ -447,6 +530,7 @@ namespace BusinessEntity.Services
                         normalizedQuery,
                         searchDown: false,
                         sortOrder == startSortOrder && hasOrigin ? startBlockIndex - 1 : int.MaxValue,
+                        documentVersion,
                         ct);
                     if (result != null)
                     {
@@ -476,6 +560,10 @@ namespace BusinessEntity.Services
                 return 0;
             }
 
+            var latestDocumentVersion = await GetLatestDocumentVersionAsync(entityId, ct);
+            var nextDocumentVersion = latestDocumentVersion == int.MaxValue
+                ? 1
+                : latestDocumentVersion + 1;
             var savedCount = 0;
             foreach (var draft in drafts
                 .Where(x => x != null)
@@ -496,7 +584,7 @@ namespace BusinessEntity.Services
                 var now = DateTime.UtcNow;
                 var newChunkDto = new BusinessEntityDataChunkDto
                 {
-                    Id = Guid.NewGuid(),
+                    Id = chunkDto.Id,
                     CreatedDate = now,
                     LastModifiedDate = now,
                     BusinessEntityId = entityId,
@@ -507,7 +595,7 @@ namespace BusinessEntity.Services
                     BlockCount = blocks.Count,
                     CharCount = RichTextChunkStorageSerializer.BuildCharCount(blocks),
                     DataSizeBytes = DataPayloadEnvelopeSerializer.GetJsonLength(dataJson),
-                    Version = chunkDto.Version <= 0 ? 1 : chunkDto.Version + 1,
+                    Version = nextDocumentVersion,
                     Checksum = RichTextChunkStorageSerializer.BuildChecksum(dataJson)
                 };
                 newChunkDto.HtmlCache = RichTextChunkStorageSerializer.BuildHtmlCache(entityId, newChunkDto.Id, blocks);
@@ -519,11 +607,12 @@ namespace BusinessEntity.Services
 
             if (savedCount > 0)
             {
-                var entity = await _businessEntityHelper.GetBusinessEntityById(entityId);
-                if (entity != null)
+                var shell = await GetRichTextDocumentShellAsync(entityId, ct);
+                if (shell != null)
                 {
-                    entity.LastModifiedDate = DateTime.UtcNow;
-                    await _dataProviderConnector.UpdateAsync(entity, ct);
+                    shell.Entity.LastModifiedDate = DateTime.UtcNow;
+                    shell.Manifest.LastModifiedDate = shell.Entity.LastModifiedDate;
+                    await _businessEntityHelper.SaveEntity(shell.Entity, shell.Manifest);
                 }
             }
 
@@ -537,10 +626,14 @@ namespace BusinessEntity.Services
         {
             if (draft.ChunkId != Guid.Empty)
             {
-                var byId = await _businessEntityDataChunkRepository.GetByIdAsync(draft.ChunkId, ct);
-                if (byId != null && byId.BusinessEntityId == entityId)
+                var documentVersion = await GetLatestDocumentVersionAsync(entityId, ct);
+                var byId = await _businessEntityDataChunkRepository.GetAllAsync(
+                    x => x.BusinessEntityId == entityId && x.Id == draft.ChunkId,
+                    ct: ct);
+                var chunkDto = SelectChunkVersions(byId, documentVersion).FirstOrDefault();
+                if (chunkDto != null)
                 {
-                    return byId;
+                    return chunkDto;
                 }
             }
 
@@ -548,7 +641,8 @@ namespace BusinessEntity.Services
                 x => x.BusinessEntityId == entityId && x.SortOrder == draft.SortOrder,
                 ct: ct);
 
-            return SelectLatestChunkVersions(bySortOrder).FirstOrDefault();
+            var latestDocumentVersion = await GetLatestDocumentVersionAsync(entityId, ct);
+            return SelectChunkVersions(bySortOrder, latestDocumentVersion).FirstOrDefault();
         }
 
         private async Task RebuildTableOfContentsPropertyAsync(
@@ -669,34 +763,36 @@ namespace BusinessEntity.Services
             if (entity == null) throw new ArgumentNullException(nameof(entity));
             if (manifest == null) throw new ArgumentNullException(nameof(manifest));
 
-            // Сначала читаем текущий снимок, чтобы append строился поверх реального сохраненного состояния.
-            var snapshot = await GetRichTextDocumentSnapshotAsync(entity.Id, ct);
-            var existingChunks = snapshot?.Chunks ?? Array.Empty<RichTextDocumentChunk>();
+            var latestDocumentVersion = await GetLatestDocumentVersionAsync(entity.Id, ct);
+            var nextDocumentVersion = latestDocumentVersion == int.MaxValue
+                ? 1
+                : latestDocumentVersion + 1;
+            var firstWindow = await GetChunkWindowAsync(entity.Id, 0, 2, latestDocumentVersion, ct);
 
             // Для нового пустого документа стартовый технический chunk убираем, чтобы импорт не создавал пустую строку сверху.
-            var normalizedExistingChunks = IsOnlyInitialEmptyChunk(existingChunks)
-                ? Array.Empty<RichTextDocumentChunk>()
-                : existingChunks;
-
-            var mergedChunks = new List<RichTextDocumentChunk>();
-            var nextSortOrder = 0L;
-
-            // Сохраняем существующие chunks в исходном порядке, но нормализуем SortOrder перед полной replace-операцией.
-            foreach (var existingChunk in normalizedExistingChunks.OrderBy(x => x.SortOrder))
+            var nextSortOrder = firstWindow.TotalChunkCount;
+            var firstWindowChunks = firstWindow.Chunks ?? Array.Empty<RichTextDocumentChunk>();
+            if (IsOnlyInitialEmptyChunk(firstWindowChunks))
             {
-                mergedChunks.Add(CloneChunkForSave(existingChunk, entity.Id, nextSortOrder++));
+                var initialChunk = firstWindowChunks.First();
+                await DeletePropertiesAsync(
+                    _businessEntityDataChunkPropertyRepository,
+                    initialChunk.Id,
+                    (int)BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents,
+                    ct);
+                await _businessEntityDataChunkRepository.DeleteAsync(initialChunk.Id, ct);
+                nextSortOrder = 0;
             }
 
-            // Новые chunks добавляем строго снизу, после последнего существующего.
+            var chunksToAppend = new List<RichTextDocumentChunk>();
             foreach (var appendedChunk in appendedChunks ?? Array.Empty<RichTextDocumentChunk>())
             {
-                mergedChunks.Add(CloneChunkForSave(appendedChunk, entity.Id, nextSortOrder++));
+                chunksToAppend.Add(CloneChunkForSave(appendedChunk, entity.Id, nextSortOrder++));
             }
 
-            // Если после merge ничего не осталось, сохраняем один пустой технический chunk, как и в create-path.
-            if (mergedChunks.Count == 0)
+            if (chunksToAppend.Count == 0 && nextSortOrder == 0)
             {
-                mergedChunks.Add(new RichTextDocumentChunk
+                chunksToAppend.Add(new RichTextDocumentChunk
                 {
                     BusinessEntityId = entity.Id,
                     SortOrder = 0,
@@ -704,12 +800,39 @@ namespace BusinessEntity.Services
                 });
             }
 
-            // Embedded files не заменяем, а дозаписываем, чтобы прежние изображения документа сохранялись.
-            await SaveRichTextDocumentAsync(
-                entity,
-                manifest,
-                mergedChunks,
-                appendedFiles,
+            foreach (var chunk in chunksToAppend.OrderBy(x => x.SortOrder))
+            {
+                var dto = MapChunkRuntimeToDto(entity.Id, chunk, chunk.SortOrder);
+                dto.Version = nextDocumentVersion;
+                var savedDto = await _businessEntityDataChunkRepository.AddAsync(dto, ct);
+                var tableOfContentsProperty = BuildTableOfContentsProperty(savedDto, chunk.Blocks);
+                if (tableOfContentsProperty != null)
+                {
+                    await _businessEntityDataChunkPropertyRepository.AddAsync(tableOfContentsProperty, ct);
+                }
+            }
+
+            entity.EntityType = BusinessEntityTypeEnum.RichTextDocument;
+            entity.BusinessEntityType = BusinessEntityTypeEnum.Document;
+            entity.LastModifiedDate = DateTime.UtcNow;
+            manifest.Id = entity.Id;
+            manifest.Name = entity.Name;
+            manifest.EntityType = BusinessEntityTypeEnum.RichTextDocument;
+            manifest.LastModifiedDate = entity.LastModifiedDate;
+            if (manifest.CreatedDate == default)
+            {
+                manifest.CreatedDate = entity.CreatedDate;
+            }
+
+            if (string.IsNullOrWhiteSpace(manifest.Tag))
+            {
+                manifest.Tag = BusinessEntityTypeEnum.RichTextDocument.ToString();
+            }
+
+            await _businessEntityHelper.SaveEntity(entity, manifest);
+            await _dataProviderConnector.SaveRichTextEmbeddedFilesAsync(
+                entity.Id,
+                appendedFiles ?? Array.Empty<RichTextEmbeddedFile>(),
                 replaceExistingFiles: false,
                 ct);
         }
@@ -809,9 +932,10 @@ namespace BusinessEntity.Services
             string query,
             bool searchDown,
             int startBlockIndex,
+            int? documentVersion,
             CancellationToken ct)
         {
-            var window = await GetChunkWindowAsync(entityId, sortOrder, 1, ct);
+            var window = await GetChunkWindowAsync(entityId, sortOrder, 1, documentVersion, ct);
             var chunk = window.Chunks.FirstOrDefault(x => x.SortOrder == sortOrder);
             if (chunk?.Blocks == null || chunk.Blocks.Count == 0)
             {
@@ -901,42 +1025,7 @@ namespace BusinessEntity.Services
             BusinessEntityDataChunkDto chunkDto,
             IReadOnlyList<RichTextBlock>? blocks)
         {
-            if (blocks == null || blocks.Count == 0)
-            {
-                return null;
-            }
-
-            var entries = new List<RichTextDocumentTableOfContentsEntry>();
-            for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
-            {
-                var block = blocks[blockIndex];
-                if (!string.Equals(block.Kind, "heading", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                var level = block.Level;
-                if (level < 1 || level > 3)
-                {
-                    continue;
-                }
-
-                var title = RichTextChunkStorageSerializer.BuildInlineText(block.Html);
-                if (string.IsNullOrWhiteSpace(title))
-                {
-                    title = $"Heading {blockIndex + 1}";
-                }
-
-                entries.Add(new RichTextDocumentTableOfContentsEntry
-                {
-                    ChunkId = chunkDto.Id,
-                    ChunkSortOrder = chunkDto.SortOrder,
-                    BlockIndex = blockIndex,
-                    Level = level,
-                    Title = title,
-                    Anchor = RichTextChunkStorageSerializer.BuildBlockAnchor(chunkDto.Id, blockIndex)
-                });
-            }
+            var entries = BuildTableOfContentsEntries(chunkDto, blocks);
 
             if (entries.Count == 0)
             {
@@ -972,6 +1061,93 @@ namespace BusinessEntity.Services
                     },
                     StorageJsonOptions.Default)
             };
+        }
+
+        private async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetTableOfContentsEntriesFromChunksAsync(
+            Guid entityId,
+            int? documentVersion,
+            int? maxChunkCount,
+            CancellationToken ct)
+        {
+            var resolvedDocumentVersion = await ResolveDocumentVersionAsync(entityId, documentVersion, ct);
+            var totalChunkCount = await GetChunkSortOrderUpperBoundAsync(entityId, resolvedDocumentVersion, ct);
+            var effectiveChunkCount = maxChunkCount.HasValue
+                ? Math.Min(totalChunkCount, Math.Max(maxChunkCount.Value, 0))
+                : totalChunkCount;
+
+            var entries = new List<RichTextDocumentTableOfContentsEntry>();
+            if (effectiveChunkCount <= 0)
+            {
+                return entries;
+            }
+
+            const int chunkBatchSize = 25;
+            for (var startSortOrder = 0; startSortOrder < effectiveChunkCount; startSortOrder += chunkBatchSize)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var take = Math.Min(chunkBatchSize, effectiveChunkCount - startSortOrder);
+                var chunkDtos = await GetSelectedChunkWindowDtosAsync(
+                    entityId,
+                    startSortOrder,
+                    take,
+                    resolvedDocumentVersion,
+                    ct);
+
+                foreach (var chunkDto in chunkDtos)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var blocks = RichTextChunkStorageSerializer.DeserializeChunkData(chunkDto.Data);
+                    entries.AddRange(BuildTableOfContentsEntries(chunkDto, blocks));
+                }
+            }
+
+            return entries;
+        }
+
+        private static IReadOnlyList<RichTextDocumentTableOfContentsEntry> BuildTableOfContentsEntries(
+            BusinessEntityDataChunkDto chunkDto,
+            IReadOnlyList<RichTextBlock>? blocks)
+        {
+            if (blocks == null || blocks.Count == 0)
+            {
+                return Array.Empty<RichTextDocumentTableOfContentsEntry>();
+            }
+
+            var entries = new List<RichTextDocumentTableOfContentsEntry>();
+            for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
+            {
+                var block = blocks[blockIndex];
+                if (!string.Equals(block.Kind, "heading", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var level = block.Level;
+                if (level < 1 || level > 3)
+                {
+                    continue;
+                }
+
+                var title = RichTextChunkStorageSerializer.BuildInlineText(block.Html);
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    title = $"Heading {blockIndex + 1}";
+                }
+
+                entries.Add(new RichTextDocumentTableOfContentsEntry
+                {
+                    ChunkId = chunkDto.Id,
+                    ChunkSortOrder = chunkDto.SortOrder,
+                    BlockIndex = blockIndex,
+                    Level = level,
+                    Title = title,
+                    Anchor = RichTextChunkStorageSerializer.BuildBlockAnchor(chunkDto.Id, blockIndex)
+                });
+            }
+
+            return entries;
         }
 
         // Читает entries оглавления из persisted chunk-property JSON.
@@ -1024,11 +1200,118 @@ namespace BusinessEntity.Services
             };
         }
 
-        // Выбирает актуальную chunk-запись для каждого SortOrder.
-        private static IReadOnlyList<BusinessEntityDataChunkDto> SelectLatestChunkVersions(IEnumerable<BusinessEntityDataChunkDto> chunkDtos)
+        private static BusinessEntityDataChunkDto MapChunkRuntimeToDto(
+            Guid businessEntityId,
+            RichTextDocumentChunk chunk,
+            long sortOrder)
+        {
+            var chunkId = chunk.Id == Guid.Empty ? Guid.NewGuid() : chunk.Id;
+            var blocks = chunk.Blocks ?? new List<RichTextBlock>();
+            var dataJson = RichTextChunkStorageSerializer.SerializeChunkData(blocks);
+            var now = DateTime.UtcNow;
+
+            return new BusinessEntityDataChunkDto
+            {
+                Id = chunkId,
+                CreatedDate = now,
+                LastModifiedDate = now,
+                BusinessEntityId = businessEntityId,
+                SortOrder = sortOrder,
+                Data = dataJson,
+                PlainText = RichTextChunkStorageSerializer.BuildPlainText(blocks),
+                HtmlCache = RichTextChunkStorageSerializer.BuildHtmlCache(businessEntityId, chunkId, blocks),
+                BlockCount = blocks.Count,
+                CharCount = RichTextChunkStorageSerializer.BuildCharCount(blocks),
+                DataSizeBytes = DataPayloadEnvelopeSerializer.GetJsonLength(dataJson),
+                Version = chunk.Version <= 0 ? 1 : chunk.Version,
+                Checksum = RichTextChunkStorageSerializer.BuildChecksum(dataJson)
+            };
+        }
+
+        // Возвращает последнюю версию BusinessEntityData; без manifest-записи не ограничивает технические chunks.
+        private async Task<int> GetLatestDocumentVersionAsync(Guid entityId, CancellationToken ct)
+        {
+            var versions = await _dataProviderConnector.GetDataVersionsAsync(entityId, ct);
+            return versions.Count == 0
+                ? int.MaxValue
+                : versions.Max(x => x.Version <= 0 ? 1 : x.Version);
+        }
+
+        private async Task<int> ResolveDocumentVersionAsync(Guid entityId, int? documentVersion, CancellationToken ct)
+        {
+            return documentVersion.HasValue && documentVersion.Value > 0
+                ? documentVersion.Value
+                : await GetLatestDocumentVersionAsync(entityId, ct);
+        }
+
+        private async Task<int> GetChunkSortOrderUpperBoundAsync(
+            Guid entityId,
+            int resolvedDocumentVersion,
+            CancellationToken ct)
+        {
+            var lastRows = await _businessEntityDataChunkRepository.GetPageAsync(
+                d => d.BusinessEntityId == entityId &&
+                     (d.Version <= 0 || d.Version <= resolvedDocumentVersion),
+                d => d.SortOrder,
+                descending: true,
+                skip: 0,
+                take: 1,
+                ct: ct);
+
+            var lastSortOrder = lastRows.FirstOrDefault()?.SortOrder;
+            if (!lastSortOrder.HasValue)
+            {
+                return 0;
+            }
+
+            if (lastSortOrder.Value >= int.MaxValue - 1L)
+            {
+                return int.MaxValue;
+            }
+
+            return (int)lastSortOrder.Value + 1;
+        }
+
+        private async Task<IReadOnlyList<BusinessEntityDataChunkDto>> GetSelectedChunkWindowDtosAsync(
+            Guid entityId,
+            long startSortOrder,
+            int take,
+            int resolvedDocumentVersion,
+            CancellationToken ct)
+        {
+            var normalizedTake = Math.Max(take, 0);
+            if (normalizedTake <= 0)
+            {
+                return Array.Empty<BusinessEntityDataChunkDto>();
+            }
+
+            var endExclusive = startSortOrder > long.MaxValue - normalizedTake
+                ? long.MaxValue
+                : startSortOrder + normalizedTake;
+
+            var chunkRows = await _businessEntityDataChunkRepository.GetPageAsync(
+                d => d.BusinessEntityId == entityId &&
+                     (d.Version <= 0 || d.Version <= resolvedDocumentVersion) &&
+                     d.SortOrder >= startSortOrder &&
+                     d.SortOrder < endExclusive,
+                d => d.SortOrder,
+                descending: false,
+                skip: 0,
+                take: null,
+                ct: ct);
+
+            return SelectChunkVersions(chunkRows, resolvedDocumentVersion)
+                .Where(d => d.SortOrder >= startSortOrder && d.SortOrder < endExclusive)
+                .OrderBy(d => d.SortOrder)
+                .ToList();
+        }
+
+        // Выбирает по одному chunk DTO на каждый chunk Id в рамках версии документа.
+        private static IReadOnlyList<BusinessEntityDataChunkDto> SelectChunkVersions(IEnumerable<BusinessEntityDataChunkDto> chunkDtos, int documentVersion)
         {
             return chunkDtos
-                .GroupBy(d => d.SortOrder)
+                .Where(d => (d.Version <= 0 ? 1 : d.Version) <= documentVersion)
+                .GroupBy(d => d.Id)
                 .Select(group => group
                     .OrderByDescending(d => d.Version <= 0 ? 1 : d.Version)
                     .ThenByDescending(d => d.LastModifiedDate)

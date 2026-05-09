@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-08 20:55:00 +03:00
+
+### MAJOR-FEATURES
+
+#### Rich-text document
+- Добавлен новый тип бизнес-объекта `RichTextDocument` с chunked-хранением текста, отдельной страницей просмотра/редактирования, импортом `.txt`, `.md`, `.html` и встроенным хранением файлов документа.
+- Реализованы чтение и редактирование больших rich-text документов через viewport/chunk-window: загрузка порциями, автоскролл к позициям, переходы по содержанию и сохранение измененных чанков.
+- Добавлены оглавление rich-doc, поиск по тексту, пользовательские закладки и правый tab-control инструментов документа.
+
+#### Версионирование BusinessEntityData
+- В базовую модель `BusinessEntityData` и DTO-хранилище добавлены `Version`, `HasVersions` и признак типа chunk-хранения `ChunkStorageType`.
+- `DataProviderMiniApp` переведен на append-only сохранение версионируемых `BusinessEntityDataItems`; чтение payload выбирает актуальную запись с максимальной версией.
+- Для rich-doc добавлено версионирование измененных чанков и UI-вкладка `Версии`, показывающая версии документа из `BusinessEntityDataItems`.
+
+#### UserMiniApp
+- Добавлен `UserMiniApp` с собственным PostgreSQL-хранилищем пользователей и пользовательских properties.
+- Закладки rich-doc перенесены в пользовательские properties текущего пользователя.
+- Re-seed теперь удаляет локальную запись текущего пользователя перед повторной заливкой данных.
+
+### MINOR-FEATURES
+
+#### Rich-text document UI
+- Сообщения rich-doc перенесены из строки под заголовком в отдельный блок `Сообщения` крайнего правого сайдбара.
+- Поиск, закладки и версии объединены в единый tab-control в правой колонке документа.
+- Добавлены настройки rich-doc, конвертеры импорта и клиентские JS-модули viewport/editor.
+
+#### DataProviderMiniApp и storage
+- Расширены DTO и property-таблицы для `BusinessEntityData`, `BusinessEntityDataChunks` и их properties.
+- Добавлены EF/Postgres и in-memory репозитории для chunk/property DTO, индексы версий и schema bootstrap в `Program.cs`.
+- Добавлен публичный DataProvider API для чтения списка версий payload.
+
+#### TreeMiniApp и навигация
+- Главное дерево вынесено в `TreeMiniApp` с connector/service/facade границей.
+- Добавлена модель узла rich-text документа и маршрутизация на страницу rich-doc из дерева.
+
+#### Политики и сопровождение
+- Добавлены политики по rich-doc хранению, чтению, редактированию, пользователям и версионированию бизнес-сущностей.
+- Обновлены отчеты и служебные routines для анализа chunk-хранилища и сопровождения changelog.
+
 ## [0.7.0] - 2026-04-26 18:48:56 +03:00
 
 ### MAJOR-FEATURES

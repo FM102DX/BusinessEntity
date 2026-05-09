@@ -27,8 +27,13 @@ else
             IsBusy="@IsImporting"
             IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
             StatusMessage="@StatusMessage"
+            VersionsRefreshToken="@VersionsRefreshToken"
+            ViewedVersion="@ViewedVersion"
+            LatestVersion="@LatestVersion"
+            CanEditViewedVersion="@CanEditViewedVersion"
             OnImportSelected="OnImportSelectedAsync"
             OnRebuildTableOfContents="OnRebuildTableOfContentsAsync"
-            OnEditorSaved="OnEditorSavedAsync" />
+            OnEditorSaved="OnEditorSavedAsync"
+            OnVersionSelected="OnVersionSelectedAsync" />
     </div>
 }

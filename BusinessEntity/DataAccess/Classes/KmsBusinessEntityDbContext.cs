@@ -25,9 +25,11 @@ public class KmsBusinessEntityDbContext : DbContext
         modelBuilder.Entity<BusinessEntityDto>().ToTable("BusinessEntities");
         modelBuilder.Entity<BusinessEntityRelationDto>().ToTable("BusinessEntityRelations");
         modelBuilder.Entity<BusinessEntityDataDto>().ToTable("BusinessEntityDataItems");
+        modelBuilder.Entity<BusinessEntityDataDto>().HasKey(x => new { x.Id, x.Version });
         modelBuilder.Entity<BusinessEntityDataDto>().Property(x => x.Data).HasColumnType("text");
         modelBuilder.Entity<BusinessEntityDataDto>().HasIndex(x => new { x.BusinessEntityId, x.Version });
         modelBuilder.Entity<BusinessEntityDataChunkDto>().ToTable("BusinessEntityDataChunks");
+        modelBuilder.Entity<BusinessEntityDataChunkDto>().HasKey(x => new { x.Id, x.Version });
         modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.Data).HasColumnType("text");
         modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.PlainText).HasColumnType("text");
         modelBuilder.Entity<BusinessEntityDataChunkDto>().Property(x => x.HtmlCache).HasColumnType("text");

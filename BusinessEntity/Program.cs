@@ -132,6 +132,7 @@ namespace BusinessEntity
             builder.Services.AddScoped<BusinessEntity.Services.SpaceHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentHelper>();
             builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentSettingsService>();
+            builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentMessagePanelService>();
             builder.Services.AddScoped<HtmlToRichTextBlocksConverter>();
             builder.Services.AddScoped<IRichDocFormatConverter, PlainTextRichTextImportConverter>();
             builder.Services.AddScoped<IRichDocFormatConverter, MarkdownRichTextImportConverter>();
@@ -261,7 +262,7 @@ namespace BusinessEntity
                     ""BusinessEntityId"" uuid NOT NULL,
                     ""Version"" integer NOT NULL DEFAULT 1,
                     ""Data"" text NOT NULL,
-                    CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"")
+                    CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"", ""Version"")
                 );
 
                 CREATE TABLE IF NOT EXISTS ""BusinessEntityDataChunks"" (
@@ -278,7 +279,7 @@ namespace BusinessEntity
                     ""DataSizeBytes"" integer NOT NULL DEFAULT 0,
                     ""Version"" integer NOT NULL DEFAULT 1,
                     ""Checksum"" text NULL,
-                    CONSTRAINT ""PK_BusinessEntityDataChunks"" PRIMARY KEY (""Id"")
+                    CONSTRAINT ""PK_BusinessEntityDataChunks"" PRIMARY KEY (""Id"", ""Version"")
                 );
 
                 CREATE TABLE IF NOT EXISTS ""BusinessEntityProperties"" (
@@ -318,6 +319,10 @@ namespace BusinessEntity
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectBId"" ON ""BusinessEntityRelations"" (""ObjectBId"");
                 ALTER TABLE ""BusinessEntityDataItems"" ADD COLUMN IF NOT EXISTS ""Version"" integer NOT NULL DEFAULT 1;
                 ALTER TABLE ""BusinessEntityDataChunks"" ADD COLUMN IF NOT EXISTS ""Version"" integer NOT NULL DEFAULT 1;
+                ALTER TABLE IF EXISTS ""BusinessEntityDataItems"" DROP CONSTRAINT IF EXISTS ""PK_BusinessEntityDataItems"";
+                ALTER TABLE IF EXISTS ""BusinessEntityDataItems"" ADD CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"", ""Version"");
+                ALTER TABLE IF EXISTS ""BusinessEntityDataChunks"" DROP CONSTRAINT IF EXISTS ""PK_BusinessEntityDataChunks"";
+                ALTER TABLE IF EXISTS ""BusinessEntityDataChunks"" ADD CONSTRAINT ""PK_BusinessEntityDataChunks"" PRIMARY KEY (""Id"", ""Version"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataItems_BusinessEntityId"" ON ""BusinessEntityDataItems"" (""BusinessEntityId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataItems_BusinessEntityId_Version"" ON ""BusinessEntityDataItems"" (""BusinessEntityId"", ""Version"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunks_BusinessEntityId_SortOrder"" ON ""BusinessEntityDataChunks"" (""BusinessEntityId"", ""SortOrder"");

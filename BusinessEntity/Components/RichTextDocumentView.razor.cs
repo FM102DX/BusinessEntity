@@ -15,10 +15,15 @@ namespace BusinessEntity.Components
         [Parameter] public bool IsBusy { get; set; }
         [Parameter] public bool IsRebuildingTableOfContents { get; set; }
         [Parameter] public string? StatusMessage { get; set; }
+        [Parameter] public int VersionsRefreshToken { get; set; }
+        [Parameter] public int ViewedVersion { get; set; } = 1;
+        [Parameter] public int LatestVersion { get; set; } = 1;
+        [Parameter] public bool CanEditViewedVersion { get; set; } = true;
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
         [Parameter] public EventCallback<InputFileChangeEventArgs> OnImportSelected { get; set; }
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
         [Parameter] public EventCallback<RichTextDocumentEditorSaveRequest> OnEditorSaved { get; set; }
+        [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
 
         private RichTextDocumentEditView? EditView { get; set; }
         private bool IsEditMode { get; set; }
@@ -30,6 +35,13 @@ namespace BusinessEntity.Components
 
         protected override void OnParametersSet()
         {
+            if (!CanEditViewedVersion && IsEditMode)
+            {
+                IsEditMode = false;
+                EditView = null;
+                EditInitialPosition = null;
+            }
+
             if (!IsEditMode)
             {
                 EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(EntityName);
@@ -39,6 +51,11 @@ namespace BusinessEntity.Components
 
         private Task HandleEditRequestedAsync(RichTextDocumentViewportPosition? visiblePosition)
         {
+            if (!CanEditViewedVersion)
+            {
+                return Task.CompletedTask;
+            }
+
             EditInitialPosition = visiblePosition;
             ReadInitialPosition = null;
             IsEditMode = true;

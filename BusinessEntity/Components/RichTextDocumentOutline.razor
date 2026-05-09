@@ -14,9 +14,10 @@
         </select>
         <button type="button"
                 class="btn btn-sm btn-outline-secondary rich-text-outline__rebuild"
-                disabled="@IsRebuilding"
+                title="@(CanRebuild ? "Обновить содержание загруженного окна" : "Доступно только для последней версии")"
+                disabled="@(IsRebuilding || !CanRebuild)"
                 @onclick="HandleRebuildRequestedAsync">
-            @(IsRebuilding ? "Пересоздание..." : "Пересоздать содержание")
+            @(IsRebuilding ? "Обновление..." : "Обновить содержание")
         </button>
     </div>
 
@@ -41,6 +42,7 @@
     [Parameter] public int DisplayLevelCount { get; set; } = 2;
     [Parameter] public bool IsLoading { get; set; }
     [Parameter] public bool IsRebuilding { get; set; }
+    [Parameter] public bool CanRebuild { get; set; } = true;
     [Parameter] public bool HideScrollbar { get; set; } = true;
     [Parameter] public EventCallback<RichTextDocumentOutlineNode> OnHeadingSelected { get; set; }
     [Parameter] public EventCallback<int> OnDisplayLevelCountChanged { get; set; }

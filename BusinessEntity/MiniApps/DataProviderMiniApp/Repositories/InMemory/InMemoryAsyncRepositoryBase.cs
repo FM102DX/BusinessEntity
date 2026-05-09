@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
+using System.Reflection;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 
@@ -10,7 +11,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Repositories.InMemory;
 /// </summary>
 public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where T : class, IBaseEntity
 {
-    private readonly ConcurrentDictionary<Guid, T> _storage = new();
+    private static readonly PropertyInfo? VersionProperty = typeof(T).GetProperty("Version", typeof(int));
+    private readonly ConcurrentDictionary<string, T> _storage = new();
     private readonly object _syncRoot = new();
 
     // Читает список записей из in-memory хранилища текущего DTO-типа.
@@ -77,14 +79,21 @@ public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where
     // Читает одну запись текущего DTO-типа по id.
     public Task<T?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        _storage.TryGetValue(id, out var entity);
-        return Task.FromResult(entity);
+        lock (_syncRoot)
+        {
+            var entity = _storage.Values
+                .Where(x => x.Id == id)
+                .OrderByDescending(GetVersion)
+                .ThenByDescending(x => x.LastModifiedDate)
+                .FirstOrDefault();
+            return Task.FromResult(entity);
+        }
     }
 
     // Проверяет наличие записи в in-memory хранилище по id.
     public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
     {
-        return Task.FromResult(_storage.ContainsKey(id));
+        return Task.FromResult(_storage.Values.Any(x => x.Id == id));
     }
 
     // Добавляет новую DTO-запись в in-memory хранилище.
@@ -97,9 +106,9 @@ public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where
             entity.CreatedDate = entity.CreatedDate == default ? DateTime.UtcNow : entity.CreatedDate;
             entity.LastModifiedDate = DateTime.UtcNow;
 
-            if (!_storage.TryAdd(entity.Id, entity))
+            if (!_storage.TryAdd(BuildStorageKey(entity), entity))
             {
-                throw new InvalidOperationException($"EntityData with id '{entity.Id}' already exists.");
+                throw new InvalidOperationException($"EntityData with id '{entity.Id}' and version '{GetVersion(entity)}' already exists.");
             }
 
             return Task.FromResult(entity);
@@ -113,23 +122,28 @@ public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where
 
         lock (_syncRoot)
         {
-            if (!_storage.ContainsKey(entity.Id))
+            var key = BuildStorageKey(entity);
+            if (!_storage.ContainsKey(key))
             {
-                throw new KeyNotFoundException($"EntityData with id '{entity.Id}' was not found.");
+                throw new KeyNotFoundException($"EntityData with id '{entity.Id}' and version '{GetVersion(entity)}' was not found.");
             }
 
             entity.LastModifiedDate = DateTime.UtcNow;
-            _storage[entity.Id] = entity;
+            _storage[key] = entity;
             return Task.CompletedTask;
         }
     }
 
-    // Удаляет DTO-запись из in-memory хранилища по id.
+    // Удаляет все DTO-записи из in-memory хранилища по id.
     public Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         lock (_syncRoot)
         {
-            _storage.TryRemove(id, out _);
+            foreach (var key in _storage.Where(x => x.Value.Id == id).Select(x => x.Key).ToList())
+            {
+                _storage.TryRemove(key, out _);
+            }
+
             return Task.CompletedTask;
         }
     }
@@ -162,5 +176,19 @@ public abstract class InMemoryAsyncRepositoryBase<T> : IAsyncRepository<T> where
             _storage.Clear();
             return Task.CompletedTask;
         }
+    }
+
+    private static string BuildStorageKey(T entity)
+    {
+        return VersionProperty == null
+            ? entity.Id.ToString("D")
+            : $"{entity.Id:D}:{GetVersion(entity):D10}";
+    }
+
+    private static int GetVersion(T entity)
+    {
+        return VersionProperty?.GetValue(entity) is int version && version > 0
+            ? version
+            : 1;
     }
 }

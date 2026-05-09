@@ -2,6 +2,7 @@ using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.Components;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
@@ -16,6 +17,8 @@ namespace BusinessEntity.Pages
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public RichTextDocumentImportService ImportService { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
+        [Inject] public RichTextDocumentMessagePanelService MessagePanel { get; set; } = default!;
+        [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
 
         private BusinessEntity.Core.Classes.BusinessEntity? Entity;
@@ -31,6 +34,12 @@ namespace BusinessEntity.Pages
         private string? StatusMessage;
         private CancellationTokenSource? LoadCancellationTokenSource { get; set; }
         private long LoadVersion { get; set; }
+        private int VersionsRefreshToken { get; set; }
+        private int ViewedVersion { get; set; } = 1;
+        private int LatestVersion { get; set; } = 1;
+        private bool CanEditViewedVersion => ViewedVersion >= LatestVersion;
+        private Guid _messagesForDocumentId;
+        private Guid _loadedDocumentId;
         private const int OutlineChunkBatchSize = 5;
 
         protected override async Task OnParametersSetAsync()
@@ -46,6 +55,19 @@ namespace BusinessEntity.Pages
             LoadCancellationTokenSource = new CancellationTokenSource();
             var cancellationToken = LoadCancellationTokenSource.Token;
             var version = ++LoadVersion;
+
+            if (_messagesForDocumentId != Id)
+            {
+                MessagePanel.Clear();
+                _messagesForDocumentId = Id;
+            }
+
+            if (_loadedDocumentId != Id)
+            {
+                ViewedVersion = 0;
+                LatestVersion = 1;
+                _loadedDocumentId = Id;
+            }
 
             IsLoading = true;
             IsInitialContentLoading = false;
@@ -67,10 +89,11 @@ namespace BusinessEntity.Pages
 
                 Entity = shell.Entity;
                 Manifest = shell.Manifest;
+                await RefreshVersionsAsync(cancellationToken);
                 IsInitialContentLoading = true;
                 IsOutlineLoading = true;
-                _ = LoadInitialChunkWindowAsync(Id, version, cancellationToken);
-                _ = LoadOutlineAsync(Id, version, cancellationToken);
+                _ = LoadInitialChunkWindowAsync(Id, version, ViewedVersion, cancellationToken);
+                _ = LoadOutlineAsync(Id, version, ViewedVersion, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -89,7 +112,11 @@ namespace BusinessEntity.Pages
             }
         }
 
-        private async Task LoadInitialChunkWindowAsync(Guid documentId, long version, CancellationToken cancellationToken)
+        private async Task LoadInitialChunkWindowAsync(
+            Guid documentId,
+            long loadVersion,
+            int documentVersion,
+            CancellationToken cancellationToken)
         {
             try
             {
@@ -98,11 +125,12 @@ namespace BusinessEntity.Pages
                     documentId,
                     0,
                     richTextDocumentSettings.GetInitialChunkCount(),
+                    documentVersion,
                     cancellationToken);
 
                 await InvokeAsync(() =>
                 {
-                    if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                    if (loadVersion != LoadVersion || cancellationToken.IsCancellationRequested)
                     {
                         return;
                     }
@@ -120,7 +148,7 @@ namespace BusinessEntity.Pages
             {
                 await InvokeAsync(() =>
                 {
-                    if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                    if (loadVersion != LoadVersion || cancellationToken.IsCancellationRequested)
                     {
                         return;
                     }
@@ -132,20 +160,27 @@ namespace BusinessEntity.Pages
             }
         }
 
-        private async Task LoadOutlineAsync(Guid documentId, long version, CancellationToken cancellationToken)
+        private async Task LoadOutlineAsync(
+            Guid documentId,
+            long loadVersion,
+            int documentVersion,
+            CancellationToken cancellationToken)
         {
             try
             {
+                var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync(cancellationToken);
                 await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
                     documentId,
                     OutlineChunkBatchSize,
+                    documentVersion,
+                    richTextDocumentSettings.GetInitialChunkCount(),
                     cancellationToken))
                 {
                     var outlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
 
                     await InvokeAsync(() =>
                     {
-                        if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                        if (loadVersion != LoadVersion || cancellationToken.IsCancellationRequested)
                         {
                             return;
                         }
@@ -157,7 +192,7 @@ namespace BusinessEntity.Pages
 
                 await InvokeAsync(() =>
                 {
-                    if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                    if (loadVersion != LoadVersion || cancellationToken.IsCancellationRequested)
                     {
                         return;
                     }
@@ -174,7 +209,7 @@ namespace BusinessEntity.Pages
             {
                 await InvokeAsync(() =>
                 {
-                    if (version != LoadVersion || cancellationToken.IsCancellationRequested)
+                    if (loadVersion != LoadVersion || cancellationToken.IsCancellationRequested)
                     {
                         return;
                     }
@@ -189,7 +224,7 @@ namespace BusinessEntity.Pages
         // Импортирует выбранный пользователем файл в rich-text документ.
         private async Task OnImportSelectedAsync(InputFileChangeEventArgs args)
         {
-            if (Entity == null)
+            if (Entity == null || !CanEditViewedVersion)
             {
                 return;
             }
@@ -201,7 +236,7 @@ namespace BusinessEntity.Pages
             }
 
             IsImporting = true;
-            StatusMessage = $"Импорт файла '{file.Name}'...";
+            SetStatusMessage($"Импорт файла '{file.Name}'...");
             Error = null;
 
             try
@@ -226,13 +261,14 @@ namespace BusinessEntity.Pages
                     importResult.Chunks,
                     importResult.Files);
 
-                StatusMessage = $"Импорт файла '{file.Name}' добавлен в конец документа.";
+                SetStatusMessage($"Импорт файла '{file.Name}' добавлен в конец документа.");
+                VersionsRefreshToken++;
                 await LoadAsync();
             }
             catch (Exception ex)
             {
                 Error = ex.Message;
-                StatusMessage = null;
+                SetStatusMessage(null);
             }
             finally
             {
@@ -243,32 +279,40 @@ namespace BusinessEntity.Pages
         // Пересоздаёт сохранённые chunk-properties содержания и обновляет HTML-cache на странице.
         private async Task OnRebuildTableOfContentsAsync()
         {
-            if (Entity == null)
+            if (Entity == null || !CanEditViewedVersion)
             {
                 return;
             }
 
             IsRebuildingTableOfContents = true;
-            StatusMessage = "Пересоздание содержания...";
+            SetStatusMessage("Пересоздание содержания...");
             Error = null;
 
             try
             {
-                var tableOfContents = await RichTextDocumentHelper.RebuildTableOfContentsAsync(Id);
-                OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
-
                 var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync();
                 InitialChunkWindow = await RichTextDocumentHelper.GetChunkWindowAsync(
                     Id,
                     0,
-                    richTextDocumentSettings.GetInitialChunkCount());
+                    richTextDocumentSettings.GetInitialChunkCount(),
+                    ViewedVersion);
 
-                StatusMessage = "Содержание пересоздано.";
+                await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
+                    Id,
+                    OutlineChunkBatchSize,
+                    ViewedVersion,
+                    richTextDocumentSettings.GetInitialChunkCount()))
+                {
+                    OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
+                    await InvokeAsync(StateHasChanged);
+                }
+
+                SetStatusMessage("Содержание обновлено для загруженного окна документа.");
             }
             catch (Exception ex)
             {
                 Error = ex.Message;
-                StatusMessage = null;
+                SetStatusMessage(null);
             }
             finally
             {
@@ -278,6 +322,11 @@ namespace BusinessEntity.Pages
 
         private async Task OnEditorSavedAsync(RichTextDocumentEditorSaveRequest request)
         {
+            if (!CanEditViewedVersion)
+            {
+                return;
+            }
+
             Error = null;
 
             try
@@ -306,14 +355,20 @@ namespace BusinessEntity.Pages
                     statusParts.Add("название сохранено");
                 }
 
-                StatusMessage = statusParts.Count == 0
+                SetStatusMessage(statusParts.Count == 0
                     ? "Нет изменений для сохранения."
-                    : string.Join("; ", statusParts) + ".";
+                    : string.Join("; ", statusParts) + ".");
+                VersionsRefreshToken++;
+                await RefreshVersionsAsync();
+                ViewedVersion = LatestVersion;
 
                 IsOutlineLoading = true;
+                var richTextDocumentSettings = await RichTextDocumentSettingsService.GetSettingsAsync();
                 await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
                     Id,
-                    OutlineChunkBatchSize))
+                    OutlineChunkBatchSize,
+                    ViewedVersion,
+                    richTextDocumentSettings.GetInitialChunkCount()))
                 {
                     OutlineNodes = tableOfContents.Select(MapTableOfContentsNode).ToList();
                     await InvokeAsync(StateHasChanged);
@@ -322,11 +377,49 @@ namespace BusinessEntity.Pages
             catch (Exception ex)
             {
                 Error = ex.Message;
-                StatusMessage = null;
+                SetStatusMessage(null);
             }
             finally
             {
                 IsOutlineLoading = false;
+            }
+        }
+
+        private async Task OnVersionSelectedAsync(int version)
+        {
+            if (Entity == null || version <= 0 || version == ViewedVersion)
+            {
+                return;
+            }
+
+            LoadCancellationTokenSource?.Cancel();
+            LoadCancellationTokenSource?.Dispose();
+            LoadCancellationTokenSource = new CancellationTokenSource();
+            var cancellationToken = LoadCancellationTokenSource.Token;
+            var loadVersion = ++LoadVersion;
+
+            ViewedVersion = Math.Min(version, LatestVersion);
+            InitialChunkWindow = null;
+            OutlineNodes = Array.Empty<RichTextDocumentOutlineNode>();
+            IsInitialContentLoading = true;
+            IsOutlineLoading = true;
+            Error = null;
+            await InvokeAsync(StateHasChanged);
+
+            _ = LoadInitialChunkWindowAsync(Id, loadVersion, ViewedVersion, cancellationToken);
+            _ = LoadOutlineAsync(Id, loadVersion, ViewedVersion, cancellationToken);
+        }
+
+        private async Task RefreshVersionsAsync(CancellationToken cancellationToken = default)
+        {
+            var versions = await DataProviderConnector.GetDataVersionsAsync(Id, cancellationToken);
+            LatestVersion = versions.Count == 0
+                ? Math.Max(Manifest?.Version ?? 1, 1)
+                : versions.Max(x => x.Version <= 0 ? 1 : x.Version);
+
+            if (ViewedVersion <= 0 || ViewedVersion > LatestVersion)
+            {
+                ViewedVersion = LatestVersion;
             }
         }
 
@@ -342,6 +435,12 @@ namespace BusinessEntity.Pages
                 IsExpanded = true,
                 Children = entry.Children.Select(MapTableOfContentsNode).ToList()
             };
+        }
+
+        private void SetStatusMessage(string? message)
+        {
+            StatusMessage = message;
+            MessagePanel.Add(Id, message);
         }
 
         public void Dispose()

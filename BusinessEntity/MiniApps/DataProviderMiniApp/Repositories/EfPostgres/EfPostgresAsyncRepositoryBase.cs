@@ -138,20 +138,20 @@ public abstract class EfPostgresAsyncRepositoryBase<T> : BusinessEntity.MiniApps
     }
 
     /// <summary>
-    /// Удаляет запись по идентификатору.
+    /// Удаляет все записи по идентификатору.
     /// </summary>
-    // Находит DTO-запись по id и удаляет её из БД.
+    // Для versioned DTO один Id может соответствовать нескольким строкам с разными Version.
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         await using var context = _dbContextFactory.CreateDbContext();
         var set = context.Set<T>();
-        var entity = await set.FindAsync(new object?[] { id }, ct);
-        if (entity == null)
+        var entities = await set.Where(e => e.Id == id).ToListAsync(ct);
+        if (entities.Count == 0)
         {
             return;
         }
 
-        set.Remove(entity);
+        set.RemoveRange(entities);
         await context.SaveChangesAsync(ct);
     }
 

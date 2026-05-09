@@ -12,6 +12,9 @@ public sealed record GetBusinessEntityByIdResponse(Guid RequestId, BusinessEntit
 public sealed record GetBusinessEntityDataRequest(Guid RequestId, Guid BusinessEntityId);
 public sealed record GetBusinessEntityDataResponse(Guid RequestId, string? Data, int Version = 1, string? ErrorMessage = null);
 
+public sealed record GetBusinessEntityDataVersionsRequest(Guid RequestId, Guid BusinessEntityId);
+public sealed record GetBusinessEntityDataVersionsResponse(Guid RequestId, IReadOnlyList<BusinessEntityDataVersionInfo> Records, string? ErrorMessage = null);
+
 public sealed record AddBusinessEntityRequest(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity Record);
 public sealed record AddBusinessEntityResponse(Guid RequestId, BusinessEntity.Core.Classes.BusinessEntity? Record, string? ErrorMessage = null);
 

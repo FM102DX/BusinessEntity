@@ -6,6 +6,7 @@
 @using System.Globalization
 
 @inject ITreeSelectionService TreeSelection
+@inject RichTextDocumentMessagePanelService RichTextMessages
 @implements IDisposable
 
 <div class="right-panel">
@@ -17,6 +18,22 @@
             <div class="widget-title">Дата и время</div>
             <div class="widget-body">@NowString</div>
         </div>
+
+        @if (RichTextMessages.Messages.Count > 0)
+        {
+            <div class="widget widget-rich-text-messages">
+                <div class="widget-title">Сообщения</div>
+                <div class="widget-body widget-rich-text-messages__body">
+                    @foreach (var message in RichTextMessages.Messages)
+                    {
+                        <div class="widget-rich-text-messages__item">
+                            <div class="widget-rich-text-messages__text">@message.Text</div>
+                            <div class="widget-rich-text-messages__time">@message.CreatedAt.ToString("HH:mm:ss")</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
 
         @if (IsMultiSelected)
         {
@@ -79,6 +96,7 @@
     protected override void OnInitialized()
     {
         TreeSelection.SelectionChanged += OnSelectionChanged;
+        RichTextMessages.Changed += OnRichTextMessagesChanged;
         _timer = new Timer(1000);
         _timer.Elapsed += OnTimerElapsed;
         _timer.AutoReset = true;
@@ -93,6 +111,7 @@
     public void Dispose()
     {
         TreeSelection.SelectionChanged -= OnSelectionChanged;
+        RichTextMessages.Changed -= OnRichTextMessagesChanged;
         if (_timer is not null)
         {
             _timer.Stop();
@@ -109,6 +128,11 @@
     private void OnTimerElapsed(object? sender, ElapsedEventArgs e)
     {
         _now = DateTime.Now;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRichTextMessagesChanged()
+    {
         InvokeAsync(StateHasChanged);
     }
 }

@@ -31,6 +31,7 @@ namespace BusinessEntity.Components
 
         [Parameter] public string ViewportElementId { get; set; } = string.Empty;
         [Parameter] public Guid BusinessEntityId { get; set; }
+        [Parameter] public int? DocumentVersion { get; set; }
         [Parameter] public RichTextDocumentChunkWindow? InitialWindow { get; set; }
         [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode> OutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
@@ -434,7 +435,8 @@ namespace BusinessEntity.Components
                 return await RichTextDocumentHelper.GetChunkWindowAsync(
                     BusinessEntityId,
                     startSortOrder,
-                    take);
+                    take,
+                    DocumentVersion);
             }
 
             var normalizedTake = Math.Max(take, 0);
@@ -515,7 +517,8 @@ namespace BusinessEntity.Components
             var window = await RichTextDocumentHelper.GetChunkWindowAsync(
                 BusinessEntityId,
                 startSortOrder,
-                take);
+                take,
+                DocumentVersion);
 
             foreach (var chunk in window.Chunks)
             {

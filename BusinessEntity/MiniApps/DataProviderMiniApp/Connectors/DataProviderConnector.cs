@@ -83,6 +83,20 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return data;
         }
 
+        // Возвращает список версий payload-записей из BusinessEntityDataItems.
+        public async Task<IReadOnlyList<BusinessEntityDataVersionInfo>> GetDataVersionsAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<GetBusinessEntityDataVersionsRequest, GetBusinessEntityDataVersionsResponse>(
+                new GetBusinessEntityDataVersionsRequest(requestId, id),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            return response.Records;
+        }
+
         // Сериализует payload в raw JSON и отправляет команду на сохранение envelope.
         public async Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
             where TData : class, IBusinessEntityData

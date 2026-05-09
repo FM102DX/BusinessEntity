@@ -15,6 +15,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
     /// </summary>
     internal sealed class DataProviderService : IDataProviderCrudService
     {
+        private const int ChunkMaintenanceBatchSize = 100;
+
         private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
         private readonly IAsyncRepository<BusinessEntityDataDto> _businessEntityDataRepository;
         private readonly IAsyncRepository<BusinessEntityDataChunkDto> _businessEntityDataChunkRepository;
@@ -88,6 +90,27 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             return data;
         }
 
+        // Возвращает metadata всех версий payload, сохранённых в BusinessEntityDataItems.
+        public async Task<IReadOnlyList<BusinessEntityDataVersionInfo>> GetDataVersionsAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var dataItems = await _businessEntityDataRepository.GetAllAsync(
+                d => d.BusinessEntityId == id,
+                ct: cancellationToken);
+
+            return dataItems
+                .OrderByDescending(d => NormalizeVersion(d.Version))
+                .ThenByDescending(d => d.CreatedDate)
+                .Select(d => new BusinessEntityDataVersionInfo
+                {
+                    Id = d.Id,
+                    BusinessEntityId = d.BusinessEntityId,
+                    Version = NormalizeVersion(d.Version),
+                    CreatedDate = d.CreatedDate,
+                    LastModifiedDate = d.LastModifiedDate
+                })
+                .ToList();
+        }
+
         // Сериализует типизированный payload в raw JSON и сохраняет его как versioned envelope.
         public async Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
             where TData : class, IBusinessEntityData
@@ -127,10 +150,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
 
             if (dto == null)
             {
-                var createdId = hasVersions ? Guid.NewGuid() : id;
                 dto = new BusinessEntityDataDto
                 {
-                    Id = createdId,
+                    Id = id,
                     BusinessEntityId = id,
                     Version = 1,
                     Data = envelopeJson
@@ -147,7 +169,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 var newVersion = NormalizeVersion(dto.Version) + 1;
                 var versionDto = new BusinessEntityDataDto
                 {
-                    Id = Guid.NewGuid(),
+                    Id = dto.Id,
                     CreatedDate = DateTime.UtcNow,
                     LastModifiedDate = DateTime.UtcNow,
                     BusinessEntityId = id,
@@ -270,93 +292,30 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         }
 
         // Возвращает все технические rich-text чанки документа в порядке SortOrder.
-        public async Task<IReadOnlyList<RichTextDocumentChunk>> GetRichTextChunksAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<RichTextDocumentChunk>> GetRichTextChunksAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
         {
-            var chunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
-                d => d.BusinessEntityId == businessEntityId,
-                ct: cancellationToken);
-
-            return SelectLatestChunkVersions(chunkDtos)
-                .Select(MapChunkDtoToRuntime)
-                .ToList();
+            throw new InvalidOperationException(
+                "Full rich-text chunk reads are disabled. Use bounded chunk-window reads instead.");
         }
 
         // Читает сохранённые в chunk-property строки оглавления rich-text документа.
-        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> GetRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
         {
-            var chunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
-                d => d.BusinessEntityId == businessEntityId,
-                ct: cancellationToken);
-
-            var result = new List<RichTextDocumentTableOfContentsEntry>();
-            foreach (var chunkDto in SelectLatestChunkVersions(chunkDtos))
-            {
-                var properties = await _businessEntityDataChunkPropertyRepository.GetAllAsync(
-                    p => p.ParentEntityId == chunkDto.Id &&
-                         p.PropertyType == (int)BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents,
-                    ct: cancellationToken);
-
-                foreach (var property in properties)
-                {
-                    result.AddRange(ReadTableOfContentsEntries(property));
-                }
-            }
-
-            return result
-                .OrderBy(x => x.ChunkSortOrder)
-                .ThenBy(x => x.BlockIndex)
-                .ToList();
+            throw new InvalidOperationException(
+                "Full rich-text table-of-contents reads are disabled. Use bounded table-of-contents reads instead.");
         }
 
         // Пересоздаёт chunk-property оглавления из сохранённых блоков каждого rich-text чанка.
-        public async Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<RichTextDocumentTableOfContentsEntry>> RebuildRichTextTableOfContentsEntriesAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
         {
-            var chunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
-                d => d.BusinessEntityId == businessEntityId,
-                ct: cancellationToken);
-
-            foreach (var chunkDto in SelectLatestChunkVersions(chunkDtos))
-            {
-                await DeletePropertiesAsync(
-                    _businessEntityDataChunkPropertyRepository,
-                    chunkDto.Id,
-                    (int)BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents,
-                    cancellationToken);
-
-                var blocks = RichTextChunkStorageSerializer.DeserializeChunkData(chunkDto.Data);
-                var htmlCache = RichTextChunkStorageSerializer.BuildHtmlCache(chunkDto.BusinessEntityId, chunkDto.Id, blocks);
-                if (!string.Equals(chunkDto.HtmlCache, htmlCache, StringComparison.Ordinal))
-                {
-                    chunkDto.HtmlCache = htmlCache;
-                    chunkDto.PlainText = RichTextChunkStorageSerializer.BuildPlainText(blocks);
-                    chunkDto.BlockCount = blocks.Count;
-                    chunkDto.CharCount = RichTextChunkStorageSerializer.BuildCharCount(blocks);
-                    chunkDto.LastModifiedDate = DateTime.UtcNow;
-                    await _businessEntityDataChunkRepository.UpdateAsync(chunkDto, cancellationToken);
-                }
-
-                var tableOfContentsProperty = BuildTableOfContentsProperty(chunkDto, blocks);
-                if (tableOfContentsProperty != null)
-                {
-                    await _businessEntityDataChunkPropertyRepository.AddAsync(tableOfContentsProperty, cancellationToken);
-                }
-            }
-
-            return await GetRichTextTableOfContentsEntriesAsync(businessEntityId, cancellationToken);
+            throw new InvalidOperationException(
+                "Full rich-text table-of-contents rebuild is disabled. Use bounded table-of-contents reads instead.");
         }
 
         // Полностью заменяет chunk-body документа новым набором чанков.
         public async Task ReplaceRichTextChunksAsync(Guid businessEntityId, IReadOnlyList<RichTextDocumentChunk> chunks, CancellationToken cancellationToken = default)
         {
-            var existingChunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
-                d => d.BusinessEntityId == businessEntityId,
-                ct: cancellationToken);
-
-            foreach (var existingChunk in existingChunkDtos)
-            {
-                await DeletePropertiesAsync(_businessEntityDataChunkPropertyRepository, existingChunk.Id, cancellationToken);
-                await _businessEntityDataChunkRepository.DeleteAsync(existingChunk.Id, cancellationToken);
-            }
+            await DeleteRichTextChunkRowsAsync(businessEntityId, cancellationToken);
 
             if (chunks == null || chunks.Count == 0)
             {
@@ -407,15 +366,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         // Полностью удаляет техническое rich-text storage документа.
         public async Task DeleteRichTextStorageAsync(Guid businessEntityId, CancellationToken cancellationToken = default)
         {
-            var chunkDtos = await _businessEntityDataChunkRepository.GetAllAsync(
-                d => d.BusinessEntityId == businessEntityId,
-                ct: cancellationToken);
-
-            foreach (var chunkDto in chunkDtos)
-            {
-                await DeletePropertiesAsync(_businessEntityDataChunkPropertyRepository, chunkDto.Id, cancellationToken);
-                await _businessEntityDataChunkRepository.DeleteAsync(chunkDto.Id, cancellationToken);
-            }
+            await DeleteRichTextChunkRowsAsync(businessEntityId, cancellationToken);
 
             _richTextDocumentFileStorageService.DeleteDocumentFolder(businessEntityId);
         }
@@ -433,23 +384,61 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                 .FirstOrDefault();
         }
 
+        // Возвращает последнюю версию BusinessEntityData для документа.
+        private async Task<int> GetLatestDataVersionAsync(Guid businessEntityId, CancellationToken cancellationToken)
+        {
+            var dataItems = await _businessEntityDataRepository.GetAllAsync(
+                d => d.BusinessEntityId == businessEntityId,
+                ct: cancellationToken);
+
+            return dataItems.Count == 0
+                ? int.MaxValue
+                : dataItems.Max(d => NormalizeVersion(d.Version));
+        }
+
         // Нормализует исторические storage-записи, у которых версия могла отсутствовать.
         private static int NormalizeVersion(int version)
         {
             return version <= 0 ? 1 : version;
         }
 
-        // Выбирает актуальную chunk-запись для каждого SortOrder.
-        private static IReadOnlyList<BusinessEntityDataChunkDto> SelectLatestChunkVersions(IEnumerable<BusinessEntityDataChunkDto> chunkDtos)
+        // Выбирает по одному chunk DTO на каждый chunk Id в рамках версии документа.
+        private static IReadOnlyList<BusinessEntityDataChunkDto> SelectChunkVersions(IEnumerable<BusinessEntityDataChunkDto> chunkDtos, int documentVersion)
         {
             return chunkDtos
-                .GroupBy(d => d.SortOrder)
+                .Where(d => NormalizeVersion(d.Version) <= documentVersion)
+                .GroupBy(d => d.Id)
                 .Select(group => group
                     .OrderByDescending(d => NormalizeVersion(d.Version))
                     .ThenByDescending(d => d.LastModifiedDate)
                     .First())
                 .OrderBy(d => d.SortOrder)
                 .ToList();
+        }
+
+        private async Task DeleteRichTextChunkRowsAsync(Guid businessEntityId, CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                var chunkDtos = await _businessEntityDataChunkRepository.GetPageAsync(
+                    d => d.BusinessEntityId == businessEntityId,
+                    d => d.SortOrder,
+                    descending: false,
+                    skip: 0,
+                    take: ChunkMaintenanceBatchSize,
+                    ct: cancellationToken);
+
+                if (chunkDtos.Count == 0)
+                {
+                    return;
+                }
+
+                foreach (var chunkDto in chunkDtos)
+                {
+                    await DeletePropertiesAsync(_businessEntityDataChunkPropertyRepository, chunkDto.Id, cancellationToken);
+                    await _businessEntityDataChunkRepository.DeleteAsync(chunkDto.Id, cancellationToken);
+                }
+            }
         }
 
         // Удаляет property-строки, привязанные к конкретной родительской DTO-записи.

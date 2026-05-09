@@ -39,11 +39,6 @@
         </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(StatusMessage))
-    {
-        <div class="alert alert-info py-2">@StatusMessage</div>
-    }
-
     @if (IsBusy)
     {
         <div class="alert alert-secondary mb-0">Обработка rich-text документа...</div>
@@ -57,6 +52,7 @@
                                          DisplayLevelCount="@DisplayLevelCount"
                                          IsLoading="@IsOutlineLoading"
                                          IsRebuilding="@IsRebuildingTableOfContents"
+                                         CanRebuild="true"
                                          HideScrollbar="@HideTableOfContentsScrollbar"
                                          OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
                                          OnRebuildRequested="HandleRebuildTableOfContentsAsync"
@@ -66,20 +62,25 @@
                 <RichTextDocumentEditorViewport @ref="EditorViewport"
                                                 ViewportElementId="@EditorViewportElementId"
                                                 BusinessEntityId="@BusinessEntityId"
+                                                DocumentVersion="@ViewedVersion"
                                                 OutlineNodes="@LocalOutlineNodes"
                                                 IsInitialContentLoading="@IsInitialContentLoading"
                                                 InitialTargetPosition="@InitialTargetPosition"
                                                 InitialWindow="@InitialChunkWindow" />
             </div>
             <div class="rich-text-document-layout__widgets">
-                <RichTextDocumentWidgets Bookmarks="@Bookmarks"
+                <RichTextDocumentWidgets BusinessEntityId="@BusinessEntityId"
+                                         Bookmarks="@Bookmarks"
                                          ActiveBookmarkId="@ActiveBookmarkId"
-                                         StatusMessage="@WidgetStatusMessage"
+                                         VersionsRefreshToken="@VersionsRefreshToken"
+                                         ViewedVersion="@ViewedVersion"
+                                         LatestVersion="@LatestVersion"
                                          OnSearchNext="HandleSearchNextAsync"
                                          OnSearchPrevious="HandleSearchPreviousAsync"
                                          OnCreateBookmark="HandleCreateBookmarkAsync"
                                          OnBookmarkSelected="HandleBookmarkSelectedAsync"
-                                         OnBookmarkDeleted="HandleBookmarkDeletedAsync" />
+                                         OnBookmarkDeleted="HandleBookmarkDeletedAsync"
+                                         OnVersionSelected="HandleVersionSelectedAsync" />
             </div>
         </div>
     }

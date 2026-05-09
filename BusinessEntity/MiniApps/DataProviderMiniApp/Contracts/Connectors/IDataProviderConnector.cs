@@ -14,6 +14,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors
         Task<BusinessEntity.Core.Classes.BusinessEntity?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task<TData?> GetDataAsync<TData>(Guid id, CancellationToken cancellationToken = default)
             where TData : class, IBusinessEntityData;
+        Task<IReadOnlyList<BusinessEntityDataVersionInfo>> GetDataVersionsAsync(Guid id, CancellationToken cancellationToken = default);
         Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
             where TData : class, IBusinessEntityData;
         Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default);

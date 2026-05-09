@@ -15,11 +15,15 @@
                               IsSaving="@IsSaving"
                               IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
                               StatusMessage="@StatusMessage"
+                              VersionsRefreshToken="@VersionsRefreshToken"
+                              ViewedVersion="@ViewedVersion"
+                              LatestVersion="@LatestVersion"
                               InitialTargetPosition="@EditInitialPosition"
                               OnTitleChanged="HandleTitleChangedAsync"
                               OnSaveRequested="HandleSaveAsync"
                               OnReadModeRequested="HandleReadModeAsync"
-                              OnRebuildTableOfContents="@OnRebuildTableOfContents" />
+                              OnRebuildTableOfContents="@OnRebuildTableOfContents"
+                              OnVersionSelected="@OnVersionSelected" />
 }
 else
 {
@@ -32,8 +36,13 @@ else
                               IsBusy="@IsBusy"
                               IsRebuildingTableOfContents="@IsRebuildingTableOfContents"
                               StatusMessage="@StatusMessage"
+                              VersionsRefreshToken="@VersionsRefreshToken"
+                              ViewedVersion="@ViewedVersion"
+                              LatestVersion="@LatestVersion"
+                              CanEdit="@CanEditViewedVersion"
                               InitialTargetPosition="@ReadInitialPosition"
                               OnImportSelected="@OnImportSelected"
                               OnRebuildTableOfContents="@OnRebuildTableOfContents"
-                              OnEditRequested="HandleEditRequestedAsync" />
+                              OnEditRequested="HandleEditRequestedAsync"
+                              OnVersionSelected="@OnVersionSelected" />
 }

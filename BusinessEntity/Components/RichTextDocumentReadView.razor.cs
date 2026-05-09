@@ -21,16 +21,22 @@ namespace BusinessEntity.Components
         [Parameter] public bool IsBusy { get; set; }
         [Parameter] public bool IsRebuildingTableOfContents { get; set; }
         [Parameter] public string? StatusMessage { get; set; }
+        [Parameter] public int VersionsRefreshToken { get; set; }
+        [Parameter] public int ViewedVersion { get; set; } = 1;
+        [Parameter] public int LatestVersion { get; set; } = 1;
+        [Parameter] public bool CanEdit { get; set; } = true;
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
         [Parameter] public EventCallback<InputFileChangeEventArgs> OnImportSelected { get; set; }
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
         [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
         [Parameter] public EventCallback<RichTextDocumentViewportPosition?> OnEditRequested { get; set; }
+        [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
 
         [Inject] public IJSRuntime JS { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
+        [Inject] public RichTextDocumentMessagePanelService MessagePanel { get; set; } = default!;
 
         private IReadOnlyList<RichTextDocumentOutlineNode> LocalOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         private IReadOnlyList<RichTextDocumentOutlineNode> VisibleOutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
@@ -40,7 +46,6 @@ namespace BusinessEntity.Components
         private bool HideTableOfContentsScrollbar { get; set; } = true;
         private Guid _bookmarksLoadedForEntityId;
         private Guid? ActiveBookmarkId { get; set; }
-        private string? WidgetStatusMessage { get; set; }
 
         private bool IsDocumentEmpty =>
             !IsInitialContentLoading &&
@@ -89,11 +94,21 @@ namespace BusinessEntity.Components
 
         private Task HandleImportSelected(InputFileChangeEventArgs args)
         {
+            if (!CanEdit)
+            {
+                return Task.CompletedTask;
+            }
+
             return OnImportSelected.InvokeAsync(args);
         }
 
         private Task HandleRebuildTableOfContentsAsync()
         {
+            if (!CanEdit)
+            {
+                return Task.CompletedTask;
+            }
+
             return OnRebuildTableOfContents.InvokeAsync();
         }
 
@@ -111,6 +126,11 @@ namespace BusinessEntity.Components
 
         private async Task HandleEditAsync()
         {
+            if (!CanEdit)
+            {
+                return;
+            }
+
             var position = Viewport == null
                 ? null
                 : await Viewport.GetCurrentViewportPositionAsync();
@@ -129,29 +149,32 @@ namespace BusinessEntity.Components
 
         private async Task HandleSearchAsync(string query, bool searchDown)
         {
-            WidgetStatusMessage = null;
             if (Viewport == null || BusinessEntityId == Guid.Empty)
             {
                 return;
             }
 
             var origin = await Viewport.GetCurrentViewportPositionAsync();
-            var result = await RichTextDocumentHelper.FindTextAsync(BusinessEntityId, query, origin, searchDown);
+            var result = await RichTextDocumentHelper.FindTextAsync(
+                BusinessEntityId,
+                query,
+                origin,
+                searchDown,
+                ViewedVersion);
             if (result == null)
             {
-                WidgetStatusMessage = "Ничего не найдено.";
+                AddMessage("Ничего не найдено.");
                 return;
             }
 
             await Viewport.ScrollToPositionAsync(result.Position);
-            WidgetStatusMessage = string.IsNullOrWhiteSpace(result.Preview)
+            AddMessage(string.IsNullOrWhiteSpace(result.Preview)
                 ? "Найдено."
-                : result.Preview;
+                : result.Preview);
         }
 
         private async Task HandleCreateBookmarkAsync()
         {
-            WidgetStatusMessage = null;
             if (Viewport == null || BusinessEntityId == Guid.Empty)
             {
                 return;
@@ -161,19 +184,18 @@ namespace BusinessEntity.Components
             var bookmark = await UserConnector.AddRichDocBookmarkAsync(BusinessEntityId, selection);
             if (bookmark == null)
             {
-                WidgetStatusMessage = "Выделите текст в документе.";
+                AddMessage("Выделите текст в документе.");
                 return;
             }
 
             ActiveBookmarkId = bookmark.Id;
             await LoadBookmarksAsync();
-            WidgetStatusMessage = "Закладка создана.";
+            AddMessage("Закладка создана.");
         }
 
         private async Task HandleBookmarkSelectedAsync(RichTextDocumentBookmark bookmark)
         {
             ActiveBookmarkId = bookmark.Id;
-            WidgetStatusMessage = null;
             if (Viewport != null)
             {
                 await Viewport.ScrollToPositionAsync(bookmark.Position);
@@ -189,7 +211,12 @@ namespace BusinessEntity.Components
             }
 
             await LoadBookmarksAsync();
-            WidgetStatusMessage = deleted ? "Закладка удалена." : "Закладка не найдена.";
+            AddMessage(deleted ? "Закладка удалена." : "Закладка не найдена.");
+        }
+
+        private Task HandleVersionSelectedAsync(int version)
+        {
+            return OnVersionSelected.InvokeAsync(version);
         }
 
         private async Task LoadBookmarksAsync()
@@ -203,6 +230,11 @@ namespace BusinessEntity.Components
 
             Bookmarks = await UserConnector.GetRichDocBookmarksAsync(BusinessEntityId);
             _bookmarksLoadedForEntityId = BusinessEntityId;
+        }
+
+        private void AddMessage(string message)
+        {
+            MessagePanel.Add(BusinessEntityId, message);
         }
 
         private static IReadOnlyList<RichTextDocumentOutlineNode> FilterOutlineNodes(
