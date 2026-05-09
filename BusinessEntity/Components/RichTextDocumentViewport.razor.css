@@ -37,6 +37,17 @@
     scroll-margin-top: 12px;
 }
 
+.rich-text-document-viewport .rich-text-image {
+    margin: 0 0 1rem 0;
+}
+
+.rich-text-document-viewport .rich-text-image img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    cursor: pointer;
+}
+
 @media (max-width: 1100px) {
     .rich-text-document-viewport {
         max-height: none;

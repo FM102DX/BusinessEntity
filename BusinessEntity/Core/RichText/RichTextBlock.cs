@@ -29,5 +29,13 @@ namespace BusinessEntity.Core.RichText
         // Альтернативный текст изображения.
         [JsonPropertyName("altText")]
         public string AltText { get; set; } = string.Empty;
+
+        // Отображаемая ширина изображения в пикселях. 0 означает original/auto.
+        [JsonPropertyName("width")]
+        public int Width { get; set; }
+
+        // Отображаемая высота изображения в пикселях. 0 означает original/auto.
+        [JsonPropertyName("height")]
+        public int Height { get; set; }
     }
 }

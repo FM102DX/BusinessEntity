@@ -27,5 +27,33 @@ namespace BusinessEntity.Controllers
 
             return File(file.Content, file.ContentType, file.FileName);
         }
+
+        // Загружает одно embedded-изображение rich-text документа.
+        [HttpPost("{documentId:guid}/images")]
+        [RequestSizeLimit(20L * 1024L * 1024L)]
+        public async Task<IActionResult> UploadImage(Guid documentId, IFormFile file, CancellationToken cancellationToken)
+        {
+            if (file == null || file.Length <= 0)
+            {
+                return BadRequest("Файл изображения не передан.");
+            }
+
+            try
+            {
+                await using var stream = file.OpenReadStream();
+                var result = await _richTextDocumentHelper.SaveRichTextEmbeddedImageAsync(
+                    documentId,
+                    stream,
+                    file.FileName,
+                    file.ContentType,
+                    cancellationToken);
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 }

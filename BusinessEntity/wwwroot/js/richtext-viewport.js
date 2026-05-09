@@ -1,6 +1,7 @@
 function createRichTextViewportRuntime() {
     const registry = new Map();
     const blockSelector = "h1,h2,h3,h4,h5,h6,p,blockquote,pre,ul,ol,table,hr";
+    let activeImageViewer = null;
 
     function syncViewportSize(viewportElementId) {
         const viewport = document.getElementById(viewportElementId);
@@ -154,11 +155,16 @@ function createRichTextViewportRuntime() {
             window.setTimeout(requestScrollNotification, 0);
         };
 
+        const handleClick = (event) => {
+            handleRichTextImageClick(viewportElementId, event);
+        };
+
         const viewport = document.getElementById(viewportElementId);
         if (viewport) {
             viewport.addEventListener("scroll", requestScrollNotification, { passive: true });
             viewport.addEventListener("keydown", handleKeyDown);
             viewport.addEventListener("mousedown", handleMouseDown);
+            viewport.addEventListener("click", handleClick);
         }
 
         registry.set(viewportElementId, {
@@ -167,6 +173,7 @@ function createRichTextViewportRuntime() {
             handleKeyDown,
             handleMouseDown,
             handleMouseUp,
+            handleClick,
             dotNetReference,
             suppressScrollNotificationsUntil: 0
         });
@@ -188,12 +195,133 @@ function createRichTextViewportRuntime() {
             viewport.removeEventListener("scroll", entry.requestScrollNotification);
             viewport.removeEventListener("keydown", entry.handleKeyDown);
             viewport.removeEventListener("mousedown", entry.handleMouseDown);
+            viewport.removeEventListener("click", entry.handleClick);
         }
 
         window.removeEventListener("resize", entry.requestSync);
         window.removeEventListener("scroll", entry.requestSync);
         window.removeEventListener("mouseup", entry.handleMouseUp);
         registry.delete(viewportElementId);
+        hideImageViewer();
+    }
+
+    function handleRichTextImageClick(viewportElementId, event) {
+        if (event.defaultPrevented ||
+            event.button !== 0 ||
+            event.detail !== 1 ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            event.altKey) {
+            return;
+        }
+
+        const viewport = document.getElementById(viewportElementId);
+        const target = event.target instanceof Element ? event.target : null;
+        const image = target?.closest("p.rich-text-image img, img[data-rich-image-id]");
+        if (!viewport || !image || !viewport.contains(image)) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        showImageViewer(image);
+    }
+
+    function showImageViewer(sourceImage) {
+        hideImageViewer();
+
+        const overlay = document.createElement("div");
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+        overlay.style.position = "fixed";
+        overlay.style.inset = "0";
+        overlay.style.zIndex = "20000";
+        overlay.style.display = "flex";
+        overlay.style.alignItems = "center";
+        overlay.style.justifyContent = "center";
+        overlay.style.padding = "24px";
+        overlay.style.background = "rgba(9, 15, 24, 0.78)";
+        overlay.style.boxSizing = "border-box";
+
+        const frame = document.createElement("div");
+        frame.style.position = "relative";
+        frame.style.maxWidth = "96vw";
+        frame.style.maxHeight = "92vh";
+        frame.style.display = "flex";
+        frame.style.alignItems = "center";
+        frame.style.justifyContent = "center";
+
+        const image = document.createElement("img");
+        image.src = sourceImage.currentSrc || sourceImage.src;
+        image.alt = sourceImage.getAttribute("alt") || "";
+        image.style.maxWidth = "96vw";
+        image.style.maxHeight = "92vh";
+        image.style.width = "auto";
+        image.style.height = "auto";
+        image.style.display = "block";
+        image.style.background = "#fff";
+        image.style.boxShadow = "0 18px 48px rgba(0, 0, 0, 0.35)";
+
+        const closeButton = document.createElement("button");
+        closeButton.type = "button";
+        closeButton.setAttribute("aria-label", "Закрыть");
+        closeButton.textContent = "x";
+        closeButton.style.position = "absolute";
+        closeButton.style.top = "-18px";
+        closeButton.style.right = "-18px";
+        closeButton.style.width = "36px";
+        closeButton.style.height = "36px";
+        closeButton.style.border = "1px solid rgba(255, 255, 255, 0.65)";
+        closeButton.style.borderRadius = "50%";
+        closeButton.style.background = "#ffffff";
+        closeButton.style.color = "#102033";
+        closeButton.style.font = "20px/1 Arial, sans-serif";
+        closeButton.style.cursor = "pointer";
+        closeButton.style.boxShadow = "0 8px 18px rgba(0, 0, 0, 0.25)";
+
+        frame.appendChild(image);
+        frame.appendChild(closeButton);
+        overlay.appendChild(frame);
+        document.body.appendChild(overlay);
+
+        const handleKeyDown = (event) => {
+            if (event.key === "Escape") {
+                hideImageViewer();
+            }
+        };
+
+        const handleMouseDown = (event) => {
+            if (event.target === overlay) {
+                hideImageViewer();
+            }
+        };
+
+        closeButton.addEventListener("click", hideImageViewer);
+        overlay.addEventListener("mousedown", handleMouseDown);
+        document.addEventListener("keydown", handleKeyDown, true);
+
+        activeImageViewer = {
+            overlay,
+            closeButton,
+            handleKeyDown,
+            handleMouseDown
+        };
+
+        closeButton.focus();
+    }
+
+    function hideImageViewer() {
+        if (!activeImageViewer) {
+            return;
+        }
+
+        const viewer = activeImageViewer;
+        activeImageViewer = null;
+        viewer.closeButton.removeEventListener("click", hideImageViewer);
+        viewer.overlay.removeEventListener("mousedown", viewer.handleMouseDown);
+        document.removeEventListener("keydown", viewer.handleKeyDown, true);
+        viewer.overlay.remove();
     }
 
     function getChunkBlocks(chunk) {

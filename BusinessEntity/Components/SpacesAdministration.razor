@@ -53,6 +53,7 @@
                         <tr>
                             <th>Имя</th>
                             <th>Создано</th>
+                            <th>Настройки</th>
                             <th class="text-end">Действия</th>
                         </tr>
                     </thead>
@@ -73,6 +74,16 @@
                                     }
                                 </td>
                                 <td>@space.CreatedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>
+                                    <div class="form-check mb-0">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               checked="@GetDoBackup(space.Id)"
+                                               @onchange="args => SetDoBackupAsync(space.Id, args)"
+                                               disabled="@IsBusy" />
+                                        <label class="form-check-label">Делать бэкап</label>
+                                    </div>
+                                </td>
                                 <td class="text-end">
                                     @if (DeleteCandidateId == space.Id)
                                     {
@@ -125,6 +136,7 @@
 
 @code {
     private readonly List<BusinessEntityEntity> Spaces = new();
+    private readonly Dictionary<Guid, bool> DoBackupBySpaceId = new();
     private bool IsLoading;
     private bool IsBusy;
     private string NewSpaceName { get; set; } = string.Empty;
@@ -239,13 +251,42 @@
         try
         {
             var spaces = await SpaceHelper.GetSpacesAsync();
+            var properties = await SpaceHelper.GetGenericSpacePropertiesAsync(spaces.Select(x => x.Id));
+
             Spaces.Clear();
             Spaces.AddRange(spaces);
+            DoBackupBySpaceId.Clear();
+            foreach (var space in spaces)
+            {
+                DoBackupBySpaceId[space.Id] = properties.TryGetValue(space.Id, out var settings) && settings.DoBackup;
+            }
         }
         finally
         {
             IsLoading = false;
         }
+    }
+
+    private bool GetDoBackup(Guid spaceId)
+    {
+        return DoBackupBySpaceId.TryGetValue(spaceId, out var doBackup) && doBackup;
+    }
+
+    private async Task SetDoBackupAsync(Guid spaceId, ChangeEventArgs args)
+    {
+        var doBackup = args.Value switch
+        {
+            bool value => value,
+            string value when bool.TryParse(value, out var parsed) => parsed,
+            _ => false
+        };
+
+        await RunBusyActionAsync(
+            async () =>
+            {
+                var settings = await SpaceHelper.SetDoBackupAsync(spaceId, doBackup);
+                DoBackupBySpaceId[spaceId] = settings.DoBackup;
+            });
     }
 
     /// <summary>

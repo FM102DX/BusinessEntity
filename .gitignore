@@ -326,6 +326,7 @@ __pycache__/
 # Docker
 # -----------------------------------------
 .dockerignore
+BusinessEntityStorage/
 
 # -----------------------------------------
 # OS generated files

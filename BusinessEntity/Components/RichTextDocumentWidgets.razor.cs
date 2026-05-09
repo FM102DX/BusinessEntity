@@ -3,6 +3,7 @@ using BusinessEntity.Core.RichText;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
+using System.Globalization;
 
 namespace BusinessEntity.Components
 {
@@ -310,12 +311,17 @@ namespace BusinessEntity.Components
 
         private static string FormatInteger(int value)
         {
-            return value.ToString("N0");
+            return UseSpaceGroupSeparators(value.ToString("#,0", CultureInfo.InvariantCulture));
         }
 
         private static string FormatAverage(double value)
         {
-            return value.ToString("N1");
+            return UseSpaceGroupSeparators(value.ToString("#,0.0", CultureInfo.InvariantCulture));
+        }
+
+        private static string UseSpaceGroupSeparators(string value)
+        {
+            return value.Replace(",", " ");
         }
 
         private string GetBookmarkButtonClass(RichTextDocumentBookmark bookmark)

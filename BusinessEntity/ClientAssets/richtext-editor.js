@@ -1,4 +1,4 @@
-import { Editor } from "@tiptap/core";
+import { Editor, Node } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -27,6 +27,47 @@ const CustomHeading = Heading.extend({
     }
 });
 
+const RichTextImage = Node.create({
+    name: "richTextImage",
+    group: "block",
+    atom: true,
+    selectable: true,
+    draggable: true,
+
+    addAttributes() {
+        return {
+            src: { default: null },
+            imageId: { default: null },
+            displayVariant: { default: "original" },
+            altText: { default: "" },
+            width: { default: null },
+            height: { default: null }
+        };
+    },
+
+    parseHTML() {
+        return [
+            {
+                tag: "p.rich-text-image",
+                getAttrs: element => readImageAttributes(element.querySelector("img"))
+            },
+            {
+                tag: "img[data-rich-image-id]",
+                getAttrs: element => readImageAttributes(element)
+            },
+            {
+                tag: "img[src*='/rich-document-files/']",
+                getAttrs: element => readImageAttributes(element)
+            }
+        ];
+    },
+
+    renderHTML({ node }) {
+        const attrs = buildImageDomAttributes(node.attrs);
+        return ["p", { class: "rich-text-image" }, ["img", attrs]];
+    }
+});
+
 const extensions = [
     StarterKit.configure({
         heading: false,
@@ -34,10 +75,12 @@ const extensions = [
     }),
     Paragraph,
     CustomHeading.configure({ levels: [1, 2, 3] }),
+    RichTextImage,
     Underline
 ];
 
 const registries = new Map();
+let activeImageMenu = null;
 
 function getRegistry(viewportElementId) {
     let registry = registries.get(viewportElementId);
@@ -45,7 +88,8 @@ function getRegistry(viewportElementId) {
         registry = {
             editors: new Map(),
             activeSortOrder: null,
-            dotNetReference: null
+            dotNetReference: null,
+            documentId: null
         };
         registries.set(viewportElementId, registry);
     }
@@ -56,6 +100,345 @@ function getRegistry(viewportElementId) {
 function toSortOrder(value) {
     const sortOrder = Number(value);
     return Number.isFinite(sortOrder) ? sortOrder : -1;
+}
+
+function toPositiveInt(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0
+        ? Math.round(number)
+        : null;
+}
+
+function readImageAttributes(element) {
+    if (!element) {
+        return false;
+    }
+
+    const src = element.getAttribute("src") || "";
+    const parsed = parseRichDocumentImageUrl(src);
+    const imageId = element.getAttribute("data-rich-image-id") || parsed.imageId;
+    if (!imageId) {
+        return false;
+    }
+
+    return {
+        src,
+        imageId,
+        displayVariant: element.getAttribute("data-display-variant") || parsed.variant || "original",
+        altText: element.getAttribute("alt") || "",
+        width: toPositiveInt(element.getAttribute("width")),
+        height: toPositiveInt(element.getAttribute("height"))
+    };
+}
+
+function buildImageDomAttributes(attrs) {
+    const imageId = attrs.imageId || "";
+    const displayVariant = attrs.displayVariant || "original";
+    const domAttrs = {
+        src: attrs.src || "",
+        alt: attrs.altText || "",
+        "data-rich-image-id": imageId,
+        "data-display-variant": displayVariant,
+        loading: "lazy"
+    };
+
+    const width = toPositiveInt(attrs.width);
+    const height = toPositiveInt(attrs.height);
+    if (width) {
+        domAttrs.width = String(width);
+    }
+
+    if (height) {
+        domAttrs.height = String(height);
+    }
+
+    const styles = [];
+    if (width) {
+        styles.push(`width: ${width}px`);
+    }
+
+    if (height) {
+        styles.push(`height: ${height}px`);
+    }
+
+    if (styles.length > 0) {
+        domAttrs.style = styles.join("; ");
+    }
+
+    return domAttrs;
+}
+
+function parseRichDocumentImageUrl(src) {
+    const empty = { imageId: "", variant: "original" };
+    if (!src) {
+        return empty;
+    }
+
+    const marker = "/rich-document-files/";
+    const markerIndex = src.toLowerCase().indexOf(marker);
+    if (markerIndex < 0) {
+        return empty;
+    }
+
+    const tail = src.slice(markerIndex + marker.length).split(/[?#]/)[0];
+    const parts = tail.split("/").filter(Boolean);
+    if (parts.length < 4 || parts[1].toLowerCase() !== "images") {
+        return empty;
+    }
+
+    return {
+        imageId: decodeURIComponent(parts[2]),
+        variant: decodeURIComponent(parts[3] || "original")
+    };
+}
+
+function getClipboardImageFile(event) {
+    const items = Array.from(event?.clipboardData?.items || []);
+    for (const item of items) {
+        if (item.kind === "file" && item.type && item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (file) {
+                return file;
+            }
+        }
+    }
+
+    const files = Array.from(event?.clipboardData?.files || []);
+    return files.find(file => file.type && file.type.startsWith("image/")) || null;
+}
+
+async function uploadRichTextImage(documentId, file) {
+    const formData = new FormData();
+    formData.append("file", file, file.name || "clipboard-image.png");
+
+    const response = await fetch(`/rich-document-files/${encodeURIComponent(documentId)}/images`, {
+        method: "POST",
+        body: formData
+    });
+
+    if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Image upload failed (${response.status})`);
+    }
+
+    return response.json();
+}
+
+async function insertPastedImage(editor, documentId, file) {
+    const result = await uploadRichTextImage(documentId, file);
+    const imageId = result.imageId ?? result.ImageId ?? "";
+    const variant = result.variant ?? result.Variant ?? "original";
+    const url = result.url ?? result.Url ?? `/rich-document-files/${documentId}/images/${encodeURIComponent(imageId)}/${encodeURIComponent(variant)}`;
+    const fileName = result.fileName ?? result.FileName ?? file.name ?? "";
+
+    if (!imageId) {
+        throw new Error("Image upload response does not contain imageId.");
+    }
+
+    editor.chain().focus().insertContent({
+        type: "richTextImage",
+        attrs: {
+            src: url,
+            imageId,
+            displayVariant: variant,
+            altText: fileName
+        }
+    }).run();
+}
+
+function handleImagePaste(viewportElementId, registry, sortOrder, event) {
+    const file = getClipboardImageFile(event);
+    if (!file || !registry.documentId) {
+        return false;
+    }
+
+    event.preventDefault();
+    const state = registry.editors.get(sortOrder);
+    if (!state) {
+        return true;
+    }
+
+    insertPastedImage(state.editor, registry.documentId, file).catch(error => {
+        console.error("[rich-text-image-paste]", error);
+    });
+    return true;
+}
+
+function hideImageSizeMenu() {
+    if (!activeImageMenu) {
+        return;
+    }
+
+    const menu = activeImageMenu;
+    activeImageMenu = null;
+    document.removeEventListener("mousedown", menu.onDocumentMouseDown, true);
+    document.removeEventListener("keydown", menu.onDocumentKeyDown, true);
+    window.removeEventListener("resize", menu.onWindowChange, true);
+    window.removeEventListener("scroll", menu.onWindowChange, true);
+    menu.element.remove();
+}
+
+function handleImageContextMenu(registry, sortOrder, event) {
+    const target = event.target instanceof Element ? event.target : null;
+    const image = target?.closest("img[data-rich-image-id], p.rich-text-image img");
+    const state = registry.editors.get(sortOrder);
+    if (!image || !state || !state.editor?.view?.dom?.contains(image)) {
+        return false;
+    }
+
+    const position = findImageNodePosition(state.editor, image);
+    if (position == null) {
+        return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    showImageSizeMenu(state.editor, position, event);
+    return true;
+}
+
+function findImageNodePosition(editor, imageElement) {
+    const imageAttrs = readImageAttributes(imageElement);
+    if (!imageAttrs || !imageAttrs.imageId) {
+        return null;
+    }
+
+    let match = null;
+    editor.state.doc.descendants((node, position) => {
+        if (node.type.name !== "richTextImage") {
+            return true;
+        }
+
+        if (node.attrs.imageId === imageAttrs.imageId) {
+            match = position;
+            return false;
+        }
+
+        return true;
+    });
+
+    return match;
+}
+
+function showImageSizeMenu(editor, position, event) {
+    hideImageSizeMenu();
+
+    const menu = document.createElement("div");
+    menu.style.position = "fixed";
+    menu.style.zIndex = "10000";
+    menu.style.minWidth = "0";
+    menu.style.padding = "6px";
+    menu.style.border = "1px solid #b8c4d4";
+    menu.style.borderRadius = "4px";
+    menu.style.background = "#ffffff";
+    menu.style.boxShadow = "0 8px 24px rgba(15, 23, 42, 0.18)";
+    menu.style.font = "13px/1.3 Arial, sans-serif";
+    menu.style.color = "#102033";
+    menu.style.userSelect = "none";
+
+    const optionRow = document.createElement("div");
+    optionRow.style.display = "flex";
+    optionRow.style.alignItems = "center";
+    optionRow.style.gap = "4px";
+
+    for (const option of [
+        { label: "100px", width: 100 },
+        { label: "200px", width: 200 },
+        { label: "300px", width: 300 },
+        { label: "500px", width: 500 },
+        { label: "[orig]", width: null }
+    ]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = option.label;
+        button.style.border = "1px solid #c9d4e2";
+        button.style.borderRadius = "3px";
+        button.style.background = "#f8fafc";
+        button.style.padding = "4px 6px";
+        button.style.cursor = "pointer";
+        button.style.color = "#102033";
+        button.addEventListener("mousedown", e => e.preventDefault());
+        button.addEventListener("click", () => setImageWidth(editor, position, option.width));
+        optionRow.appendChild(button);
+    }
+
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "1";
+    input.step = "1";
+    input.placeholder = "custom px";
+    input.style.boxSizing = "border-box";
+    input.style.width = "92px";
+    input.style.marginLeft = "4px";
+    input.style.border = "1px solid #c9d4e2";
+    input.style.borderRadius = "3px";
+    input.style.padding = "5px 6px";
+    input.addEventListener("mousedown", e => e.stopPropagation());
+    input.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            const width = toPositiveInt(input.value);
+            if (width) {
+                setImageWidth(editor, position, width);
+            }
+        }
+    });
+
+    optionRow.appendChild(input);
+    menu.appendChild(optionRow);
+    document.body.appendChild(menu);
+
+    positionImageMenu(menu, event.clientX, event.clientY);
+
+    const menuState = {
+        element: menu,
+        onDocumentMouseDown: e => {
+            if (!menu.contains(e.target)) {
+                hideImageSizeMenu();
+            }
+        },
+        onDocumentKeyDown: e => {
+            if (e.key === "Escape") {
+                hideImageSizeMenu();
+            }
+        },
+        onWindowChange: () => hideImageSizeMenu()
+    };
+
+    activeImageMenu = menuState;
+    document.addEventListener("mousedown", menuState.onDocumentMouseDown, true);
+    document.addEventListener("keydown", menuState.onDocumentKeyDown, true);
+    window.addEventListener("resize", menuState.onWindowChange, true);
+    window.addEventListener("scroll", menuState.onWindowChange, true);
+    input.focus();
+}
+
+function positionImageMenu(menu, clientX, clientY) {
+    const margin = 8;
+    const rect = menu.getBoundingClientRect();
+    const left = Math.min(clientX, window.innerWidth - rect.width - margin);
+    const top = Math.min(clientY, window.innerHeight - rect.height - margin);
+    menu.style.left = `${Math.max(margin, left)}px`;
+    menu.style.top = `${Math.max(margin, top)}px`;
+}
+
+function setImageWidth(editor, position, width) {
+    const node = editor.state.doc.nodeAt(position);
+    if (!node || node.type.name !== "richTextImage") {
+        hideImageSizeMenu();
+        return;
+    }
+
+    const nextAttrs = {
+        ...node.attrs,
+        width: width ?? null,
+        height: null
+    };
+
+    const transaction = editor.state.tr.setNodeMarkup(position, undefined, nextAttrs);
+    editor.view.dispatch(transaction);
+    editor.view.focus();
+    hideImageSizeMenu();
 }
 
 function createEditor(viewportElementId, registry, host, item) {
@@ -72,6 +455,14 @@ function createEditor(viewportElementId, registry, host, item) {
         editorProps: {
             attributes: {
                 class: "rich-text-tiptap-content"
+            },
+            handlePaste: (view, event) => {
+                return handleImagePaste(viewportElementId, registry, sortOrder, event);
+            },
+            handleDOMEvents: {
+                contextmenu: (view, event) => {
+                    return handleImageContextMenu(registry, sortOrder, event);
+                }
             }
         },
         onFocus: () => {
@@ -127,7 +518,7 @@ function notifyEditorDisposed(registry, state, reason) {
         .catch(() => {});
 }
 
-function syncEditors(viewportElementId, chunks, dotNetReference) {
+function syncEditors(viewportElementId, chunks, dotNetReference, documentId) {
     const viewport = document.getElementById(viewportElementId);
     if (!viewport) {
         return;
@@ -135,6 +526,7 @@ function syncEditors(viewportElementId, chunks, dotNetReference) {
 
     const registry = getRegistry(viewportElementId);
     registry.dotNetReference = dotNetReference ?? registry.dotNetReference;
+    registry.documentId = documentId ?? registry.documentId;
     const visibleSortOrders = new Set();
     const items = Array.isArray(chunks) ? chunks : [];
     const itemsBySortOrder = new Map();
@@ -207,6 +599,8 @@ function collectEditors(viewportElementId) {
 }
 
 function destroyEditors(viewportElementId) {
+    hideImageSizeMenu();
+
     const registry = registries.get(viewportElementId);
     if (!registry) {
         return;

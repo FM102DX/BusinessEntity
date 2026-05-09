@@ -84,6 +84,13 @@ namespace BusinessEntity.Services.RichTextImport
 
             if (nodeName == "img")
             {
+                var existingImageBlock = TryBuildExistingEmbeddedImageBlock(node);
+                if (existingImageBlock != null)
+                {
+                    blocks.Add(existingImageBlock);
+                    return;
+                }
+
                 var imageFile = await TryImportImageAsync(node, cancellationToken);
                 if (imageFile != null)
                 {
@@ -93,7 +100,9 @@ namespace BusinessEntity.Services.RichTextImport
                         Kind = "image",
                         ImageId = imageFile.ImageId,
                         DisplayVariant = imageFile.Variant,
-                        AltText = node.GetAttributeValue("alt", string.Empty)
+                        AltText = node.GetAttributeValue("alt", string.Empty),
+                        Width = ReadPositivePixelValue(node, "width"),
+                        Height = ReadPositivePixelValue(node, "height")
                     });
                 }
                 return;
@@ -143,6 +152,117 @@ namespace BusinessEntity.Services.RichTextImport
 
             var nodeName = node.Name.ToLowerInvariant();
             return nodeName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "p" or "div" or "img";
+        }
+
+        private static RichTextBlock? TryBuildExistingEmbeddedImageBlock(HtmlNode imageNode)
+        {
+            var imageId = imageNode.GetAttributeValue("data-rich-image-id", string.Empty).Trim();
+            var variant = imageNode.GetAttributeValue("data-display-variant", string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(imageId))
+            {
+                var src = imageNode.GetAttributeValue("src", string.Empty).Trim();
+                if (!TryParseRichDocumentImageUrl(src, out imageId, out variant))
+                {
+                    return null;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(variant))
+            {
+                variant = "original";
+            }
+
+            return new RichTextBlock
+            {
+                Kind = "image",
+                ImageId = imageId,
+                DisplayVariant = variant,
+                AltText = imageNode.GetAttributeValue("alt", string.Empty),
+                Width = ReadPositivePixelValue(imageNode, "width"),
+                Height = ReadPositivePixelValue(imageNode, "height")
+            };
+        }
+
+        private static bool TryParseRichDocumentImageUrl(string? src, out string imageId, out string variant)
+        {
+            imageId = string.Empty;
+            variant = "original";
+            if (string.IsNullOrWhiteSpace(src))
+            {
+                return false;
+            }
+
+            const string marker = "/rich-document-files/";
+            var markerIndex = src.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (markerIndex < 0)
+            {
+                return false;
+            }
+
+            var tail = src[(markerIndex + marker.Length)..];
+            var queryIndex = tail.IndexOfAny(new[] { '?', '#' });
+            if (queryIndex >= 0)
+            {
+                tail = tail[..queryIndex];
+            }
+
+            var parts = tail.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 4 || !string.Equals(parts[1], "images", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            imageId = Uri.UnescapeDataString(parts[2]);
+            variant = Uri.UnescapeDataString(parts[3]);
+            return !string.IsNullOrWhiteSpace(imageId);
+        }
+
+        private static int ReadPositivePixelValue(HtmlNode node, string name)
+        {
+            var attributeValue = ReadPositiveInt(node.GetAttributeValue(name, string.Empty));
+            if (attributeValue > 0)
+            {
+                return attributeValue;
+            }
+
+            var style = node.GetAttributeValue("style", string.Empty);
+            foreach (var declaration in style.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var separatorIndex = declaration.IndexOf(':');
+                if (separatorIndex < 0)
+                {
+                    continue;
+                }
+
+                var propertyName = declaration[..separatorIndex].Trim();
+                if (!string.Equals(propertyName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var propertyValue = declaration[(separatorIndex + 1)..].Trim();
+                var pixelSuffixIndex = propertyValue.IndexOf("px", StringComparison.OrdinalIgnoreCase);
+                if (pixelSuffixIndex >= 0)
+                {
+                    propertyValue = propertyValue[..pixelSuffixIndex];
+                }
+
+                return ReadPositiveInt(propertyValue);
+            }
+
+            return 0;
+        }
+
+        private static int ReadPositiveInt(string? rawValue)
+        {
+            return int.TryParse(
+                rawValue?.Trim(),
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var value) && value > 0
+                ? value
+                : 0;
         }
 
         // Санитизирует inline-html так, чтобы в документ попали только разрешенные теги форматирования.

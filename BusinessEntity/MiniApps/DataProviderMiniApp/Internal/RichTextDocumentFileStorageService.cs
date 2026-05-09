@@ -1,6 +1,7 @@
 using System.Text.Json;
 using BusinessEntity.Core.RichText;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
 
@@ -11,11 +12,19 @@ internal sealed class RichTextDocumentFileStorageService
     private const string MetadataFileName = "metadata.json";
     private readonly string _storageRoot;
 
-    // Вычисляет root-папку storage относительно content-root приложения.
-    public RichTextDocumentFileStorageService(IWebHostEnvironment environment)
+    // Вычисляет root-папку storage из конфигурации или относительно content-root приложения.
+    public RichTextDocumentFileStorageService(IWebHostEnvironment environment, IConfiguration configuration)
     {
         var contentRoot = environment.ContentRootPath ?? AppContext.BaseDirectory;
-        _storageRoot = Path.Combine(contentRoot, "App_Data", "RichDocumentData");
+        var configuredRoot = configuration["Storage:RootPath"];
+        var storageRoot = string.IsNullOrWhiteSpace(configuredRoot)
+            ? Path.Combine(contentRoot, "App_Data", "RichDocumentData")
+            : configuredRoot.Trim();
+
+        _storageRoot = Path.GetFullPath(
+            Path.IsPathRooted(storageRoot)
+                ? storageRoot
+                : Path.Combine(contentRoot, storageRoot));
     }
 
     // Полностью заменяет embedded-файлы документа новым набором.
@@ -109,7 +118,7 @@ internal sealed class RichTextDocumentFileStorageService
     // Возвращает каталог документа.
     private string GetDocumentDirectory(Guid businessEntityId)
     {
-        return Path.Combine(_storageRoot, businessEntityId.ToString("D"));
+        return Path.Combine(_storageRoot, "business-entities", businessEntityId.ToString("D"));
     }
 
     // Возвращает каталог конкретного embedded-изображения.

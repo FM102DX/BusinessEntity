@@ -103,8 +103,9 @@ internal static class RichTextChunkStorageSerializer
                     var encodedAlt = WebUtility.HtmlEncode(block.AltText ?? string.Empty);
                     var imageId = Uri.EscapeDataString(block.ImageId ?? string.Empty);
                     var variant = Uri.EscapeDataString(string.IsNullOrWhiteSpace(block.DisplayVariant) ? "original" : block.DisplayVariant);
+                    var imageAttributes = BuildImageAttributes(block, encodedAlt, imageId, variant);
                     builder.Append(
-                        $"<p class=\"rich-text-image\"><img src=\"/rich-document-files/{businessEntityId:D}/images/{imageId}/{variant}\" alt=\"{encodedAlt}\" /></p>");
+                        $"<p class=\"rich-text-image\"><img src=\"/rich-document-files/{businessEntityId:D}/images/{imageId}/{variant}\"{imageAttributes} /></p>");
                     break;
             }
         }
@@ -169,6 +170,43 @@ internal static class RichTextChunkStorageSerializer
             }
         }
 
+        return builder.ToString();
+    }
+
+    private static string BuildImageAttributes(RichTextBlock block, string encodedAlt, string imageId, string variant)
+    {
+        var builder = new StringBuilder();
+        builder.Append($" alt=\"{encodedAlt}\"");
+        builder.Append($" data-rich-image-id=\"{imageId}\"");
+        builder.Append($" data-display-variant=\"{variant}\"");
+
+        if (block.Width > 0)
+        {
+            builder.Append($" width=\"{block.Width}\"");
+        }
+
+        if (block.Height > 0)
+        {
+            builder.Append($" height=\"{block.Height}\"");
+        }
+
+        var styleParts = new List<string>();
+        if (block.Width > 0)
+        {
+            styleParts.Add($"width: {block.Width}px");
+        }
+
+        if (block.Height > 0)
+        {
+            styleParts.Add($"height: {block.Height}px");
+        }
+
+        if (styleParts.Count > 0)
+        {
+            builder.Append($" style=\"{string.Join("; ", styleParts)}\"");
+        }
+
+        builder.Append(" loading=\"lazy\"");
         return builder.ToString();
     }
 

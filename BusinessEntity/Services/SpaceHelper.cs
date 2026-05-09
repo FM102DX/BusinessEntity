@@ -1,5 +1,12 @@
 using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.Services;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Unicode;
 using System.Text.RegularExpressions;
 
 namespace BusinessEntity.Services
@@ -12,13 +19,24 @@ namespace BusinessEntity.Services
             @"^[\p{L}\p{Nd}_]{5}[\p{L}\p{Nd}_ ]*$",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+        private static readonly JsonSerializerOptions PropertyJsonOptions = new()
+        {
+            Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.Never
+        };
+
         // Основной helper бизнес-сущностей.
         private readonly BusinessEntityHelper _businessEntityHelper;
+        private readonly IAsyncRepository<BusinessEntityPropertyDto> _businessEntityPropertyRepository;
 
         // Подключает helper бизнес-сущностей для CRUD операций с пространствами.
-        public SpaceHelper(BusinessEntityHelper businessEntityHelper)
+        public SpaceHelper(
+            BusinessEntityHelper businessEntityHelper,
+            IAsyncRepository<BusinessEntityPropertyDto> businessEntityPropertyRepository)
         {
             _businessEntityHelper = businessEntityHelper;
+            _businessEntityPropertyRepository = businessEntityPropertyRepository;
         }
 
         /// <summary>
@@ -40,6 +58,84 @@ namespace BusinessEntity.Services
                 .OrderBy(x => x.CreatedDate)
                 .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Возвращает общие настройки пространства.
+        /// </summary>
+        public async Task<GenericSpaceProperties> GetGenericSpacePropertiesAsync(Guid spaceId, CancellationToken ct = default)
+        {
+            var property = await GetGenericSpacePropertyDtoAsync(spaceId, ct);
+            return DeserializeGenericSpaceProperties(property);
+        }
+
+        /// <summary>
+        /// Возвращает общие настройки для набора пространств.
+        /// </summary>
+        public async Task<IReadOnlyDictionary<Guid, GenericSpaceProperties>> GetGenericSpacePropertiesAsync(
+            IEnumerable<Guid> spaceIds,
+            CancellationToken ct = default)
+        {
+            var ids = spaceIds.ToHashSet();
+            if (ids.Count == 0)
+            {
+                return new Dictionary<Guid, GenericSpaceProperties>();
+            }
+
+            var idList = ids.ToList();
+            var propertyType = (int)BusinessEntityPropertyTypeEnum.GenericSpaceProperties;
+            var properties = await _businessEntityPropertyRepository.GetAllAsync(
+                x => idList.Contains(x.ParentEntityId) && x.PropertyType == propertyType,
+                ct: ct);
+
+            return ids.ToDictionary(
+                x => x,
+                x =>
+                {
+                    var property = properties
+                        .Where(p => p.ParentEntityId == x)
+                        .OrderByDescending(p => p.LastModifiedDate)
+                        .ThenByDescending(p => p.CreatedDate)
+                        .FirstOrDefault();
+                    return DeserializeGenericSpaceProperties(property);
+                });
+        }
+
+        /// <summary>
+        /// Сохраняет признак резервного копирования пространства.
+        /// </summary>
+        public async Task<GenericSpaceProperties> SetDoBackupAsync(Guid spaceId, bool doBackup, CancellationToken ct = default)
+        {
+            await GetRequiredSpaceAsync(spaceId, ct);
+
+            var property = await GetGenericSpacePropertyDtoAsync(spaceId, ct);
+            var settings = DeserializeGenericSpaceProperties(property);
+            settings.DoBackup = doBackup;
+
+            var now = DateTime.UtcNow;
+            var serialized = JsonSerializer.Serialize(settings, PropertyJsonOptions);
+            if (property == null)
+            {
+                await _businessEntityPropertyRepository.AddAsync(new BusinessEntityPropertyDto
+                {
+                    Id = Guid.NewGuid(),
+                    CreatedDate = now,
+                    LastModifiedDate = now,
+                    ParentEntityId = spaceId,
+                    PropertyType = (int)BusinessEntityPropertyTypeEnum.GenericSpaceProperties,
+                    Data = serialized,
+                    Metadata = nameof(GenericSpaceProperties)
+                }, ct);
+            }
+            else
+            {
+                property.LastModifiedDate = now;
+                property.Data = serialized;
+                property.Metadata = nameof(GenericSpaceProperties);
+                await _businessEntityPropertyRepository.UpdateAsync(property, ct);
+            }
+
+            return settings;
         }
 
         /// <summary>
@@ -110,6 +206,37 @@ namespace BusinessEntity.Services
             }
 
             return space;
+        }
+
+        private async Task<BusinessEntityPropertyDto?> GetGenericSpacePropertyDtoAsync(Guid spaceId, CancellationToken ct)
+        {
+            var propertyType = (int)BusinessEntityPropertyTypeEnum.GenericSpaceProperties;
+            var properties = await _businessEntityPropertyRepository.GetAllAsync(
+                x => x.ParentEntityId == spaceId && x.PropertyType == propertyType,
+                ct: ct);
+
+            return properties
+                .OrderByDescending(x => x.LastModifiedDate)
+                .ThenByDescending(x => x.CreatedDate)
+                .FirstOrDefault();
+        }
+
+        private static GenericSpaceProperties DeserializeGenericSpaceProperties(BusinessEntityPropertyDto? property)
+        {
+            if (property == null || string.IsNullOrWhiteSpace(property.Data))
+            {
+                return new GenericSpaceProperties();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<GenericSpaceProperties>(property.Data, PropertyJsonOptions)
+                    ?? new GenericSpaceProperties();
+            }
+            catch (JsonException)
+            {
+                return new GenericSpaceProperties();
+            }
         }
     }
 }

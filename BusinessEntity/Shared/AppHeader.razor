@@ -4,6 +4,7 @@
 @using BusinessEntity.Contracts
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
+@implements IDisposable
 @inject IUserContextService UserContext
 @inject BusinessEntityHelper BusinessEntityHelper
 
@@ -16,16 +17,25 @@
     <div class="app-header__actions">
         @if (IsAuthenticated)
         {
-            <details class="app-header__user-menu">
-                <summary class="app-header__avatar" title="@UserName">
+            <div class="app-header__user-menu"
+                 @onmouseenter="CancelUserMenuAutoClose"
+                 @onmouseleave="ScheduleUserMenuAutoClose">
+                <button type="button"
+                        class="app-header__avatar"
+                        title="@UserName"
+                        aria-expanded="@IsUserMenuOpen"
+                        @onclick="ToggleUserMenu">
                     @UserInitials
-                </summary>
+                </button>
 
-                <div class="app-header__dropdown">
-                    <a class="app-header__dropdown-item" href="/space-selection">Пространства</a>
-                    <a class="app-header__dropdown-item" href="/auth/logout">Выход</a>
-                </div>
-            </details>
+                @if (IsUserMenuOpen)
+                {
+                    <div class="app-header__dropdown">
+                        <a class="app-header__dropdown-item" href="/space-selection">Пространства</a>
+                        <a class="app-header__dropdown-item" href="/auth/logout">Выход</a>
+                    </div>
+                }
+            </div>
         }
     </div>
 </div>
@@ -35,6 +45,8 @@
     private bool IsAuthenticated { get; set; }
     private string UserName { get; set; } = string.Empty;
     private string UserInitials { get; set; } = string.Empty;
+    private bool IsUserMenuOpen { get; set; }
+    private CancellationTokenSource? _userMenuAutoCloseCts;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
@@ -73,6 +85,7 @@
         {
             UserName = string.Empty;
             UserInitials = string.Empty;
+            IsUserMenuOpen = false;
             return;
         }
 
@@ -96,5 +109,67 @@
         return trimmed.Length >= 2
             ? trimmed[..2].ToUpperInvariant()
             : trimmed.ToUpperInvariant();
+    }
+
+    private void ToggleUserMenu()
+    {
+        if (IsUserMenuOpen)
+        {
+            CloseUserMenu();
+            return;
+        }
+
+        CancelUserMenuAutoClose();
+        IsUserMenuOpen = true;
+    }
+
+    private void CloseUserMenu()
+    {
+        CancelUserMenuAutoClose();
+        IsUserMenuOpen = false;
+    }
+
+    private void CancelUserMenuAutoClose()
+    {
+        _userMenuAutoCloseCts?.Cancel();
+        _userMenuAutoCloseCts?.Dispose();
+        _userMenuAutoCloseCts = null;
+    }
+
+    private void ScheduleUserMenuAutoClose()
+    {
+        if (!IsUserMenuOpen)
+        {
+            return;
+        }
+
+        CancelUserMenuAutoClose();
+        var cts = new CancellationTokenSource();
+        _userMenuAutoCloseCts = cts;
+        _ = CloseUserMenuAfterDelayAsync(cts.Token);
+    }
+
+    private async Task CloseUserMenuAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                await InvokeAsync(() =>
+                {
+                    IsUserMenuOpen = false;
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        CancelUserMenuAutoClose();
     }
 }

@@ -23,6 +23,7 @@ namespace BusinessEntity.Services
         public const int MaxRichTextDocumentTitleLength = 120;
 
         private const string InvalidTitleCharacters = "<>:\"/\\|?*";
+        private const long MaxEmbeddedImageUploadBytes = 20L * 1024L * 1024L;
 
         // Базовый helper обычных business-entity операций.
         private readonly BusinessEntityHelper _businessEntityHelper;
@@ -764,6 +765,74 @@ namespace BusinessEntity.Services
         }
 
         /// <summary>
+        /// Сохраняет одно embedded-изображение rich-text документа без изменения chunk-ов.
+        /// </summary>
+        public async Task<RichTextEmbeddedImageUploadResult> SaveRichTextEmbeddedImageAsync(
+            Guid entityId,
+            Stream content,
+            string? fileName,
+            string? contentType,
+            CancellationToken ct = default)
+        {
+            if (entityId == Guid.Empty)
+            {
+                throw new ArgumentException("Entity id is required.", nameof(entityId));
+            }
+
+            if (content == null)
+            {
+                throw new ArgumentNullException(nameof(content));
+            }
+
+            var shell = await GetRichTextDocumentShellAsync(entityId, ct);
+            if (shell == null)
+            {
+                throw new InvalidOperationException("Rich-text документ не найден.");
+            }
+
+            var normalizedContentType = NormalizeImageContentType(contentType);
+            var normalizedFileName = NormalizeEmbeddedFileName(fileName, normalizedContentType);
+            await using var buffer = new MemoryStream();
+            await content.CopyToAsync(buffer, ct);
+            if (buffer.Length <= 0)
+            {
+                throw new InvalidOperationException("Файл изображения пустой.");
+            }
+
+            if (buffer.Length > MaxEmbeddedImageUploadBytes)
+            {
+                throw new InvalidOperationException(
+                    $"Размер изображения превышает лимит {MaxEmbeddedImageUploadBytes / 1024 / 1024} MB.");
+            }
+
+            var imageId = Guid.NewGuid().ToString("D");
+            var variant = "original";
+            var embeddedFile = new RichTextEmbeddedFile
+            {
+                ImageId = imageId,
+                Variant = variant,
+                FileName = normalizedFileName,
+                ContentType = normalizedContentType,
+                Content = buffer.ToArray()
+            };
+
+            await _dataProviderConnector.SaveRichTextEmbeddedFilesAsync(
+                entityId,
+                new[] { embeddedFile },
+                replaceExistingFiles: false,
+                ct);
+
+            return new RichTextEmbeddedImageUploadResult
+            {
+                ImageId = imageId,
+                Variant = variant,
+                Url = $"/rich-document-files/{entityId:D}/images/{Uri.EscapeDataString(imageId)}/{variant}",
+                FileName = normalizedFileName,
+                ContentType = normalizedContentType
+            };
+        }
+
+        /// <summary>
         /// Сохраняет rich-text документ как fan-out: entity, manifest, chunks и embedded files.
         /// </summary>
         public async Task SaveRichTextDocumentAsync(
@@ -1393,6 +1462,51 @@ namespace BusinessEntity.Services
 
             var chunk = chunks[0];
             return chunk.Blocks == null || chunk.Blocks.Count == 0;
+        }
+
+        private static string NormalizeImageContentType(string? contentType)
+        {
+            var normalized = string.IsNullOrWhiteSpace(contentType)
+                ? "application/octet-stream"
+                : contentType.Trim();
+
+            if (!normalized.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Можно загружать только изображения.");
+            }
+
+            return normalized;
+        }
+
+        private static string NormalizeEmbeddedFileName(string? fileName, string contentType)
+        {
+            var normalized = Path.GetFileName(fileName ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                normalized = $"clipboard-image.{GetExtensionFromContentType(contentType)}";
+            }
+
+            foreach (var invalidChar in Path.GetInvalidFileNameChars())
+            {
+                normalized = normalized.Replace(invalidChar, '_');
+            }
+
+            return normalized.Length <= 120
+                ? normalized
+                : normalized[^120..];
+        }
+
+        private static string GetExtensionFromContentType(string contentType)
+        {
+            return contentType.ToLowerInvariant() switch
+            {
+                "image/jpeg" => "jpg",
+                "image/png" => "png",
+                "image/gif" => "gif",
+                "image/webp" => "webp",
+                "image/svg+xml" => "svg",
+                _ => "bin"
+            };
         }
 
         // Builds a hierarchical H1-H3 tree from persisted flat table-of-contents entries.

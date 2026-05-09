@@ -6,5 +6,8 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 public enum BusinessEntityPropertyTypeEnum
 {
     // Неопределенный тип свойства.
-    Undefined = 0
+    Undefined = 0,
+
+    // Общие настройки пространства.
+    GenericSpaceProperties = 1
 }

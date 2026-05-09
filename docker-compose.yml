@@ -127,6 +127,9 @@ services:
       AUTHENTIK_REDIRECT_URIS: http://localhost:7000/auth/callback
       # Disable bootstrap temporarily to test
       EnsureAuthentikOnStartup: "false"
+      Storage__RootPath: /app/storage
+    volumes:
+      - ./BusinessEntityStorage:/app/storage
     depends_on:
       postgres-production-db:
         condition: service_healthy

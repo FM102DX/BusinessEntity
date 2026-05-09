@@ -776,7 +776,12 @@ namespace BusinessEntity.Components
                 };
             }).ToArray();
 
-            return JS.InvokeVoidAsync("richTextEditor.syncEditors", ViewportElementId, payload, _dotNetReference).AsTask();
+            return JS.InvokeVoidAsync(
+                "richTextEditor.syncEditors",
+                ViewportElementId,
+                payload,
+                _dotNetReference,
+                BusinessEntityId.ToString("D")).AsTask();
         }
 
         private void RecalculateSpacers()

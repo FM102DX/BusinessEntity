@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-09 18:32:53 +03:00
+
+### MAJOR-FEATURES
+
+#### Rich-text document images
+- В rich-doc добавлена вставка изображений из clipboard: редактор загружает картинку через API, сохраняет ее как embedded-файл документа и вставляет в content image-блок.
+- Для изображений rich-doc добавлено сохранение display-size в самом документе: ширина/высота проходят через block model, HTML serializer и HTML import/conversion pipeline.
+- В режиме редактирования добавлено контекстное меню изображения с быстрыми размерами `100 / 200 / 300 / 500`, режимом `[orig]` и custom-width вводом.
+- В режиме просмотра и редактирования добавлен in-page просмотрщик полного изображения по левому клику с закрытием через `ESC`, фон или кнопку закрытия.
+
+#### File object storage
+- Embedded-файлы rich-doc вынесены из disposable filesystem контейнера во внешний storage root, задаваемый через `Storage:RootPath`.
+- Docker compose монтирует host-каталог `BusinessEntityStorage` в `/app/storage`, чтобы загруженные изображения переживали пересборку и пересоздание контейнера.
+- Физическая структура файлового storage приведена к схеме `business-entities/{businessEntityId}/images/{imageId}/{variant}.bin`.
+
+### MINOR-FEATURES
+
+#### Rich-text document UX
+- Для изображений rich-doc добавлен pointer-cursor при hover, чтобы пользователь видел кликабельность.
+- Сериализация image HTML теперь добавляет `data-rich-image-id`, `data-display-variant`, `loading="lazy"` и размерные атрибуты.
+- Импорт HTML распознает уже существующие rich-doc embedded images и не пытается переимпортировать их как внешние картинки.
+- Форматирование чисел во вкладке статистики rich-doc переведено на пробелы как разделители групп.
+
+#### Shell UI
+- Пользовательское меню в шапке переведено с native `details` на управляемое Blazor-состояние и автоматически закрывается через 5 секунд после ухода мыши.
+
+#### Policies and storage configuration
+- Добавлена политика хранения файловых объектов, вложений, архивов и прочих загружаемых данных во внешнем storage.
+- `BusinessEntityStorage/` добавлен в `.gitignore`, а локальный fallback storage оставлен только как non-Docker default через `App_Data/RichDocumentData`.
+
 ## [0.9.0] - 2026-05-09 11:04:03 +03:00
 
 ### MAJOR-FEATURES
