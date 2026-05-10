@@ -76,6 +76,8 @@ Manifest намеренно остается маленьким. Его безо
 
 `HtmlCache` является основным read-side полем для browser viewport. Viewport рендерит уже подготовленный HTML и не пересобирает документ из raw blocks при обычном чтении.
 
+Если paragraph/heading HTML содержит inline image marker `span.rich-text-inline-image`, `HtmlCache` должен содержать уже отрендеренный `span > img`, где `src` построен сервером из `documentId + imageId + variant`. Browser viewport не должен доверять сохраненному `src` из editor HTML.
+
 Чанки режутся по настроенному размеру. Read-side логика не должна зависеть от того, что семантические границы идеально совпадают с границами чанков.
 
 ---

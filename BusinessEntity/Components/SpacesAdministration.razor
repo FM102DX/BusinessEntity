@@ -1,7 +1,10 @@
 @using BusinessEntity.Core.Classes
+@using BusinessEntity.Core.DomainEntities
 @using BusinessEntityEntity = BusinessEntity.Core.Classes.BusinessEntity
 @using BusinessEntity.Services
+@using BusinessEntity.Services.Backup
 @inject SpaceHelper SpaceHelper
+@inject SpaceBackupService SpaceBackupService
 
 <div class="card">
     <div class="card-body">
@@ -53,7 +56,6 @@
                         <tr>
                             <th>Имя</th>
                             <th>Создано</th>
-                            <th>Настройки</th>
                             <th class="text-end">Действия</th>
                         </tr>
                     </thead>
@@ -74,16 +76,6 @@
                                     }
                                 </td>
                                 <td>@space.CreatedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
-                                <td>
-                                    <div class="form-check mb-0">
-                                        <input class="form-check-input"
-                                               type="checkbox"
-                                               checked="@GetDoBackup(space.Id)"
-                                               @onchange="args => SetDoBackupAsync(space.Id, args)"
-                                               disabled="@IsBusy" />
-                                        <label class="form-check-label">Делать бэкап</label>
-                                    </div>
-                                </td>
                                 <td class="text-end">
                                     @if (DeleteCandidateId == space.Id)
                                     {
@@ -123,9 +115,86 @@
                                                 disabled="@IsBusy">
                                             Удалить
                                         </button>
+                                        <button class="btn btn-sm btn-outline-secondary ms-2"
+                                                title="Настройки пространства"
+                                                aria-label="Настройки пространства"
+                                                aria-expanded="@(ExpandedSettingsSpaceId == space.Id)"
+                                                @onclick="() => ToggleSpaceSettings(space)"
+                                                disabled="@IsBusy">
+                                            <span aria-hidden="true">@(ExpandedSettingsSpaceId == space.Id ? "▴" : "▾")</span>
+                                        </button>
                                     }
                                 </td>
                             </tr>
+                            @if (ExpandedSettingsSpaceId == space.Id)
+                            {
+                                <tr>
+                                    <td colspan="3" class="bg-light">
+                                        <div class="border rounded p-3 bg-white">
+                                            <fieldset class="border rounded p-3">
+                                                <legend class="float-none w-auto px-2 fs-6 mb-0">Бэкап</legend>
+                                                <div class="d-flex flex-column gap-3">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input"
+                                                               type="checkbox"
+                                                               checked="@GetDraftDoBackup(space.Id)"
+                                                               @onchange="args => SetDraftDoBackup(space.Id, args)"
+                                                               disabled="@IsBusy" />
+                                                        <label class="form-check-label">Делать бэкап</label>
+                                                    </div>
+
+                                                    <div>
+                                                        <label class="form-label">Папка для бэкапа</label>
+                                                        <input class="form-control form-control-sm"
+                                                               value="@GetDraftBackupFolder(space.Id)"
+                                                               @oninput="args => SetDraftBackupFolder(space.Id, args)"
+                                                               placeholder="@GetDisplayBackupFolder(space.Id)"
+                                                               title="@GetDisplayBackupFolder(space.Id)"
+                                                               disabled="@IsBusy" />
+                                                        <div class="form-text">
+                                                            Итоговый путь: <code>@GetDisplayBackupFolder(space.Id)</code>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label class="form-label">Период, минут</label>
+                                                        <input class="form-control form-control-sm"
+                                                               type="number"
+                                                               min="1"
+                                                               step="1"
+                                                               value="@GetDraftBackupIntervalMinutes(space.Id)"
+                                                               @oninput="args => SetDraftBackupIntervalMinutes(space.Id, args)"
+                                                               disabled="@IsBusy" />
+                                                    </div>
+
+                                                    <div class="d-flex flex-column gap-2 align-items-start">
+                                                        <button class="btn btn-sm btn-outline-primary"
+                                                                @onclick="() => RunManualBackupAsync(space.Id)"
+                                                                disabled="@(IsBusy || !GetDraftDoBackup(space.Id))">
+                                                            Backup
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                                @onclick="() => ClearBackupAsync(space.Id)"
+                                                                disabled="@IsBusy">
+                                                            Очистить бэкап
+                                                        </button>
+                                                        <button class="btn btn-sm btn-primary"
+                                                                @onclick="() => SaveSpacePropertiesAsync(space.Id)"
+                                                                disabled="@IsBusy">
+                                                            Сохранить
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-secondary"
+                                                                @onclick="() => CancelSpaceSettings(space.Id)"
+                                                                disabled="@IsBusy">
+                                                            Отмена
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </fieldset>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -136,13 +205,15 @@
 
 @code {
     private readonly List<BusinessEntityEntity> Spaces = new();
-    private readonly Dictionary<Guid, bool> DoBackupBySpaceId = new();
+    private readonly Dictionary<Guid, GenericSpaceProperties> SpacePropertiesBySpaceId = new();
+    private readonly Dictionary<Guid, GenericSpaceProperties> DraftSpacePropertiesBySpaceId = new();
     private bool IsLoading;
     private bool IsBusy;
     private string NewSpaceName { get; set; } = string.Empty;
     private string EditingSpaceName { get; set; } = string.Empty;
     private Guid? EditingSpaceId { get; set; }
     private Guid? DeleteCandidateId { get; set; }
+    private Guid? ExpandedSettingsSpaceId { get; set; }
     private string? StatusMessage { get; set; }
     private string? ErrorMessage { get; set; }
 
@@ -176,6 +247,7 @@
     {
         ResetMessages();
         DeleteCandidateId = null;
+        ExpandedSettingsSpaceId = null;
         EditingSpaceId = space.Id;
         EditingSpaceName = space.Name;
     }
@@ -214,6 +286,7 @@
         ResetMessages();
         EditingSpaceId = null;
         EditingSpaceName = string.Empty;
+        ExpandedSettingsSpaceId = null;
         DeleteCandidateId = spaceId;
     }
 
@@ -228,6 +301,9 @@
                 var deletedSpace = Spaces.FirstOrDefault(x => x.Id == spaceId);
                 await SpaceHelper.DeleteSpaceAsync(spaceId);
                 DeleteCandidateId = null;
+                ExpandedSettingsSpaceId = null;
+                SpacePropertiesBySpaceId.Remove(spaceId);
+                DraftSpacePropertiesBySpaceId.Remove(spaceId);
                 StatusMessage = $"Пространство '{deletedSpace?.Name ?? spaceId.ToString()}' удалено.";
                 await ReloadSpacesAsync();
             });
@@ -255,10 +331,25 @@
 
             Spaces.Clear();
             Spaces.AddRange(spaces);
-            DoBackupBySpaceId.Clear();
+            SpacePropertiesBySpaceId.Clear();
+            DraftSpacePropertiesBySpaceId.Clear();
             foreach (var space in spaces)
             {
-                DoBackupBySpaceId[space.Id] = properties.TryGetValue(space.Id, out var settings) && settings.DoBackup;
+                SpacePropertiesBySpaceId[space.Id] = CloneSpaceProperties(
+                    properties.TryGetValue(space.Id, out var settings)
+                        ? settings
+                        : new GenericSpaceProperties());
+            }
+
+            if (ExpandedSettingsSpaceId.HasValue && !SpacePropertiesBySpaceId.ContainsKey(ExpandedSettingsSpaceId.Value))
+            {
+                ExpandedSettingsSpaceId = null;
+            }
+
+            if (ExpandedSettingsSpaceId.HasValue)
+            {
+                DraftSpacePropertiesBySpaceId[ExpandedSettingsSpaceId.Value] = CloneSpaceProperties(
+                    GetSpaceProperties(ExpandedSettingsSpaceId.Value));
             }
         }
         finally
@@ -267,26 +358,154 @@
         }
     }
 
-    private bool GetDoBackup(Guid spaceId)
+    private void ToggleSpaceSettings(BusinessEntityEntity space)
     {
-        return DoBackupBySpaceId.TryGetValue(spaceId, out var doBackup) && doBackup;
+        ResetMessages();
+        DeleteCandidateId = null;
+        EditingSpaceId = null;
+        EditingSpaceName = string.Empty;
+
+        if (ExpandedSettingsSpaceId == space.Id)
+        {
+            ExpandedSettingsSpaceId = null;
+            DraftSpacePropertiesBySpaceId.Remove(space.Id);
+            return;
+        }
+
+        ExpandedSettingsSpaceId = space.Id;
+        DraftSpacePropertiesBySpaceId[space.Id] = CloneSpaceProperties(GetSpaceProperties(space.Id));
     }
 
-    private async Task SetDoBackupAsync(Guid spaceId, ChangeEventArgs args)
+    private bool GetDraftDoBackup(Guid spaceId)
     {
-        var doBackup = args.Value switch
+        return GetDraftSpaceProperties(spaceId).DoBackup;
+    }
+
+    private void SetDraftDoBackup(Guid spaceId, ChangeEventArgs args)
+    {
+        GetDraftSpaceProperties(spaceId).DoBackup = args.Value switch
         {
             bool value => value,
             string value when bool.TryParse(value, out var parsed) => parsed,
             _ => false
         };
+    }
 
+    private string GetDraftBackupFolder(Guid spaceId)
+    {
+        return GetDraftSpaceProperties(spaceId).BackupFolder;
+    }
+
+    private void SetDraftBackupFolder(Guid spaceId, ChangeEventArgs args)
+    {
+        GetDraftSpaceProperties(spaceId).BackupFolder = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private string GetDisplayBackupFolder(Guid spaceId)
+    {
+        return SpaceBackupService.GetDisplaySpaceBackupFolder(spaceId, GetDraftSpaceProperties(spaceId));
+    }
+
+    private int GetDraftBackupIntervalMinutes(Guid spaceId)
+    {
+        return Math.Max(1, GetDraftSpaceProperties(spaceId).BackupIntervalMinutes);
+    }
+
+    private void SetDraftBackupIntervalMinutes(Guid spaceId, ChangeEventArgs args)
+    {
+        GetDraftSpaceProperties(spaceId).BackupIntervalMinutes =
+            int.TryParse(args.Value?.ToString(), out var value) && value > 0
+                ? value
+                : 1;
+    }
+
+    private async Task SaveSpacePropertiesAsync(Guid spaceId)
+    {
         await RunBusyActionAsync(
             async () =>
             {
-                var settings = await SpaceHelper.SetDoBackupAsync(spaceId, doBackup);
-                DoBackupBySpaceId[spaceId] = settings.DoBackup;
+                var settings = await SpaceHelper.SaveGenericSpacePropertiesAsync(
+                    spaceId,
+                    CloneSpaceProperties(GetDraftSpaceProperties(spaceId)));
+                SpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(settings);
+                DraftSpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(settings);
+                StatusMessage = "Настройки пространства сохранены.";
             });
+    }
+
+    private async Task RunManualBackupAsync(Guid spaceId)
+    {
+        await RunBusyActionAsync(
+            async () =>
+            {
+                var settings = await SpaceHelper.SaveGenericSpacePropertiesAsync(
+                    spaceId,
+                    CloneSpaceProperties(GetDraftSpaceProperties(spaceId)));
+                SpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(settings);
+                DraftSpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(settings);
+
+                var result = await SpaceBackupService.RunManualBackupAsync(spaceId);
+                StatusMessage = result.ManifestUpdated
+                    ? $"Backup пространства '{result.SpaceName}' выполнен. Обновлено сущностей: {result.ChangedEntityCount}."
+                    : $"Backup пространства '{result.SpaceName}' выполнен. Изменений для записи нет.";
+            });
+    }
+
+    private async Task ClearBackupAsync(Guid spaceId)
+    {
+        await RunBusyActionAsync(
+            async () =>
+            {
+                var result = await SpaceBackupService.ClearSpaceBackupAsync(
+                    spaceId,
+                    CloneSpaceProperties(GetDraftSpaceProperties(spaceId)));
+                StatusMessage = result.Deleted
+                    ? $"Backup очищен: {result.DisplayBackupFolder}"
+                    : $"Backup уже пуст: {result.DisplayBackupFolder}";
+            });
+    }
+
+    private void CancelSpaceSettings(Guid spaceId)
+    {
+        DraftSpacePropertiesBySpaceId[spaceId] = CloneSpaceProperties(GetSpaceProperties(spaceId));
+        ExpandedSettingsSpaceId = null;
+        ResetMessages();
+    }
+
+    private GenericSpaceProperties GetSpaceProperties(Guid spaceId)
+    {
+        if (SpacePropertiesBySpaceId.TryGetValue(spaceId, out var settings))
+        {
+            return settings;
+        }
+
+        var defaultSettings = new GenericSpaceProperties();
+        SpacePropertiesBySpaceId[spaceId] = defaultSettings;
+        return defaultSettings;
+    }
+
+    private GenericSpaceProperties GetDraftSpaceProperties(Guid spaceId)
+    {
+        if (DraftSpacePropertiesBySpaceId.TryGetValue(spaceId, out var settings))
+        {
+            return settings;
+        }
+
+        var draft = CloneSpaceProperties(GetSpaceProperties(spaceId));
+        DraftSpacePropertiesBySpaceId[spaceId] = draft;
+        return draft;
+    }
+
+    private static GenericSpaceProperties CloneSpaceProperties(GenericSpaceProperties settings)
+    {
+        return new GenericSpaceProperties
+        {
+            SchemaVersion = settings.SchemaVersion,
+            Kind = settings.Kind,
+            DoBackup = settings.DoBackup,
+            BackupFolder = settings.BackupFolder,
+            BackupIntervalMinutes = Math.Max(1, settings.BackupIntervalMinutes)
+        };
     }
 
     /// <summary>

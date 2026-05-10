@@ -29,7 +29,8 @@ const CustomHeading = Heading.extend({
 
 const RichTextImage = Node.create({
     name: "richTextImage",
-    group: "block",
+    inline: true,
+    group: "inline",
     atom: true,
     selectable: true,
     draggable: true,
@@ -48,8 +49,8 @@ const RichTextImage = Node.create({
     parseHTML() {
         return [
             {
-                tag: "p.rich-text-image",
-                getAttrs: element => readImageAttributes(element.querySelector("img"))
+                tag: "span.rich-text-inline-image",
+                getAttrs: element => readImageAttributes(element)
             },
             {
                 tag: "img[data-rich-image-id]",
@@ -63,8 +64,9 @@ const RichTextImage = Node.create({
     },
 
     renderHTML({ node }) {
-        const attrs = buildImageDomAttributes(node.attrs);
-        return ["p", { class: "rich-text-image" }, ["img", attrs]];
+        const spanAttrs = buildInlineImageSpanAttributes(node.attrs);
+        const imgAttrs = buildImageDomAttributes(node.attrs);
+        return ["span", spanAttrs, ["img", imgAttrs]];
     }
 });
 
@@ -114,9 +116,14 @@ function readImageAttributes(element) {
         return false;
     }
 
-    const src = element.getAttribute("src") || "";
+    const isImage = element.matches?.("img") === true;
+    const imageElement = isImage ? element : element.querySelector?.("img");
+    const src = imageElement?.getAttribute("src") || element.getAttribute("src") || "";
     const parsed = parseRichDocumentImageUrl(src);
-    const imageId = element.getAttribute("data-rich-image-id") || parsed.imageId;
+    const imageId =
+        element.getAttribute("data-rich-image-id") ||
+        imageElement?.getAttribute("data-rich-image-id") ||
+        parsed.imageId;
     if (!imageId) {
         return false;
     }
@@ -124,11 +131,49 @@ function readImageAttributes(element) {
     return {
         src,
         imageId,
-        displayVariant: element.getAttribute("data-display-variant") || parsed.variant || "original",
-        altText: element.getAttribute("alt") || "",
-        width: toPositiveInt(element.getAttribute("width")),
-        height: toPositiveInt(element.getAttribute("height"))
+        displayVariant:
+            element.getAttribute("data-display-variant") ||
+            imageElement?.getAttribute("data-display-variant") ||
+            parsed.variant ||
+            "original",
+        altText:
+            element.getAttribute("data-alt-text") ||
+            imageElement?.getAttribute("alt") ||
+            element.getAttribute("alt") ||
+            "",
+        width:
+            toPositiveInt(element.getAttribute("data-width")) ||
+            toPositiveInt(element.getAttribute("width")) ||
+            toPositiveInt(imageElement?.getAttribute("width")),
+        height:
+            toPositiveInt(element.getAttribute("data-height")) ||
+            toPositiveInt(element.getAttribute("height")) ||
+            toPositiveInt(imageElement?.getAttribute("height"))
     };
+}
+
+function buildInlineImageSpanAttributes(attrs) {
+    const imageId = attrs.imageId || "";
+    const displayVariant = attrs.displayVariant || "original";
+    const domAttrs = {
+        class: "rich-text-inline-image",
+        "data-rich-image-id": imageId,
+        "data-display-variant": displayVariant,
+        "data-alt-text": attrs.altText || "",
+        contenteditable: "false"
+    };
+
+    const width = toPositiveInt(attrs.width);
+    const height = toPositiveInt(attrs.height);
+    if (width) {
+        domAttrs["data-width"] = String(width);
+    }
+
+    if (height) {
+        domAttrs["data-height"] = String(height);
+    }
+
+    return domAttrs;
 }
 
 function buildImageDomAttributes(attrs) {
@@ -241,7 +286,8 @@ async function insertPastedImage(editor, documentId, file) {
             src: url,
             imageId,
             displayVariant: variant,
-            altText: fileName
+            altText: fileName,
+            width: 220
         }
     }).run();
 }
@@ -280,7 +326,7 @@ function hideImageSizeMenu() {
 
 function handleImageContextMenu(registry, sortOrder, event) {
     const target = event.target instanceof Element ? event.target : null;
-    const image = target?.closest("img[data-rich-image-id], p.rich-text-image img");
+    const image = target?.closest("span.rich-text-inline-image, span.rich-text-inline-image img, img[data-rich-image-id], p.rich-text-image img");
     const state = registry.editors.get(sortOrder);
     if (!image || !state || !state.editor?.view?.dom?.contains(image)) {
         return false;
@@ -301,6 +347,20 @@ function findImageNodePosition(editor, imageElement) {
     const imageAttrs = readImageAttributes(imageElement);
     if (!imageAttrs || !imageAttrs.imageId) {
         return null;
+    }
+
+    const markerElement = imageElement.closest?.("span.rich-text-inline-image") || imageElement;
+    try {
+        const domPosition = editor.view.posAtDOM(markerElement, 0);
+        for (const offset of [0, -1, 1]) {
+            const position = domPosition + offset;
+            const node = position >= 0 ? editor.state.doc.nodeAt(position) : null;
+            if (node?.type?.name === "richTextImage") {
+                return position;
+            }
+        }
+    } catch {
+        // Fallback below handles legacy DOM or browser-specific posAtDOM quirks.
     }
 
     let match = null;

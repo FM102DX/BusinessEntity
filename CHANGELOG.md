@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-05-10 18:49:14 +03:00
+
+### MAJOR-FEATURES
+
+#### Rich-text document backup export
+- Человекочитаемый export rich-doc изменен с набора Markdown-файлов на один HTML-файл `{entityName}--human-readable.html`.
+- Для HTML-export добавлена папка `attachments/`, куда копируются изображения и будущие вложения в обычных файловых форматах; HTML ссылается на локальные файлы и открывается из файловой системы без приложения.
+
+### MINOR-FEATURES
+
+#### Rich-text document image storage
+- Внутреннее файловое хранилище embedded images больше не пишет новые изображения как `*.bin`: variant сохраняется в родном расширении по имени файла или MIME-типу.
+- В `metadata.json` embedded-файла добавлен `storedFileName`; чтение сохраняет fallback на legacy `*.bin` для уже существующих картинок.
+
+#### Backup policies
+- Политики backup и file-object storage обновлены под HTML-export rich-doc, папку `attachments` и запрет новых `original.bin`.
+
+## [0.11.0] - 2026-05-10 18:33:28 +03:00
+
+### MAJOR-FEATURES
+
+#### Rich-text document images
+- Изображения rich-doc переведены в inline-модель: картинка хранится и редактируется как inline atom внутри текста, может стоять в одной строке с другой картинкой и текстом между ними.
+- Канонический HTML inline-картинки изменен на `span.rich-text-inline-image` с document-local image id; Tiptap, HTML import, chunk serializer и read-side cache сохраняют этот marker и серверно восстанавливают `img src`.
+- Сохранение edited chunks теперь сохраняет embedded-файлы, появившиеся при HTML-конвертации inline-картинок, до записи chunk-ссылок.
+
+#### Space backup
+- Добавлен background backup пространств: `SpaceBackupService` обходит пространства, пишет только dirty business entities, обновляет relations и публикует `manifest.json` в entity-folder layout.
+- В администрировании пространств добавлены настройки backup: включение, папка, период, ручной запуск и очистка backup для конкретного пространства.
+- Добавлен generic backup handler, который выгружает entity/data/properties/chunks/files в JSON и формирует human-readable экспорт для обычных документов и rich-doc, включая вложенные изображения.
+
+### MINOR-FEATURES
+
+#### Rich-text document image storage
+- Файловое хранилище embedded images сохраняет расширение по имени файла или content type, пишет `StoredFileName` в metadata и сохраняет совместимость с legacy `*.bin`.
+- Стили просмотра и редактирования rich-doc обновлены для inline-картинок: `inline-block`, вертикальное выравнивание по строке и сохранение кликабельности.
+
+#### Backup configuration and policies
+- В конфигурацию добавлены `SpaceBackup` настройки и host-path mapping для отображения backup/storage путей из Docker.
+- Добавлена политика `space-backup-policy-entity-folder-layout.md`; политики rich-doc и file-object storage обновлены под inline image marker.
+- `.gitignore` уточнен так, чтобы папка `BusinessEntity/Services/Backup/` не попадала под общий ignore-паттерн `Backup*/`.
+
 ## [0.10.0] - 2026-05-09 18:32:53 +03:00
 
 ### MAJOR-FEATURES

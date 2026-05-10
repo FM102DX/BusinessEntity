@@ -7,6 +7,10 @@ namespace BusinessEntity.Core.DomainEntities
 
         public string Kind { get; set; } = nameof(GenericSpaceProperties);
 
-        public bool DoBackup { get; set; }
+        public bool DoBackup { get; set; } = true;
+
+        public string BackupFolder { get; set; } = string.Empty;
+
+        public int BackupIntervalMinutes { get; set; } = 5;
     }
 }

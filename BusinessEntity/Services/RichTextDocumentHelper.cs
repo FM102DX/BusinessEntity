@@ -639,6 +639,16 @@ namespace BusinessEntity.Services
 
                 var converted = await _htmlToRichTextBlocksConverter.ConvertHtmlAsync(draft.Html ?? string.Empty, ct);
                 var blocks = converted.Blocks ?? new List<RichTextBlock>();
+                if (converted.Files.Count > 0)
+                {
+                    // Inline HTML save may import data-uri/http images into embedded files before chunk JSON references them.
+                    await _dataProviderConnector.SaveRichTextEmbeddedFilesAsync(
+                        entityId,
+                        converted.Files,
+                        replaceExistingFiles: false,
+                        ct);
+                }
+
                 var dataJson = RichTextChunkStorageSerializer.SerializeChunkData(blocks);
 
                 var now = DateTime.UtcNow;

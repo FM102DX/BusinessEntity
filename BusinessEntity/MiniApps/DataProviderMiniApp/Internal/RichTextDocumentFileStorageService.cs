@@ -51,7 +51,10 @@ internal sealed class RichTextDocumentFileStorageService
             var imageDirectory = GetImageDirectory(businessEntityId, file.ImageId);
             Directory.CreateDirectory(imageDirectory);
 
-            var contentPath = Path.Combine(imageDirectory, $"{file.Variant}.bin");
+            DeleteVariantFiles(imageDirectory, file.Variant);
+
+            var storedFileName = BuildStoredFileName(file.Variant, file.FileName, file.ContentType);
+            var contentPath = Path.Combine(imageDirectory, storedFileName);
             var metadataPath = Path.Combine(imageDirectory, MetadataFileName);
 
             await File.WriteAllBytesAsync(contentPath, file.Content ?? Array.Empty<byte>(), cancellationToken);
@@ -60,7 +63,8 @@ internal sealed class RichTextDocumentFileStorageService
                 new FileMetadata
                 {
                     FileName = file.FileName ?? string.Empty,
-                    ContentType = file.ContentType ?? "application/octet-stream"
+                    ContentType = file.ContentType ?? "application/octet-stream",
+                    StoredFileName = storedFileName
                 },
                 StorageJsonOptions.Default);
 
@@ -76,10 +80,9 @@ internal sealed class RichTextDocumentFileStorageService
         CancellationToken cancellationToken = default)
     {
         var imageDirectory = GetImageDirectory(businessEntityId, imageId);
-        var contentPath = Path.Combine(imageDirectory, $"{variant}.bin");
         var metadataPath = Path.Combine(imageDirectory, MetadataFileName);
 
-        if (!File.Exists(contentPath) || !File.Exists(metadataPath))
+        if (!File.Exists(metadataPath))
         {
             return null;
         }
@@ -87,6 +90,11 @@ internal sealed class RichTextDocumentFileStorageService
         var metadataJson = await File.ReadAllTextAsync(metadataPath, cancellationToken);
         var metadata = JsonSerializer.Deserialize<FileMetadata>(metadataJson, StorageJsonOptions.Default)
             ?? new FileMetadata();
+        var contentPath = ResolveContentPath(imageDirectory, variant, metadata);
+        if (contentPath == null)
+        {
+            return null;
+        }
 
         return new RichTextEmbeddedFileContent
         {
@@ -127,10 +135,104 @@ internal sealed class RichTextDocumentFileStorageService
         return Path.Combine(GetDocumentDirectory(businessEntityId), "images", imageId);
     }
 
+    private static string BuildStoredFileName(string? variant, string? fileName, string? contentType)
+    {
+        var safeVariant = SanitizeFileName(string.IsNullOrWhiteSpace(variant) ? "original" : variant.Trim());
+        var extension = ResolveFileExtension(fileName, contentType);
+        return $"{safeVariant}{extension}";
+    }
+
+    private static string? ResolveContentPath(string imageDirectory, string? variant, FileMetadata metadata)
+    {
+        if (!string.IsNullOrWhiteSpace(metadata.StoredFileName))
+        {
+            var storedFileName = Path.GetFileName(metadata.StoredFileName);
+            var storedPath = Path.Combine(imageDirectory, storedFileName);
+            if (File.Exists(storedPath))
+            {
+                return storedPath;
+            }
+        }
+
+        var newFormatPath = Path.Combine(
+            imageDirectory,
+            BuildStoredFileName(variant, metadata.FileName, metadata.ContentType));
+        if (File.Exists(newFormatPath))
+        {
+            return newFormatPath;
+        }
+
+        var safeVariant = SanitizeFileName(string.IsNullOrWhiteSpace(variant) ? "original" : variant.Trim());
+        var legacyPath = Path.Combine(imageDirectory, $"{safeVariant}.bin");
+        if (File.Exists(legacyPath))
+        {
+            return legacyPath;
+        }
+
+        return Directory
+            .EnumerateFiles(imageDirectory, $"{safeVariant}.*")
+            .FirstOrDefault();
+    }
+
+    private static void DeleteVariantFiles(string imageDirectory, string? variant)
+    {
+        var safeVariant = SanitizeFileName(string.IsNullOrWhiteSpace(variant) ? "original" : variant.Trim());
+        foreach (var filePath in Directory.EnumerateFiles(imageDirectory, $"{safeVariant}.*"))
+        {
+            if (!string.Equals(Path.GetFileName(filePath), MetadataFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    private static string ResolveFileExtension(string? fileName, string? contentType)
+    {
+        var extension = Path.GetExtension(fileName ?? string.Empty);
+        if (IsAllowedFileExtension(extension))
+        {
+            return extension.ToLowerInvariant();
+        }
+
+        return (contentType ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/png" => ".png",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            "image/svg+xml" => ".svg",
+            _ => ".dat"
+        };
+    }
+
+    private static bool IsAllowedFileExtension(string? extension)
+    {
+        return (extension ?? string.Empty).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".svg" => true,
+            _ => false
+        };
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars()
+            .Concat(new[] { '<', '>', ':', '"', '/', '\\', '|', '?', '*' })
+            .ToHashSet();
+        var chars = value
+            .Select(x => invalidChars.Contains(x) || char.IsControl(x) ? '_' : x)
+            .ToArray();
+        var sanitized = new string(chars).Trim();
+        return string.IsNullOrWhiteSpace(sanitized)
+            ? "file"
+            : sanitized;
+    }
+
     // Sidecar-метаданные локально сохраненного embedded-файла.
     private sealed class FileMetadata
     {
         public string? FileName { get; set; }
         public string? ContentType { get; set; }
+        public string? StoredFileName { get; set; }
     }
 }

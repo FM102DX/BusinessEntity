@@ -51,6 +51,9 @@ Chunk payload
 
 Block
     = paragraph / heading / image
+
+Inline images
+    = span.rich-text-inline-image marker внутри paragraph.html / heading.html
 ```
 
 Главное правило:
@@ -338,7 +341,10 @@ RichTextDocument --UsesMedia--> Image 2
 ```text
 RichTextDocument = BusinessEntity
 
-ImageBlock внутри chunk_json
+Inline image marker внутри paragraph.html / heading.html
+    -> imageId
+
+Legacy ImageBlock внутри chunk_json
     -> imageId
 
 RichDocumentData/{documentId}/images/{imageId}/
@@ -482,7 +488,7 @@ RichTextDocumentChunk
 - `imageId` не является `BusinessEntity.Id`;
 - `imageId` не участвует в `BusinessEntityRelation`;
 - фактический файл ищется по `documentId + imageId`;
-- image block хранит позицию изображения в тексте, а не бизнес-связь.
+- inline image marker или legacy image block хранит позицию изображения в тексте, а не бизнес-связь.
 
 ---
 
@@ -538,6 +544,8 @@ heading
 image
 ```
 
+Нормативный способ вставки новых картинок в редакторе — inline marker внутри `paragraph.html` / `heading.html`, а не отдельный image block. Блок `image` остается валидным для standalone/legacy-данных и импортов, где картинка действительно является отдельным блоком.
+
 Пока не входят в MVP:
 
 ```text
@@ -581,7 +589,7 @@ businessEntityEmbed
 
 - `level` допускается от `1` до `3` в MVP;
 - внутри `heading.html` лучше использовать plain text;
-- если inline-разметка нужна, разрешаются только `strong`, `em`, `u`, `br`.
+- если inline-разметка нужна, разрешаются только `strong`, `em`, `u`, `br` и `span.rich-text-inline-image`.
 
 ### 12.3. Image
 
@@ -626,6 +634,7 @@ em
 i
 u
 br
+span.rich-text-inline-image
 ```
 
 Семантика:
@@ -636,6 +645,7 @@ br
 | `em` / `i` | курсив |
 | `u` | подчеркивание |
 | `br` | перенос строки внутри блока |
+| `span.rich-text-inline-image` | inline-картинка как atom внутри текста; разрешены только `data-rich-image-id`, `data-display-variant`, `data-alt-text`, `data-width`, `data-height` |
 
 Запрещено внутри inline HTML:
 
@@ -648,14 +658,14 @@ embed
 form
 input
 button
-img
+img без `data-rich-image-id` / rich-document URL
 table
 div
 section
 article
 h1-h6
 a
-span
+span кроме `span.rich-text-inline-image`
 code
 pre
 blockquote
@@ -668,7 +678,8 @@ li
 
 ```text
 heading -> отдельный block
-image   -> отдельный block
+standalone image -> отдельный block
+inline image -> marker внутри paragraph/heading html
 ```
 
 HTML не является канонической моделью всего документа.
@@ -757,12 +768,10 @@ RichDocumentData/
  └── {documentId:N}/
      ├── images/
      │   └── {imageId}/
-     │       ├── original/
-     │       │   └── original.{ext}
-     │       ├── variants/
-     │       │   ├── display.webp
-     │       │   ├── preview.webp
-     │       │   └── thumb.webp
+     │       ├── original.{ext}
+     │       ├── display.webp
+     │       ├── preview.webp
+     │       ├── thumb.webp
      │       └── metadata.json
      └── _tmp/
 ```
@@ -773,10 +782,10 @@ RichDocumentData/
 |---|---|
 | `{documentId:N}` | GUID документа без дефисов |
 | `{imageId}` | локальный id изображения, например `img_01HVK2M8AGM7V75MYZG7F9V5AA` |
-| `original/original.{ext}` | исходный файл в полном разрешении |
-| `variants/display.webp` | адаптированная версия для отображения в документе |
-| `variants/preview.webp` | средняя версия для быстрых preview |
-| `variants/thumb.webp` | маленькая миниатюра |
+| `original.{ext}` | исходный файл в полном разрешении и родном формате |
+| `display.webp` | адаптированная версия для отображения в документе |
+| `preview.webp` | средняя версия для быстрых preview |
+| `thumb.webp` | маленькая миниатюра |
 | `metadata.json` | техническое описание изображения |
 | `_tmp` | временная зона загрузки и генерации файлов |
 
@@ -787,12 +796,10 @@ RichDocumentData/
  └── 0f8fad5bd9cb469fa16570867728950e/
      └── images/
          └── img_01HVK2M8AGM7V75MYZG7F9V5AA/
-             ├── original/
-             │   └── original.png
-             ├── variants/
-             │   ├── display.webp
-             │   ├── preview.webp
-             │   └── thumb.webp
+             ├── original.png
+             ├── display.webp
+             ├── preview.webp
+             ├── thumb.webp
              └── metadata.json
 ```
 
@@ -837,6 +844,7 @@ variants = webp
   "kind": "RichTextDocumentImage",
   "imageId": "img_01HVK2M8AGM7V75MYZG7F9V5AA",
   "originalFileName": "schema.png",
+  "storedFileName": "original.png",
   "originalExtension": ".png",
   "mimeType": "image/png",
   "sizeBytes": 382910,
@@ -845,25 +853,25 @@ variants = webp
   "height": 1350,
   "variants": {
     "original": {
-      "relativePath": "images/img_01HVK2M8AGM7V75MYZG7F9V5AA/original/original.png",
+      "relativePath": "images/img_01HVK2M8AGM7V75MYZG7F9V5AA/original.png",
       "width": 2400,
       "height": 1350,
       "mimeType": "image/png"
     },
     "display": {
-      "relativePath": "images/img_01HVK2M8AGM7V75MYZG7F9V5AA/variants/display.webp",
+      "relativePath": "images/img_01HVK2M8AGM7V75MYZG7F9V5AA/display.webp",
       "width": 1600,
       "height": 900,
       "mimeType": "image/webp"
     },
     "preview": {
-      "relativePath": "images/img_01HVK2M8AGM7V75MYZG7F9V5AA/variants/preview.webp",
+      "relativePath": "images/img_01HVK2M8AGM7V75MYZG7F9V5AA/preview.webp",
       "width": 800,
       "height": 450,
       "mimeType": "image/webp"
     },
     "thumb": {
-      "relativePath": "images/img_01HVK2M8AGM7V75MYZG7F9V5AA/variants/thumb.webp",
+      "relativePath": "images/img_01HVK2M8AGM7V75MYZG7F9V5AA/thumb.webp",
       "width": 320,
       "height": 180,
       "mimeType": "image/webp"
@@ -875,9 +883,17 @@ variants = webp
 
 `metadata.json` является техническим файлом, а не бизнес-объектом.
 
-### 14.6. Image block в chunk JSON
+### 14.6. Inline image marker и legacy image block в chunk JSON
 
-В chunk JSON блок изображения хранит только позиционную ссылку на локальный ресурс:
+В новых редакторных данных картинка внутри строки хранится как marker в `paragraph.html` / `heading.html`:
+
+```html
+<span class="rich-text-inline-image" data-rich-image-id="img_01HVK2M8AGM7V75MYZG7F9V5AA" data-display-variant="original" data-width="220"></span>
+```
+
+Такой marker ведет себя как inline atom: между двумя картинками можно печатать текст, а высота строки определяется самой высокой картинкой. `src` не хранится как canonical data; он строится при генерации `HtmlCache`.
+
+Для standalone/legacy-сценариев chunk JSON также может содержать отдельный блок изображения, который хранит только позиционную ссылку на локальный ресурс:
 
 ```json
 {
@@ -909,7 +925,7 @@ documentId + imageId + displayVariant
 Этот HTTP endpoint должен сам находить физический файл:
 
 ```text
-RichDocumentData/{documentId}/images/{imageId}/variants/display.webp
+RichDocumentData/{documentId}/images/{imageId}/display.webp
 ```
 
 ### 14.7. Почему не хранить absolute path в блоке
@@ -958,7 +974,7 @@ DocumentEditorMiniApp
                     -> записать metadata.json
                     -> переместить из _tmp в images/{imageId}
                     -> вернуть EmbeddedImageDescriptor
-        -> DocumentEditorMiniApp вставляет image block в текущий chunk
+        -> DocumentEditorMiniApp вставляет inline image marker в текущий chunk
         -> сохранение dirty chunk
 ```
 
@@ -971,7 +987,7 @@ DocumentEditorMiniApp
 1. сначала файл пишется во временную папку `_tmp/{uploadId}`;
 2. после успешной проверки и генерации вариантов создается финальная папка `images/{imageId}`;
 3. редактор получает `imageId`;
-4. image block сохраняется в chunk JSON;
+4. inline image marker сохраняется в chunk JSON;
 5. если сохранение чанка не удалось, файл считается временно неиспользуемым;
 6. периодическая cleanup-задача удаляет неиспользуемые image folders.
 
@@ -1026,7 +1042,7 @@ BusinessEntityDataChunks
 RichDocumentData/{documentId}/images
 ```
 
-Идентификаторы `imageId` должны сохраниться, иначе image block в chunk JSON потеряет файл.
+Идентификаторы `imageId` должны сохраниться, иначе inline image marker или legacy image block потеряет файл.
 
 ---
 
@@ -1138,7 +1154,7 @@ SortOrder bigint с шагом 1000
 Важно:
 
 - изображения не увеличивают размер чанка самим бинарником;
-- image block хранит только `imageId` и небольшие атрибуты;
+- inline image marker / legacy image block хранит только `imageId` и небольшие атрибуты;
 - оригинальные изображения лежат на диске.
 
 Если один текстовый блок становится слишком большим, нужно либо:
@@ -1261,7 +1277,7 @@ Endpoint обязан:
 2. нормализовать blocks;
 3. очистить HTML по whitelist;
 4. проверить, что block types входят в разрешенный MVP-набор;
-5. проверить, что image blocks ссылаются только на локальные `imageId`;
+5. проверить, что inline image markers и image blocks ссылаются только на локальные `imageId`;
 6. сериализовать chunk envelope через `StorageJsonOptions.Default`;
 7. извлечь `PlainText`;
 8. пересчитать `BlockCount`, `CharCount`, `DataSizeBytes`, `Checksum`;
@@ -1574,7 +1590,7 @@ RichTextEmbeddedFileCleanupService
 - адаптацию между editor state и chunk payload;
 - команды UI: heading, bold, italic, underline, insert image;
 - отправку изображения на сохранение через Connector;
-- вставку image block после получения `imageId`;
+- вставку inline image marker после получения `imageId`;
 - сохранение измененных чанков через Connector или Bus;
 - работу с selection в пределах загруженного окна;
 - запрос серверных операций для больших диапазонов.
@@ -1795,12 +1811,12 @@ User вставил изображение
                     -> write metadata.json
                     -> return imageId
         -> DocumentEditorMiniApp
-            -> insert image block with imageId
+            -> insert inline image marker with imageId
             -> mark current chunk dirty
             -> SaveChunksAsync
 ```
 
-Image block появляется в chunk JSON только после того, как файловое хранилище вернуло `imageId`.
+Inline image marker появляется в chunk JSON только после того, как файловое хранилище вернуло `imageId`.
 
 ---
 
@@ -1889,7 +1905,7 @@ block b_1602 принадлежит chunk_16
 5. При скролле вверх подгружаем предыдущие 3 чанка.
 6. Пока не выгружаем старые чанки из DOM.
 7. Сохраняем только dirty chunks.
-8. Изображения вставляем как image block с локальным imageId.
+8. Изображения вставляем как inline image marker с локальным imageId.
 ```
 
 Позже добавить:
@@ -2148,6 +2164,8 @@ public sealed record ImageBlockAttrs(
     string? Align);
 ```
 
+Новые inline-картинки не требуют отдельного `RichTextBlock`-типа: они хранятся внутри `ParagraphBlock.Html` / `HeadingBlock.Html` как `span.rich-text-inline-image` marker. `ImageBlock` остается для standalone/legacy-представления.
+
 ### 42.4. Embedded image descriptor
 
 ```csharp
@@ -2202,7 +2220,7 @@ DocumentEditorMiniApp
                 -> display / preview / thumb
                 -> metadata.json
             -> EmbeddedImageDescriptorDto
-    -> insert image block
+    -> insert inline image marker
     -> save dirty chunk
 ```
 
@@ -2382,6 +2400,9 @@ Chunk payload
 
 Разрешенное inline-форматирование MVP
     bold / italic / underline
+
+Разрешенные inline media markers MVP
+    span.rich-text-inline-image
 
 Вставленные изображения
     не являются BusinessEntity

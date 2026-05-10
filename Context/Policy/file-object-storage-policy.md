@@ -165,16 +165,26 @@ C:\Develop\BusinessEntityStorage\business-entities\...
 
 В тексте rich document хранится не binary image, а маркер/HTML-представление со ссылкой на logical image id.
 
-Пример canonical marker:
+Пример canonical marker внутри rich-text inline HTML:
 
-```text
-{image id=9f7c4b2d-2e1f-4d4c-ae8e-0d7c9a1a7d33 width=300}
+```html
+<span class="rich-text-inline-image"
+      data-rich-image-id="9f7c4b2d-2e1f-4d4c-ae8e-0d7c9a1a7d33"
+      data-display-variant="original"
+      data-width="300"></span>
 ```
 
 В rendered HTML это может превращаться в:
 
 ```html
-<img data-rich-image-id="9f7c4b2d-2e1f-4d4c-ae8e-0d7c9a1a7d33" src="/rich-document-files/...">
+<span class="rich-text-inline-image"
+      data-rich-image-id="9f7c4b2d-2e1f-4d4c-ae8e-0d7c9a1a7d33"
+      data-display-variant="original"
+      data-width="300">
+  <img data-rich-image-id="9f7c4b2d-2e1f-4d4c-ae8e-0d7c9a1a7d33"
+       src="/rich-document-files/.../images/9f7c4b2d-2e1f-4d4c-ae8e-0d7c9a1a7d33/original"
+       width="300" />
+</span>
 ```
 
 Размер изображения, выбранный пользователем в редакторе, хранится в rich document content, а не только в UI state.
@@ -182,8 +192,24 @@ C:\Develop\BusinessEntityStorage\business-entities\...
 Физический файл изображения хранится в:
 
 ```text
-business-entities/{businessEntityId}/images/
+business-entities/{businessEntityId}/images/{imageId}/
+  metadata.json
+  original.{nativeExtension}
 ```
+
+Файл variant хранится в родном формате, с которым он был загружен или сгенерирован. Для вставленной PNG-картинки это `original.png`, для JPEG - `original.jpg`, для WebP - `original.webp`.
+
+`metadata.json` хранит как минимум:
+
+```json
+{
+  "fileName": "image.png",
+  "contentType": "image/png",
+  "storedFileName": "original.png"
+}
+```
+
+Использование технического `original.bin` для новых файлов запрещено. Старые `.bin`-файлы допустимы только как legacy input при чтении или миграции.
 
 ---
 
@@ -309,4 +335,3 @@ IFileObjectStorage
 - удалять физический файл, не проверив ссылки из старых версий документов;
 - читать или отдавать файл по произвольному path из запроса;
 - смешивать временные и постоянные файлы в одном каталоге без метаданных.
-

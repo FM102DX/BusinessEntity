@@ -128,7 +128,7 @@ StarterKit
 Underline
 Link
 TableKit
-CustomImageNode
+CustomInlineImageNode
 UniqueID или собственная логика blockId
 ```
 
@@ -146,6 +146,7 @@ UniqueID или собственная логика blockId
 paragraph
     -> paragraph
     -> attrs.blockId = block.id
+    -> inline image marker внутри paragraph.html -> customInlineImage atom
 
 heading
     -> heading
@@ -153,7 +154,7 @@ heading
     -> attrs.blockId = block.id
 
 image
-    -> customImage
+    -> legacy/customImage block только для старых standalone image-block данных
     -> attrs.blockId = block.id
     -> attrs.imageId = block.imageId
     -> attrs.displayVariant = block.displayVariant
@@ -347,7 +348,7 @@ s
 code
 a[href]
 br
-span[data-*] — только при необходимости
+span.rich-text-inline-image[data-rich-image-id][data-display-variant][data-alt-text][data-width][data-height]
 ```
 
 Запретить:
@@ -368,17 +369,13 @@ base64 images
 
 Картинки не хранить как `<img src="base64...">`.
 
-Картинки должны быть отдельными блоками:
+Новые картинки внутри текста должны храниться как безопасный inline marker:
 
-```json
-{
-  "id": "b_000010",
-  "kind": "image",
-  "imageId": "img_123",
-  "displayVariant": "original",
-  "altText": "Скриншот"
-}
+```html
+<span class="rich-text-inline-image" data-rich-image-id="img_123" data-display-variant="original" data-alt-text="Скриншот"></span>
 ```
+
+Standalone image block допустим только для legacy-данных или отдельной картинки вне строки текста.
 
 ---
 
@@ -450,21 +447,33 @@ base64 images
 Сделать кастомный Tiptap node:
 
 ```text
-name: customImage
-group: block
+name: customInlineImage
+inline: true
+group: inline
 atom: true
 selectable: true
 draggable: true
 attrs:
-    blockId
     imageId
     displayVariant
     altText
+    width
+    height
 ```
 
 Этот node не должен хранить binary/base64.
 
-Он должен рендерить картинку по URL, который строится из `imageId` и `displayVariant`.
+Он должен вести себя как inline atom внутри paragraph/heading: между двумя картинками можно печатать обычный текст, а строка увеличивает высоту по самой высокой картинке.
+
+Рендер node должен идти через span-wrapper:
+
+```html
+<span class="rich-text-inline-image" data-rich-image-id="..." data-display-variant="original">
+  <img src="/rich-document-files/{documentId}/images/{imageId}/{variant}" alt="" />
+</span>
+```
+
+`src` не является canonical storage-данными. Сервер при сохранении обязан оставить только безопасный marker с `imageId`/`variant`/размерами, а при построении `HtmlCache` заново построить URL из `documentId + imageId + variant`.
 
 ---
 
@@ -480,7 +489,8 @@ attrs:
     новый блок получает новый id;
 - при merge paragraphs:
     результирующий блок сохраняет id первого блока;
-- image/table/codeBlock всегда имеют собственный id;
+- table/codeBlock и legacy standalone image всегда имеют собственный block id;
+- inline image marker имеет `imageId`, но не является отдельным block id;
 - block.id должен переживать сохранение, перезагрузку и повторное открытие редактора.
 ```
 
@@ -541,7 +551,7 @@ RichTextDocumentChunk -> Tiptap JSON -> RichTextDocumentChunk
 3. paragraph with <strong>
 4. paragraph with link
 5. heading level 1/2/3
-6. image block
+6. inline image marker inside paragraph
 7. table block
 8. block ids are preserved
 9. new block gets id
@@ -562,7 +572,7 @@ RichTextDocumentChunk -> Tiptap JSON -> RichTextDocumentChunk
 - italic/bold/underline сохраняются;
 - block.id сохраняются после roundtrip;
 - можно вставить и отредактировать таблицу;
-- image block отображается, но binary не попадает в chunk;
+- inline image отображается как atom внутри текста, но binary не попадает в chunk;
 - dirty chunk сохраняется отдельно;
 - весь документ целиком не загружается в editor;
 - plain_text обновляется после сохранения;

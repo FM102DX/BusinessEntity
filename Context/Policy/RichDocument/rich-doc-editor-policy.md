@@ -202,6 +202,7 @@ Chunk становится dirty в момент фактического изм
 - ввод текста;
 - удаление символов;
 - вставка;
+- вставка inline-картинки как atom внутри текста;
 - команда форматирования;
 - изменение heading / paragraph mode.
 
@@ -437,6 +438,7 @@ Adapter должен сохранять:
 - block kind;
 - heading level;
 - inline formatting;
+- inline image markers в `span.rich-text-inline-image`;
 - links;
 - image references;
 - table structure, когда таблицы будут поддержаны.
@@ -551,6 +553,7 @@ Outline не должен ограничиваться только началь
 19. Размеры edit window задаются через sys parameters в админке.
 20. Старые версии доступны только на чтение.
 21. Import создает новую версию и затем перечитывает документ как при открытии.
+22. Картинки вставляются как inline atom внутри paragraph/heading HTML; между картинками можно вводить текст.
 
 ## 27. Зафиксированные решения
 
@@ -562,8 +565,8 @@ Outline не должен ограничиваться только началь
 4. Если chunk выгружен из editor viewport, его в редакторе нет.
 5. Dirty cache хранит только измененные chunks.
 6. Dirty state выставляется в момент правки, а не только при dispose.
-7. Первый MVP поддерживает paragraphs, headings H1-H3 и inline formatting.
-8. Таблицы, картинки и сложные embedded-элементы добавляются отдельным этапом.
+7. Первый MVP поддерживает paragraphs, headings H1-H3, inline formatting и inline-картинки.
+8. Таблицы, галереи/сетки изображений и сложные embedded-элементы добавляются отдельным этапом.
 9. Conflict tracking в первом MVP не выполняется.
 10. Save сохраняет dirty chunks поверх текущего состояния БД.
 11. Название документа сохраняется вместе с edit save.

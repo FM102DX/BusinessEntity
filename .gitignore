@@ -261,6 +261,10 @@ orleans.codegen.cs
 # -----------------------------------------
 _UpgradeReport_Files/
 Backup*/
+!BusinessEntity/Services/Backup/
+!BusinessEntity/Services/Backup/*.cs
+!Context/Policy/Backup/
+!Context/Policy/Backup/*.md
 UpgradeLog*.XML
 UpgradeLog*.htm
 ServiceFabricBackup/

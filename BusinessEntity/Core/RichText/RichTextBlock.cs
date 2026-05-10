@@ -14,7 +14,7 @@ namespace BusinessEntity.Core.RichText
         [JsonPropertyName("level")]
         public int Level { get; set; }
 
-        // Inline-HTML содержимое paragraph/heading блока.
+        // Inline-HTML содержимое paragraph/heading блока, включая безопасные inline image markers.
         [JsonPropertyName("html")]
         public string Html { get; set; } = string.Empty;
 

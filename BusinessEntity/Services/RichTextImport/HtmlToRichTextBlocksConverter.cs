@@ -69,7 +69,7 @@ namespace BusinessEntity.Services.RichTextImport
             if (nodeName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6")
             {
                 var level = int.Parse(nodeName.Substring(1), System.Globalization.CultureInfo.InvariantCulture);
-                var headingHtml = SanitizeInlineHtml(node);
+                var headingHtml = await SanitizeInlineHtmlAsync(node, files, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(headingHtml))
                 {
                     blocks.Add(new RichTextBlock
@@ -120,7 +120,7 @@ namespace BusinessEntity.Services.RichTextImport
                     return;
                 }
 
-                var paragraphHtml = SanitizeInlineHtml(node);
+                var paragraphHtml = await SanitizeInlineHtmlAsync(node, files, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(paragraphHtml))
                 {
                     blocks.Add(new RichTextBlock
@@ -151,36 +151,24 @@ namespace BusinessEntity.Services.RichTextImport
             }
 
             var nodeName = node.Name.ToLowerInvariant();
-            return nodeName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "p" or "div" or "img";
+            return nodeName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "p" or "div";
         }
 
         private static RichTextBlock? TryBuildExistingEmbeddedImageBlock(HtmlNode imageNode)
         {
-            var imageId = imageNode.GetAttributeValue("data-rich-image-id", string.Empty).Trim();
-            var variant = imageNode.GetAttributeValue("data-display-variant", string.Empty).Trim();
-
-            if (string.IsNullOrWhiteSpace(imageId))
+            if (!TryReadExistingEmbeddedImage(imageNode, out var image))
             {
-                var src = imageNode.GetAttributeValue("src", string.Empty).Trim();
-                if (!TryParseRichDocumentImageUrl(src, out imageId, out variant))
-                {
-                    return null;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(variant))
-            {
-                variant = "original";
+                return null;
             }
 
             return new RichTextBlock
             {
                 Kind = "image",
-                ImageId = imageId,
-                DisplayVariant = variant,
-                AltText = imageNode.GetAttributeValue("alt", string.Empty),
-                Width = ReadPositivePixelValue(imageNode, "width"),
-                Height = ReadPositivePixelValue(imageNode, "height")
+                ImageId = image.ImageId,
+                DisplayVariant = image.DisplayVariant,
+                AltText = image.AltText,
+                Width = image.Width,
+                Height = image.Height
             };
         }
 
@@ -218,8 +206,27 @@ namespace BusinessEntity.Services.RichTextImport
             return !string.IsNullOrWhiteSpace(imageId);
         }
 
+        // Читает положительный pixel-размер из основного узла или fallback img-узла.
+        private static int ReadPositivePixelValue(HtmlNode node, HtmlNode? fallbackNode, string name)
+        {
+            var value = ReadPositivePixelValue(node, name);
+            if (value > 0 || fallbackNode == null || ReferenceEquals(node, fallbackNode))
+            {
+                return value;
+            }
+
+            return ReadPositivePixelValue(fallbackNode, name);
+        }
+
+        // Читает положительный pixel-размер из data-атрибута, прямого атрибута или style.
         private static int ReadPositivePixelValue(HtmlNode node, string name)
         {
+            var dataAttributeValue = ReadPositiveInt(node.GetAttributeValue($"data-{name}", string.Empty));
+            if (dataAttributeValue > 0)
+            {
+                return dataAttributeValue;
+            }
+
             var attributeValue = ReadPositiveInt(node.GetAttributeValue(name, string.Empty));
             if (attributeValue > 0)
             {
@@ -265,19 +272,26 @@ namespace BusinessEntity.Services.RichTextImport
                 : 0;
         }
 
-        // Санитизирует inline-html так, чтобы в документ попали только разрешенные теги форматирования.
-        private static string SanitizeInlineHtml(HtmlNode node)
+        // Санитизирует inline-html так, чтобы в документ попали только разрешенные теги форматирования и inline image markers.
+        private async Task<string> SanitizeInlineHtmlAsync(
+            HtmlNode node,
+            List<RichTextEmbeddedFile> files,
+            CancellationToken cancellationToken)
         {
             var builder = new StringBuilder();
             foreach (var child in node.ChildNodes)
             {
-                AppendSanitizedInlineHtml(child, builder);
+                await AppendSanitizedInlineHtmlAsync(child, builder, files, cancellationToken);
             }
             return builder.ToString().Trim();
         }
 
         // Рекурсивно собирает безопасный inline-html для paragraph/heading блока.
-        private static void AppendSanitizedInlineHtml(HtmlNode node, StringBuilder builder)
+        private async Task AppendSanitizedInlineHtmlAsync(
+            HtmlNode node,
+            StringBuilder builder,
+            List<RichTextEmbeddedFile> files,
+            CancellationToken cancellationToken)
         {
             if (node.NodeType == HtmlNodeType.Text)
             {
@@ -291,6 +305,33 @@ namespace BusinessEntity.Services.RichTextImport
             }
 
             var nodeName = node.Name.ToLowerInvariant();
+            if (TryReadExistingEmbeddedImage(node, out var existingImage))
+            {
+                AppendInlineImageMarker(builder, existingImage);
+                return;
+            }
+
+            if (nodeName == "img")
+            {
+                var imageFile = await TryImportImageAsync(node, cancellationToken);
+                if (imageFile != null)
+                {
+                    files.Add(imageFile);
+                    AppendInlineImageMarker(
+                        builder,
+                        new InlineImageDescriptor
+                        {
+                            ImageId = imageFile.ImageId,
+                            DisplayVariant = imageFile.Variant,
+                            AltText = node.GetAttributeValue("alt", string.Empty),
+                            Width = ReadPositivePixelValue(node, "width"),
+                            Height = ReadPositivePixelValue(node, "height")
+                        });
+                }
+
+                return;
+            }
+
             if (nodeName == "br")
             {
                 builder.Append("<br />");
@@ -309,7 +350,7 @@ namespace BusinessEntity.Services.RichTextImport
                 builder.Append('<').Append(normalizedTag).Append('>');
                 foreach (var child in node.ChildNodes)
                 {
-                    AppendSanitizedInlineHtml(child, builder);
+                    await AppendSanitizedInlineHtmlAsync(child, builder, files, cancellationToken);
                 }
                 builder.Append("</").Append(normalizedTag).Append('>');
                 return;
@@ -317,8 +358,131 @@ namespace BusinessEntity.Services.RichTextImport
 
             foreach (var child in node.ChildNodes)
             {
-                AppendSanitizedInlineHtml(child, builder);
+                await AppendSanitizedInlineHtmlAsync(child, builder, files, cancellationToken);
             }
+        }
+
+        // Пытается прочитать уже сохраненную embedded-картинку из inline span/img marker.
+        private static bool TryReadExistingEmbeddedImage(HtmlNode node, out InlineImageDescriptor image)
+        {
+            image = new InlineImageDescriptor();
+            if (node.NodeType != HtmlNodeType.Element)
+            {
+                return false;
+            }
+
+            var nodeName = node.Name.ToLowerInvariant();
+            if (nodeName != "img" &&
+                !(nodeName == "span" && HasCssClass(node, "rich-text-inline-image")))
+            {
+                return false;
+            }
+
+            var imageNode = nodeName == "img"
+                ? node
+                : node.Descendants("img").FirstOrDefault();
+
+            var imageId = ReadAttribute(node, "data-rich-image-id");
+            var variant = ReadAttribute(node, "data-display-variant");
+            if (string.IsNullOrWhiteSpace(imageId) && imageNode != null)
+            {
+                imageId = ReadAttribute(imageNode, "data-rich-image-id");
+            }
+
+            if (string.IsNullOrWhiteSpace(variant) && imageNode != null)
+            {
+                variant = ReadAttribute(imageNode, "data-display-variant");
+            }
+
+            if (string.IsNullOrWhiteSpace(imageId) && imageNode != null)
+            {
+                var src = ReadAttribute(imageNode, "src");
+                if (!TryParseRichDocumentImageUrl(src, out imageId, out variant))
+                {
+                    return false;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(imageId))
+            {
+                return false;
+            }
+
+            image = new InlineImageDescriptor
+            {
+                ImageId = imageId,
+                DisplayVariant = string.IsNullOrWhiteSpace(variant) ? "original" : variant,
+                AltText = ReadFirstAttribute(node, imageNode, "data-alt-text", "alt"),
+                Width = ReadPositivePixelValue(node, imageNode, "width"),
+                Height = ReadPositivePixelValue(node, imageNode, "height")
+            };
+
+            return true;
+        }
+
+        // Добавляет canonical inline image marker в HTML блока без сохранения src.
+        private static void AppendInlineImageMarker(StringBuilder builder, InlineImageDescriptor image)
+        {
+            builder.Append("<span class=\"rich-text-inline-image\"");
+            builder.Append(" data-rich-image-id=\"").Append(WebUtility.HtmlEncode(image.ImageId ?? string.Empty)).Append('"');
+            builder.Append(" data-display-variant=\"").Append(WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(image.DisplayVariant) ? "original" : image.DisplayVariant)).Append('"');
+            builder.Append(" data-alt-text=\"").Append(WebUtility.HtmlEncode(image.AltText ?? string.Empty)).Append('"');
+
+            if (image.Width > 0)
+            {
+                builder.Append(" data-width=\"").Append(image.Width.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('"');
+            }
+
+            if (image.Height > 0)
+            {
+                builder.Append(" data-height=\"").Append(image.Height.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('"');
+            }
+
+            builder.Append("></span>");
+        }
+
+        // Читает первый непустой атрибут из основного узла или fallback img-узла.
+        private static string ReadFirstAttribute(HtmlNode node, HtmlNode? fallbackNode, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var value = ReadAttribute(node, name);
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            if (fallbackNode == null)
+            {
+                return string.Empty;
+            }
+
+            foreach (var name in names)
+            {
+                var value = ReadAttribute(fallbackNode, name);
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        // Читает HTML-атрибут с de-entity нормализацией.
+        private static string ReadAttribute(HtmlNode node, string name)
+        {
+            return HtmlEntity.DeEntitize(node.GetAttributeValue(name, string.Empty)).Trim();
+        }
+
+        // Проверяет наличие CSS-класса у HTML-узла.
+        private static bool HasCssClass(HtmlNode node, string className)
+        {
+            var classAttribute = node.GetAttributeValue("class", string.Empty);
+            return classAttribute
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(x => string.Equals(x, className, StringComparison.OrdinalIgnoreCase));
         }
 
         // Импортирует картинку из data-uri или внешнего http/https URL.
@@ -396,6 +560,20 @@ namespace BusinessEntity.Services.RichTextImport
                 "image/svg+xml" => "svg",
                 _ => "bin"
             };
+        }
+
+        // Техническое описание inline-картинки при HTML import/save roundtrip.
+        private sealed class InlineImageDescriptor
+        {
+            public string ImageId { get; set; } = string.Empty;
+
+            public string DisplayVariant { get; set; } = "original";
+
+            public string AltText { get; set; } = string.Empty;
+
+            public int Width { get; set; }
+
+            public int Height { get; set; }
         }
     }
 }

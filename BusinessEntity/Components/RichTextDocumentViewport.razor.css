@@ -48,6 +48,21 @@
     cursor: pointer;
 }
 
+.rich-text-document-viewport .rich-text-inline-image {
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
+    vertical-align: top;
+}
+
+.rich-text-document-viewport .rich-text-inline-image img {
+    max-width: 100%;
+    height: auto;
+    display: inline-block;
+    cursor: pointer;
+    vertical-align: top;
+}
+
 @media (max-width: 1100px) {
     .rich-text-document-viewport {
         max-height: none;

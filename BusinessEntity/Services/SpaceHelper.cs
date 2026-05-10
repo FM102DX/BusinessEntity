@@ -106,14 +106,26 @@ namespace BusinessEntity.Services
         /// </summary>
         public async Task<GenericSpaceProperties> SetDoBackupAsync(Guid spaceId, bool doBackup, CancellationToken ct = default)
         {
-            await GetRequiredSpaceAsync(spaceId, ct);
-
             var property = await GetGenericSpacePropertyDtoAsync(spaceId, ct);
             var settings = DeserializeGenericSpaceProperties(property);
             settings.DoBackup = doBackup;
+            return await SaveGenericSpacePropertiesAsync(spaceId, settings, ct);
+        }
 
+        /// <summary>
+        /// Сохраняет общие настройки пространства.
+        /// </summary>
+        public async Task<GenericSpaceProperties> SaveGenericSpacePropertiesAsync(
+            Guid spaceId,
+            GenericSpaceProperties settings,
+            CancellationToken ct = default)
+        {
+            await GetRequiredSpaceAsync(spaceId, ct);
+
+            var property = await GetGenericSpacePropertyDtoAsync(spaceId, ct);
+            var normalizedSettings = NormalizeGenericSpaceProperties(settings);
             var now = DateTime.UtcNow;
-            var serialized = JsonSerializer.Serialize(settings, PropertyJsonOptions);
+            var serialized = JsonSerializer.Serialize(normalizedSettings, PropertyJsonOptions);
             if (property == null)
             {
                 await _businessEntityPropertyRepository.AddAsync(new BusinessEntityPropertyDto
@@ -135,7 +147,7 @@ namespace BusinessEntity.Services
                 await _businessEntityPropertyRepository.UpdateAsync(property, ct);
             }
 
-            return settings;
+            return normalizedSettings;
         }
 
         /// <summary>
@@ -231,12 +243,30 @@ namespace BusinessEntity.Services
             try
             {
                 return JsonSerializer.Deserialize<GenericSpaceProperties>(property.Data, PropertyJsonOptions)
-                    ?? new GenericSpaceProperties();
+                    is { } settings
+                        ? NormalizeGenericSpaceProperties(settings)
+                        : new GenericSpaceProperties();
             }
             catch (JsonException)
             {
                 return new GenericSpaceProperties();
             }
+        }
+
+        private static GenericSpaceProperties NormalizeGenericSpaceProperties(GenericSpaceProperties? settings)
+        {
+            return new GenericSpaceProperties
+            {
+                SchemaVersion = settings?.SchemaVersion > 0 ? settings.SchemaVersion : 1,
+                Kind = string.IsNullOrWhiteSpace(settings?.Kind)
+                    ? nameof(GenericSpaceProperties)
+                    : settings.Kind,
+                DoBackup = settings?.DoBackup ?? true,
+                BackupFolder = settings?.BackupFolder?.Trim() ?? string.Empty,
+                BackupIntervalMinutes = settings?.BackupIntervalMinutes > 0
+                    ? settings.BackupIntervalMinutes
+                    : 5
+            };
         }
     }
 }
