@@ -6,7 +6,7 @@ namespace BusinessEntity.Core.RichText
     // Блок rich-text документа в нормализованном MVP-формате.
     public class RichTextBlock
     {
-        // Тип блока: paragraph / heading / image.
+        // Тип блока: paragraph / heading / image / video.
         [JsonPropertyName("kind")]
         public string Kind { get; set; } = "paragraph";
 
@@ -37,5 +37,13 @@ namespace BusinessEntity.Core.RichText
         // Отображаемая высота изображения в пикселях. 0 означает original/auto.
         [JsonPropertyName("height")]
         public int Height { get; set; }
+
+        // Идентификатор видео из общего мультимедиа-хранилища.
+        [JsonPropertyName("videoId")]
+        public string VideoId { get; set; } = string.Empty;
+
+        // Отображаемое имя видео.
+        [JsonPropertyName("videoTitle")]
+        public string VideoTitle { get; set; } = string.Empty;
     }
 }

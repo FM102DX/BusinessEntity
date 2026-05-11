@@ -4,6 +4,8 @@ using BusinessEntity.Core.Services;
 using BusinessEntity.DataAccess.Classes;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Registration;
+using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
+using BusinessEntity.MiniApps.MediaServerMiniApp.Registration;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Contracts;
 using BusinessEntity.MiniApps.SampleDataMiniApp.Registration;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
@@ -120,6 +122,7 @@ namespace BusinessEntity
 
             // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddDataProviderMiniApp();
+            builder.Services.AddMediaServerMiniApp();
             builder.Services.AddSampleDataMiniApp();
             builder.Services.AddTreeMiniApp();
             builder.Services.AddUserMiniApp();
@@ -187,6 +190,13 @@ namespace BusinessEntity
             {
                 var userMiniApp = scope.ServiceProvider.GetRequiredService<IUserMiniApp>();
                 userMiniApp.EnsureInitialized();
+            }
+
+            // Явно поднимает MediaServerMiniApp при старте приложения.
+            using (var scope = app.Services.CreateScope())
+            {
+                var mediaServerMiniApp = scope.ServiceProvider.GetRequiredService<IMediaServerMiniApp>();
+                mediaServerMiniApp.EnsureInitialized();
             }
 
             // Явно поднимает TreeMiniApp при старте приложения.

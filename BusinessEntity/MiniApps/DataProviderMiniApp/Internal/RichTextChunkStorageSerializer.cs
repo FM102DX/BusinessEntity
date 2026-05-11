@@ -70,6 +70,12 @@ internal static class RichTextChunkStorageSerializer
                         builder.Append(block.AltText);
                     }
                     break;
+                case "video":
+                    if (!string.IsNullOrWhiteSpace(block.VideoTitle))
+                    {
+                        builder.Append(block.VideoTitle);
+                    }
+                    break;
             }
         }
 
@@ -107,6 +113,9 @@ internal static class RichTextChunkStorageSerializer
                     var imageAttributes = BuildImageAttributes(block, encodedAlt, imageId, variant);
                     builder.Append(
                         $"<p class=\"rich-text-image\"><img src=\"/rich-document-files/{businessEntityId:D}/images/{imageId}/{variant}\"{imageAttributes} /></p>");
+                    break;
+                case "video":
+                    AppendRenderedVideoBlock(block, builder);
                     break;
             }
         }
@@ -240,6 +249,12 @@ internal static class RichTextChunkStorageSerializer
             return;
         }
 
+        if (TryReadInlineVideo(node, out var video) && !string.IsNullOrWhiteSpace(video.Title))
+        {
+            builder.Append(video.Title);
+            return;
+        }
+
         foreach (var child in node.ChildNodes)
         {
             AppendInlineText(child, builder);
@@ -263,6 +278,12 @@ internal static class RichTextChunkStorageSerializer
         if (TryReadInlineImage(node, out var image))
         {
             AppendRenderedInlineImage(businessEntityId, image, builder);
+            return;
+        }
+
+        if (TryReadInlineVideo(node, out var video))
+        {
+            AppendRenderedInlineVideo(video, builder);
             return;
         }
 
@@ -396,6 +417,84 @@ internal static class RichTextChunkStorageSerializer
         builder.Append(
             $"<img src=\"/rich-document-files/{businessEntityId:D}/images/{urlImageId}/{urlVariant}\"{BuildImageAttributes(block, encodedAlt, urlImageId, urlVariant)} />");
         builder.Append("</span>");
+    }
+
+    // Пытается прочитать inline video marker из span/video без доверия к произвольным атрибутам.
+    private static bool TryReadInlineVideo(HtmlNode node, out InlineVideoDescriptor video)
+    {
+        video = new InlineVideoDescriptor();
+        if (node.NodeType != HtmlNodeType.Element)
+        {
+            return false;
+        }
+
+        var nodeName = node.Name.ToLowerInvariant();
+        if (nodeName != "video" &&
+            !(nodeName == "span" && HasCssClass(node, "rich-text-inline-video")))
+        {
+            return false;
+        }
+
+        var videoNode = nodeName == "video"
+            ? node
+            : node.Descendants("video").FirstOrDefault();
+
+        var videoId = ReadAttribute(node, "data-rich-video-id");
+        if (string.IsNullOrWhiteSpace(videoId) && videoNode != null)
+        {
+            videoId = ReadAttribute(videoNode, "data-rich-video-id");
+        }
+
+        if (string.IsNullOrWhiteSpace(videoId) && videoNode != null)
+        {
+            var src = ReadAttribute(videoNode, "src");
+            if (!TryParseMediaServerVideoUrl(src, out videoId))
+            {
+                return false;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(videoId))
+        {
+            return false;
+        }
+
+        video = new InlineVideoDescriptor
+        {
+            VideoId = videoId,
+            Title = ReadFirstAttribute(node, videoNode, "data-video-title", "title", "aria-label")
+        };
+
+        return true;
+    }
+
+    // Рендерит inline video marker как span + video с фиксированной высотой просмотра.
+    private static void AppendRenderedInlineVideo(InlineVideoDescriptor video, StringBuilder builder)
+    {
+        var encodedVideoId = WebUtility.HtmlEncode(video.VideoId ?? string.Empty);
+        var encodedTitle = WebUtility.HtmlEncode(video.Title ?? string.Empty);
+        var urlVideoId = Uri.EscapeDataString(video.VideoId ?? string.Empty);
+
+        builder.Append("<span class=\"rich-text-inline-video\"");
+        builder.Append($" data-rich-video-id=\"{encodedVideoId}\"");
+        builder.Append($" data-video-title=\"{encodedTitle}\"");
+        builder.Append(">");
+        builder.Append(
+            $"<video src=\"/media-server-files/videos/{urlVideoId}/original\" data-rich-video-id=\"{encodedVideoId}\" title=\"{encodedTitle}\" controls preload=\"metadata\" style=\"height: 300px; max-width: 100%;\"></video>");
+        builder.Append("</span>");
+    }
+
+    private static void AppendRenderedVideoBlock(RichTextBlock block, StringBuilder builder)
+    {
+        var descriptor = new InlineVideoDescriptor
+        {
+            VideoId = block.VideoId ?? string.Empty,
+            Title = block.VideoTitle ?? string.Empty
+        };
+
+        builder.Append("<p class=\"rich-text-video\">");
+        AppendRenderedInlineVideo(descriptor, builder);
+        builder.Append("</p>");
     }
 
     // Читает первый непустой атрибут из основного узла или fallback img-узла.
@@ -544,6 +643,39 @@ internal static class RichTextChunkStorageSerializer
         return !string.IsNullOrWhiteSpace(imageId);
     }
 
+    // Извлекает videoId из безопасного MediaServer URL.
+    private static bool TryParseMediaServerVideoUrl(string? src, out string videoId)
+    {
+        videoId = string.Empty;
+        if (string.IsNullOrWhiteSpace(src))
+        {
+            return false;
+        }
+
+        const string marker = "/media-server-files/videos/";
+        var markerIndex = src.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+        {
+            return false;
+        }
+
+        var tail = src[(markerIndex + marker.Length)..];
+        var queryIndex = tail.IndexOfAny(new[] { '?', '#' });
+        if (queryIndex >= 0)
+        {
+            tail = tail[..queryIndex];
+        }
+
+        var parts = tail.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !string.Equals(parts[1], "original", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        videoId = Uri.UnescapeDataString(parts[0]);
+        return !string.IsNullOrWhiteSpace(videoId);
+    }
+
     private static string BuildImageAttributes(RichTextBlock block, string encodedAlt, string imageId, string variant)
     {
         var builder = new StringBuilder();
@@ -600,5 +732,13 @@ internal static class RichTextChunkStorageSerializer
         public int Width { get; set; }
 
         public int Height { get; set; }
+    }
+
+    // Техническое описание inline-видео внутри paragraph/heading HTML.
+    private sealed class InlineVideoDescriptor
+    {
+        public string VideoId { get; set; } = string.Empty;
+
+        public string Title { get; set; } = string.Empty;
     }
 }

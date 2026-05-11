@@ -23,6 +23,8 @@ namespace BusinessEntity.Core.Classes
         RichTextDocument = 350,
         // Системные параметры приложения
         SysParametersTp = 400,
+        // Видео в общем мультимедиа-хранилище
+        MediaVideo = 500,
 
         // Неопределенный тип
         Undefined = 9999

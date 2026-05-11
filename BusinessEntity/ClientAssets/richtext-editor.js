@@ -70,6 +70,46 @@ const RichTextImage = Node.create({
     }
 });
 
+const RichTextVideo = Node.create({
+    name: "richTextVideo",
+    inline: true,
+    group: "inline",
+    atom: true,
+    selectable: true,
+    draggable: true,
+
+    addAttributes() {
+        return {
+            src: { default: null },
+            videoId: { default: null },
+            title: { default: "" }
+        };
+    },
+
+    parseHTML() {
+        return [
+            {
+                tag: "span.rich-text-inline-video",
+                getAttrs: element => readVideoAttributes(element)
+            },
+            {
+                tag: "video[data-rich-video-id]",
+                getAttrs: element => readVideoAttributes(element)
+            },
+            {
+                tag: "video[src*='/media-server-files/videos/']",
+                getAttrs: element => readVideoAttributes(element)
+            }
+        ];
+    },
+
+    renderHTML({ node }) {
+        const spanAttrs = buildInlineVideoSpanAttributes(node.attrs);
+        const videoAttrs = buildVideoDomAttributes(node.attrs);
+        return ["span", spanAttrs, ["video", videoAttrs]];
+    }
+});
+
 const extensions = [
     StarterKit.configure({
         heading: false,
@@ -78,6 +118,7 @@ const extensions = [
     Paragraph,
     CustomHeading.configure({ levels: [1, 2, 3] }),
     RichTextImage,
+    RichTextVideo,
     Underline
 ];
 
@@ -237,6 +278,79 @@ function parseRichDocumentImageUrl(src) {
     };
 }
 
+function readVideoAttributes(element) {
+    if (!element) {
+        return false;
+    }
+
+    const isVideo = element.matches?.("video") === true;
+    const videoElement = isVideo ? element : element.querySelector?.("video");
+    const src = videoElement?.getAttribute("src") || element.getAttribute("src") || "";
+    const parsed = parseMediaServerVideoUrl(src);
+    const videoId =
+        element.getAttribute("data-rich-video-id") ||
+        videoElement?.getAttribute("data-rich-video-id") ||
+        parsed.videoId;
+    if (!videoId) {
+        return false;
+    }
+
+    return {
+        src: src || `/media-server-files/videos/${encodeURIComponent(videoId)}/original`,
+        videoId,
+        title:
+            element.getAttribute("data-video-title") ||
+            videoElement?.getAttribute("title") ||
+            element.getAttribute("title") ||
+            ""
+    };
+}
+
+function buildInlineVideoSpanAttributes(attrs) {
+    const videoId = attrs.videoId || "";
+    return {
+        class: "rich-text-inline-video",
+        "data-rich-video-id": videoId,
+        "data-video-title": attrs.title || "",
+        contenteditable: "false"
+    };
+}
+
+function buildVideoDomAttributes(attrs) {
+    const videoId = attrs.videoId || "";
+    return {
+        src: attrs.src || `/media-server-files/videos/${encodeURIComponent(videoId)}/original`,
+        "data-rich-video-id": videoId,
+        title: attrs.title || "",
+        controls: "",
+        preload: "metadata",
+        style: "height: 300px; max-width: 100%;"
+    };
+}
+
+function parseMediaServerVideoUrl(src) {
+    const empty = { videoId: "" };
+    if (!src) {
+        return empty;
+    }
+
+    const marker = "/media-server-files/videos/";
+    const markerIndex = src.toLowerCase().indexOf(marker);
+    if (markerIndex < 0) {
+        return empty;
+    }
+
+    const tail = src.slice(markerIndex + marker.length).split(/[?#]/)[0];
+    const parts = tail.split("/").filter(Boolean);
+    if (parts.length < 2 || parts[1].toLowerCase() !== "original") {
+        return empty;
+    }
+
+    return {
+        videoId: decodeURIComponent(parts[0])
+    };
+}
+
 function getClipboardImageFile(event) {
     const items = Array.from(event?.clipboardData?.items || []);
     for (const item of items) {
@@ -306,6 +420,74 @@ function handleImagePaste(viewportElementId, registry, sortOrder, event) {
 
     insertPastedImage(state.editor, registry.documentId, file).catch(error => {
         console.error("[rich-text-image-paste]", error);
+    });
+    return true;
+}
+
+function getDataTransferVideoFile(event) {
+    const files = Array.from(event?.dataTransfer?.files || []);
+    return files.find(file => file.type && file.type.startsWith("video/")) || null;
+}
+
+async function uploadMediaVideo(file) {
+    const formData = new FormData();
+    formData.append("file", file, file.name || "video");
+
+    const response = await fetch("/media-server-files/videos", {
+        method: "POST",
+        body: formData
+    });
+
+    if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Video upload failed (${response.status})`);
+    }
+
+    return response.json();
+}
+
+function insertVideoNode(editor, videoId, title, url) {
+    if (!editor || !videoId) {
+        return;
+    }
+
+    editor.chain().focus().insertContent({
+        type: "richTextVideo",
+        attrs: {
+            src: url || `/media-server-files/videos/${encodeURIComponent(videoId)}/original`,
+            videoId,
+            title: title || ""
+        }
+    }).run();
+}
+
+async function insertDroppedVideo(editor, file) {
+    const result = await uploadMediaVideo(file);
+    const videoId = result.id ?? result.Id ?? "";
+    const title = result.displayName ?? result.DisplayName ?? file.name ?? "";
+    const url = result.embedUrl ?? result.EmbedUrl ?? `/media-server-files/videos/${encodeURIComponent(videoId)}/original`;
+
+    if (!videoId) {
+        throw new Error("Video upload response does not contain id.");
+    }
+
+    insertVideoNode(editor, videoId, title, url);
+}
+
+function handleVideoDrop(registry, sortOrder, event) {
+    const file = getDataTransferVideoFile(event);
+    if (!file) {
+        return false;
+    }
+
+    event.preventDefault();
+    const state = registry.editors.get(sortOrder);
+    if (!state) {
+        return true;
+    }
+
+    insertDroppedVideo(state.editor, file).catch(error => {
+        console.error("[rich-text-video-drop]", error);
     });
     return true;
 }
@@ -518,6 +700,9 @@ function createEditor(viewportElementId, registry, host, item) {
             },
             handlePaste: (view, event) => {
                 return handleImagePaste(viewportElementId, registry, sortOrder, event);
+            },
+            handleDrop: (view, event) => {
+                return handleVideoDrop(registry, sortOrder, event);
             },
             handleDOMEvents: {
                 contextmenu: (view, event) => {
@@ -739,10 +924,21 @@ function runCommand(viewportElementId, command) {
     }
 }
 
+function insertVideo(viewportElementId, videoId, title, url) {
+    const registry = registries.get(viewportElementId);
+    if (!registry) {
+        return;
+    }
+
+    const editor = getActiveEditor(registry);
+    insertVideoNode(editor, videoId, title, url);
+}
+
 window.richTextEditor = {
     syncEditors,
     collectEditors,
     destroyEditors,
     markClean,
-    runCommand
+    runCommand,
+    insertVideo
 };

@@ -1,0 +1,226 @@
+@page "/multimedia"
+@using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts
+@inject IMediaServerService MediaServerService
+
+<PageTitle>Мультимедиа</PageTitle>
+
+<div class="multimedia-page">
+    <h3>Мультимедиа</h3>
+
+    <div class="multimedia-tabs" role="tablist" aria-label="Типы мультимедиа">
+        <button type="button" class="multimedia-tab multimedia-tab--active">Видео</button>
+        <button type="button" class="multimedia-tab" disabled>Аудио</button>
+        <button type="button" class="multimedia-tab" disabled>Файлы</button>
+        <button type="button" class="multimedia-tab" disabled>Картинки</button>
+    </div>
+
+    <div class="multimedia-actions">
+        <label class="btn btn-primary btn-sm multimedia-upload">
+            <span class="oi oi-cloud-upload" aria-hidden="true"></span>
+            <span>Загрузить</span>
+            <InputFile class="multimedia-upload__input" OnChange="UploadVideoAsync" accept="video/*" />
+        </label>
+        @if (IsUploading)
+        {
+            <span class="multimedia-status">Загрузка...</span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Message))
+        {
+            <span class="multimedia-status">@Message</span>
+        }
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="multimedia-empty">Загрузка списка...</div>
+    }
+    else if (Videos.Count == 0)
+    {
+        <div class="multimedia-empty">Видео пока не загружены.</div>
+    }
+    else
+    {
+        <div class="multimedia-list">
+            @foreach (var video in Videos)
+            {
+                <div class="multimedia-video-row" @key="video.Id">
+                    <div class="multimedia-video-row__icon">
+                        <span class="oi oi-media-play" aria-hidden="true"></span>
+                    </div>
+                    <div class="multimedia-video-row__main">
+                        <input class="form-control"
+                               value="@GetDraftName(video)"
+                               @oninput="eventArgs => SetDraftName(video.Id, eventArgs.Value?.ToString())"
+                               @onkeydown="eventArgs => HandleNameKeyDownAsync(video, eventArgs)" />
+                        <div class="multimedia-video-row__meta">
+                            <span>@video.FileName</span>
+                            <span>@FormatSize(video.OriginalSizeBytes)</span>
+                            <span>@video.UploadedDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                        </div>
+                    </div>
+                    <div class="multimedia-video-row__duration">@FormatDuration(video.DurationSeconds)</div>
+                    <div class="multimedia-video-row__actions">
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => SaveNameAsync(video)" title="Сохранить имя">
+                            <span class="oi oi-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteVideoAsync(video)" title="Удалить">
+                            <span class="oi oi-trash" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private const long MaxVideoBytes = 2L * 1024L * 1024L * 1024L;
+
+    private List<MediaVideoInfo> Videos { get; set; } = new();
+    private Dictionary<Guid, string> DraftNames { get; } = new();
+    private bool IsLoading { get; set; }
+    private bool IsUploading { get; set; }
+    private string Message { get; set; } = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVideosAsync();
+    }
+
+    private async Task LoadVideosAsync()
+    {
+        IsLoading = true;
+        Message = string.Empty;
+        try
+        {
+            Videos = (await MediaServerService.GetVideosAsync()).ToList();
+            DraftNames.Clear();
+            foreach (var video in Videos)
+            {
+                DraftNames[video.Id] = video.DisplayName;
+            }
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task UploadVideoAsync(InputFileChangeEventArgs eventArgs)
+    {
+        var file = eventArgs.File;
+        if (file == null)
+        {
+            return;
+        }
+
+        IsUploading = true;
+        Message = string.Empty;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxVideoBytes);
+            await MediaServerService.UploadVideoAsync(
+                stream,
+                file.Name,
+                file.ContentType,
+                file.Size);
+            Message = "Видео загружено.";
+            await LoadVideosAsync();
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
+        finally
+        {
+            IsUploading = false;
+        }
+    }
+
+    private string GetDraftName(MediaVideoInfo video)
+    {
+        return DraftNames.TryGetValue(video.Id, out var value) ? value : video.DisplayName;
+    }
+
+    private void SetDraftName(Guid id, string? value)
+    {
+        DraftNames[id] = value ?? string.Empty;
+    }
+
+    private async Task HandleNameKeyDownAsync(MediaVideoInfo video, KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Enter")
+        {
+            await SaveNameAsync(video);
+        }
+    }
+
+    private async Task SaveNameAsync(MediaVideoInfo video)
+    {
+        try
+        {
+            var updated = await MediaServerService.RenameVideoAsync(video.Id, GetDraftName(video));
+            var index = Videos.FindIndex(x => x.Id == video.Id);
+            if (index >= 0)
+            {
+                Videos[index] = updated;
+            }
+
+            DraftNames[updated.Id] = updated.DisplayName;
+            Message = "Имя сохранено.";
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
+    }
+
+    private async Task DeleteVideoAsync(MediaVideoInfo video)
+    {
+        try
+        {
+            await MediaServerService.DeleteVideoAsync(video.Id);
+            Videos.RemoveAll(x => x.Id == video.Id);
+            DraftNames.Remove(video.Id);
+            Message = "Видео удалено.";
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
+    }
+
+    private static string FormatDuration(double? durationSeconds)
+    {
+        if (!durationSeconds.HasValue || durationSeconds.Value <= 0)
+        {
+            return "--:--";
+        }
+
+        var duration = TimeSpan.FromSeconds(durationSeconds.Value);
+        return duration.TotalHours >= 1
+            ? duration.ToString(@"hh\:mm\:ss")
+            : duration.ToString(@"mm\:ss");
+    }
+
+    private static string FormatSize(long size)
+    {
+        if (size <= 0)
+        {
+            return "0 Б";
+        }
+
+        string[] suffixes = { "Б", "КБ", "МБ", "ГБ" };
+        var value = (double)size;
+        var suffixIndex = 0;
+        while (value >= 1024 && suffixIndex < suffixes.Length - 1)
+        {
+            value /= 1024;
+            suffixIndex++;
+        }
+
+        return suffixIndex == 0
+            ? $"{value:0} {suffixes[suffixIndex]}"
+            : $"{value:0.0} {suffixes[suffixIndex]}";
+    }
+}

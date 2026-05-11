@@ -563,6 +563,8 @@ namespace BusinessEntity.Core.Services
                     return await LoadTypedDataListAsync<Document>(entityData);
                 case BusinessEntityTypeEnum.RichTextDocument:
                     return await LoadTypedDataListAsync<RichTextDocument>(entityData);
+                case BusinessEntityTypeEnum.MediaVideo:
+                    return await LoadTypedDataListAsync<MediaVideo>(entityData);
                 case BusinessEntityTypeEnum.SysParametersTp:
                     return await LoadTypedDataListAsync<SysParameters>(entityData);
                 default:
@@ -731,6 +733,7 @@ namespace BusinessEntity.Core.Services
                     name),
                 BusinessEntityTypeEnum.Folder => _businessEntityFactory.Create<Folder>(type, name),
                 BusinessEntityTypeEnum.Space => _businessEntityFactory.Create<Space>(type, name),
+                BusinessEntityTypeEnum.MediaVideo => _businessEntityFactory.Create<MediaVideo>(type, name),
                 BusinessEntityTypeEnum.SysParametersTp => _businessEntityFactory.Create<SysParameters>(type, name),
                 _ => _businessEntityFactory.Create(type, name)
             };
@@ -745,6 +748,7 @@ namespace BusinessEntity.Core.Services
             {
                 Document document => CreateDocumentPersistenceEntity(entityData, document, entityType),
                 RichTextDocument richTextDocument => CreateRichTextDocumentPersistenceEntity(entityData, richTextDocument, entityType),
+                MediaVideo mediaVideo => CreateMediaVideoPersistenceEntity(entityData, mediaVideo, entityType),
                 SysParameters sysParameters => CreateSysParametersPersistenceEntity(entityData, sysParameters, entityType),
                 Folder => CopyEntityState(entityData, _businessEntityFactory.Create<Folder>(entityType, entityData.Name)),
                 Space => CopyEntityState(entityData, _businessEntityFactory.Create<Space>(entityType, entityData.Name)),
@@ -796,6 +800,42 @@ namespace BusinessEntity.Core.Services
             typedEntity.Data.ChunkPolicy = richTextDocument.ChunkPolicy;
             typedEntity.Data.EmbeddedFileStorage = richTextDocument.EmbeddedFileStorage;
             typedEntity.Data.SupportsImages = richTextDocument.SupportsImages;
+
+            return typedEntity;
+        }
+
+        // Создает entity видео для сохранения typed payload без потери storage-полей.
+        private Classes.BusinessEntity CreateMediaVideoPersistenceEntity(Classes.BusinessEntity entityData, MediaVideo mediaVideo, BusinessEntityTypeEnum entityType)
+        {
+            var typedEntity = _businessEntityFactory.Create(
+                entityType,
+                new MediaVideo
+                {
+                    Name = string.IsNullOrWhiteSpace(mediaVideo.Name) ? entityData.Name : mediaVideo.Name,
+                    Tag = mediaVideo.Tag,
+                    FileName = mediaVideo.FileName ?? string.Empty,
+                    DisplayName = mediaVideo.DisplayName ?? string.Empty,
+                    ContentType = mediaVideo.ContentType ?? "application/octet-stream",
+                    OriginalSizeBytes = mediaVideo.OriginalSizeBytes,
+                    DurationSeconds = mediaVideo.DurationSeconds,
+                    UploadedByUserId = mediaVideo.UploadedByUserId,
+                    UploadedDate = mediaVideo.UploadedDate,
+                    StorageRelativePath = mediaVideo.StorageRelativePath ?? string.Empty,
+                    EmbedUrl = mediaVideo.EmbedUrl ?? string.Empty
+                },
+                entityData.Name);
+
+            typedEntity = CopyEntityState(entityData, typedEntity);
+            typedEntity.Data.Tag = mediaVideo.Tag;
+            typedEntity.Data.FileName = mediaVideo.FileName ?? string.Empty;
+            typedEntity.Data.DisplayName = mediaVideo.DisplayName ?? string.Empty;
+            typedEntity.Data.ContentType = mediaVideo.ContentType ?? "application/octet-stream";
+            typedEntity.Data.OriginalSizeBytes = mediaVideo.OriginalSizeBytes;
+            typedEntity.Data.DurationSeconds = mediaVideo.DurationSeconds;
+            typedEntity.Data.UploadedByUserId = mediaVideo.UploadedByUserId;
+            typedEntity.Data.UploadedDate = mediaVideo.UploadedDate;
+            typedEntity.Data.StorageRelativePath = mediaVideo.StorageRelativePath ?? string.Empty;
+            typedEntity.Data.EmbedUrl = mediaVideo.EmbedUrl ?? string.Empty;
 
             return typedEntity;
         }
@@ -897,6 +937,7 @@ namespace BusinessEntity.Core.Services
             {
                 Document document => _dataProviderConnector.UpdateDataAsync(entityId, document),
                 RichTextDocument richTextDocument => _dataProviderConnector.UpdateDataAsync(entityId, richTextDocument),
+                MediaVideo mediaVideo => _dataProviderConnector.UpdateDataAsync(entityId, mediaVideo),
                 Folder folder => _dataProviderConnector.UpdateDataAsync(entityId, folder),
                 Space space => _dataProviderConnector.UpdateDataAsync(entityId, space),
                 SysParameters sysParameters => _dataProviderConnector.UpdateDataAsync(entityId, sysParameters),

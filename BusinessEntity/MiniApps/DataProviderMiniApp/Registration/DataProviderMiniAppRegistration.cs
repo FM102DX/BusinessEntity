@@ -31,6 +31,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             // Регистрируем поэкземплярные payload-конвертеры для всех поддерживаемых typed business-data объектов.
             services.AddSingleton<IEntityDataStorageConverter, DocumentEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, FolderEntityDataStorageConverter>();
+            services.AddSingleton<IEntityDataStorageConverter, MediaVideoEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, RichTextDocumentEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, SpaceEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, SysParametersEntityDataStorageConverter>();

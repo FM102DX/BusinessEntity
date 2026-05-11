@@ -1,8 +1,10 @@
 using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
 using BusinessEntity.Services;
 using BusinessEntity.Settings;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 
 namespace BusinessEntity.Components
@@ -14,6 +16,7 @@ namespace BusinessEntity.Components
         private const double MaxEstimatedChunkHeight = 8000;
         private const int ProgrammaticScrollSuppressionMs = 350;
         private const string ProgrammaticScrollBehavior = "auto";
+        private const long MaxVideoUploadBytes = 2L * 1024L * 1024L * 1024L;
 
         private readonly Dictionary<long, double> _chunkHeights = new();
         private readonly Dictionary<long, EditorChunkDraft> _dirtyDrafts = new();
@@ -42,6 +45,7 @@ namespace BusinessEntity.Components
         [Inject] public IJSRuntime JS { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
+        [Inject] public IMediaServerService MediaServerService { get; set; } = default!;
         [Inject] public IWebLoggerService? WebLogger { get; set; }
 
         private IReadOnlyList<RichTextDocumentChunk> LoadedChunks { get; set; } = Array.Empty<RichTextDocumentChunk>();
@@ -50,6 +54,10 @@ namespace BusinessEntity.Components
         private double TopSpacerPx { get; set; }
         private double BottomSpacerPx { get; set; }
         private bool HasDirtyDrafts => _dirtyDrafts.Count > 0 || _dirtySortOrders.Count > 0;
+        private bool IsEmbedPanelOpen { get; set; }
+        private bool IsEmbedLoading { get; set; }
+        private string EmbedMessage { get; set; } = string.Empty;
+        private List<MediaVideoInfo> EmbedVideos { get; set; } = new();
         private string TopSpacerStyle => $"height: {Math.Max(TopSpacerPx, 0):0.##}px;";
         private string BottomSpacerStyle => $"height: {Math.Max(BottomSpacerPx, 0):0.##}px;";
 
@@ -267,6 +275,88 @@ namespace BusinessEntity.Components
         private Task RunEditorCommandAsync(string command)
         {
             return JS.InvokeVoidAsync("richTextEditor.runCommand", ViewportElementId, command).AsTask();
+        }
+
+        private async Task ToggleEmbedPanelAsync()
+        {
+            IsEmbedPanelOpen = !IsEmbedPanelOpen;
+            EmbedMessage = string.Empty;
+            if (IsEmbedPanelOpen)
+            {
+                await LoadEmbedVideosAsync();
+            }
+        }
+
+        private async Task LoadEmbedVideosAsync()
+        {
+            IsEmbedLoading = true;
+            try
+            {
+                EmbedVideos = (await MediaServerService.GetVideosAsync()).ToList();
+            }
+            catch (Exception ex)
+            {
+                EmbedMessage = ex.Message;
+            }
+            finally
+            {
+                IsEmbedLoading = false;
+            }
+        }
+
+        private async Task UploadAndEmbedVideoAsync(InputFileChangeEventArgs eventArgs)
+        {
+            var file = eventArgs.File;
+            if (file == null)
+            {
+                return;
+            }
+
+            EmbedMessage = string.Empty;
+            try
+            {
+                await using var stream = file.OpenReadStream(MaxVideoUploadBytes);
+                var video = await MediaServerService.UploadVideoAsync(
+                    stream,
+                    file.Name,
+                    file.ContentType,
+                    file.Size);
+                EmbedVideos.Insert(0, video);
+                await InsertVideoAsync(video);
+            }
+            catch (Exception ex)
+            {
+                EmbedMessage = ex.Message;
+            }
+        }
+
+        private async Task InsertVideoAsync(MediaVideoInfo video)
+        {
+            if (video == null)
+            {
+                return;
+            }
+
+            await JS.InvokeVoidAsync(
+                "richTextEditor.insertVideo",
+                ViewportElementId,
+                video.Id.ToString("D"),
+                video.DisplayName,
+                video.EmbedUrl);
+            IsEmbedPanelOpen = false;
+        }
+
+        private static string FormatVideoDuration(double? durationSeconds)
+        {
+            if (!durationSeconds.HasValue || durationSeconds.Value <= 0)
+            {
+                return "--:--";
+            }
+
+            var duration = TimeSpan.FromSeconds(durationSeconds.Value);
+            return duration.TotalHours >= 1
+                ? duration.ToString(@"hh\:mm\:ss")
+                : duration.ToString(@"mm\:ss");
         }
 
         [JSInvokable]

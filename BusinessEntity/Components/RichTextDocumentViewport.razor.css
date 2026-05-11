@@ -63,6 +63,22 @@
     vertical-align: top;
 }
 
+.rich-text-document-viewport .rich-text-video,
+.rich-text-document-viewport .rich-text-inline-video {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
+}
+
+.rich-text-document-viewport .rich-text-inline-video video,
+.rich-text-document-viewport .rich-text-video video {
+    height: 300px;
+    max-width: 100%;
+    display: inline-block;
+    vertical-align: top;
+    background: #000000;
+}
+
 @media (max-width: 1100px) {
     .rich-text-document-viewport {
         max-height: none;

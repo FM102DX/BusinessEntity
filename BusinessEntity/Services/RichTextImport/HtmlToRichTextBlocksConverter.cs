@@ -108,6 +108,16 @@ namespace BusinessEntity.Services.RichTextImport
                 return;
             }
 
+            if (nodeName == "video" || (nodeName == "span" && HasCssClass(node, "rich-text-inline-video")))
+            {
+                var existingVideoBlock = TryBuildExistingVideoBlock(node);
+                if (existingVideoBlock != null)
+                {
+                    blocks.Add(existingVideoBlock);
+                }
+                return;
+            }
+
             if (nodeName is "p" or "div")
             {
                 // Если контейнер содержит block-level потомков, обрабатываем их как самостоятельные блоки.
@@ -169,6 +179,21 @@ namespace BusinessEntity.Services.RichTextImport
                 AltText = image.AltText,
                 Width = image.Width,
                 Height = image.Height
+            };
+        }
+
+        private static RichTextBlock? TryBuildExistingVideoBlock(HtmlNode node)
+        {
+            if (!TryReadExistingVideo(node, out var video))
+            {
+                return null;
+            }
+
+            return new RichTextBlock
+            {
+                Kind = "video",
+                VideoId = video.VideoId,
+                VideoTitle = video.Title
             };
         }
 
@@ -305,6 +330,12 @@ namespace BusinessEntity.Services.RichTextImport
             }
 
             var nodeName = node.Name.ToLowerInvariant();
+            if (TryReadExistingVideo(node, out var existingVideo))
+            {
+                AppendInlineVideoMarker(builder, existingVideo);
+                return;
+            }
+
             if (TryReadExistingEmbeddedImage(node, out var existingImage))
             {
                 AppendInlineImageMarker(builder, existingImage);
@@ -420,6 +451,55 @@ namespace BusinessEntity.Services.RichTextImport
             return true;
         }
 
+        // Пытается прочитать уже сохраненное видео из inline span/video marker.
+        private static bool TryReadExistingVideo(HtmlNode node, out InlineVideoDescriptor video)
+        {
+            video = new InlineVideoDescriptor();
+            if (node.NodeType != HtmlNodeType.Element)
+            {
+                return false;
+            }
+
+            var nodeName = node.Name.ToLowerInvariant();
+            if (nodeName != "video" &&
+                !(nodeName == "span" && HasCssClass(node, "rich-text-inline-video")))
+            {
+                return false;
+            }
+
+            var videoNode = nodeName == "video"
+                ? node
+                : node.Descendants("video").FirstOrDefault();
+
+            var videoId = ReadAttribute(node, "data-rich-video-id");
+            if (string.IsNullOrWhiteSpace(videoId) && videoNode != null)
+            {
+                videoId = ReadAttribute(videoNode, "data-rich-video-id");
+            }
+
+            if (string.IsNullOrWhiteSpace(videoId) && videoNode != null)
+            {
+                var src = ReadAttribute(videoNode, "src");
+                if (!TryParseMediaServerVideoUrl(src, out videoId))
+                {
+                    return false;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(videoId))
+            {
+                return false;
+            }
+
+            video = new InlineVideoDescriptor
+            {
+                VideoId = videoId,
+                Title = ReadFirstAttribute(node, videoNode, "data-video-title", "title", "aria-label")
+            };
+
+            return true;
+        }
+
         // Добавляет canonical inline image marker в HTML блока без сохранения src.
         private static void AppendInlineImageMarker(StringBuilder builder, InlineImageDescriptor image)
         {
@@ -438,6 +518,15 @@ namespace BusinessEntity.Services.RichTextImport
                 builder.Append(" data-height=\"").Append(image.Height.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('"');
             }
 
+            builder.Append("></span>");
+        }
+
+        // Добавляет canonical inline video marker в HTML блока без сохранения src.
+        private static void AppendInlineVideoMarker(StringBuilder builder, InlineVideoDescriptor video)
+        {
+            builder.Append("<span class=\"rich-text-inline-video\"");
+            builder.Append(" data-rich-video-id=\"").Append(WebUtility.HtmlEncode(video.VideoId ?? string.Empty)).Append('"');
+            builder.Append(" data-video-title=\"").Append(WebUtility.HtmlEncode(video.Title ?? string.Empty)).Append('"');
             builder.Append("></span>");
         }
 
@@ -483,6 +572,38 @@ namespace BusinessEntity.Services.RichTextImport
             return classAttribute
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Any(x => string.Equals(x, className, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool TryParseMediaServerVideoUrl(string? src, out string videoId)
+        {
+            videoId = string.Empty;
+            if (string.IsNullOrWhiteSpace(src))
+            {
+                return false;
+            }
+
+            const string marker = "/media-server-files/videos/";
+            var markerIndex = src.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (markerIndex < 0)
+            {
+                return false;
+            }
+
+            var tail = src[(markerIndex + marker.Length)..];
+            var queryIndex = tail.IndexOfAny(new[] { '?', '#' });
+            if (queryIndex >= 0)
+            {
+                tail = tail[..queryIndex];
+            }
+
+            var parts = tail.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2 || !string.Equals(parts[1], "original", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            videoId = Uri.UnescapeDataString(parts[0]);
+            return !string.IsNullOrWhiteSpace(videoId);
         }
 
         // Импортирует картинку из data-uri или внешнего http/https URL.
@@ -574,6 +695,14 @@ namespace BusinessEntity.Services.RichTextImport
             public int Width { get; set; }
 
             public int Height { get; set; }
+        }
+
+        // Техническое описание inline-видео при HTML save roundtrip.
+        private sealed class InlineVideoDescriptor
+        {
+            public string VideoId { get; set; } = string.Empty;
+
+            public string Title { get; set; } = string.Empty;
         }
     }
 }
