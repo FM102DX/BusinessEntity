@@ -10,7 +10,7 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Hosting;
 
-namespace BusinessEntity.Services.Backup;
+namespace BusinessEntity.Services.BackupRestore;
 
 // Постоянно запущенный orchestrator backup-а пространств.
 public sealed class SpaceBackupService : BackgroundService

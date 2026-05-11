@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Backup configuration and policies
 - В конфигурацию добавлены `SpaceBackup` настройки и host-path mapping для отображения backup/storage путей из Docker.
 - Добавлена политика `space-backup-policy-entity-folder-layout.md`; политики rich-doc и file-object storage обновлены под inline image marker.
-- `.gitignore` уточнен так, чтобы папка `BusinessEntity/Services/Backup/` не попадала под общий ignore-паттерн `Backup*/`.
+- `.gitignore` уточнен так, чтобы папка `BusinessEntity/Services/BackupRestore/` не попадала под общий ignore-паттерн `Backup*/`.
 
 ## [0.10.0] - 2026-05-09 18:32:53 +03:00
 

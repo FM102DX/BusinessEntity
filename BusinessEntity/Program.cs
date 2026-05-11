@@ -14,7 +14,7 @@ using BusinessEntity.MiniApps.UserMiniApp.Storage;
 using BusinessEntity.Service;
 using BusinessEntity.Service.WebLogging;
 using BusinessEntity.Services;
-using BusinessEntity.Services.Backup;
+using BusinessEntity.Services.BackupRestore;
 using BusinessEntity.Services.RichTextImport;
 using BusinessEntity.Settings;
 using BusinessEntity.WebLogger.Services;
@@ -144,7 +144,9 @@ namespace BusinessEntity
             builder.Services.AddScoped<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
             builder.Services.AddSingleton<IBusinessEntityBackupHandler, GenericBusinessEntityBackupHandler>();
+            builder.Services.AddSingleton<IBusinessEntityRestoreHandler, GenericBusinessEntityRestoreHandler>();
             builder.Services.AddSingleton<SpaceBackupService>();
+            builder.Services.AddSingleton<SpaceRestoreService>();
             builder.Services.AddHostedService(provider => provider.GetRequiredService<SpaceBackupService>());
 
             // Настраивает EF Core и фабрику DbContext для работы с БД.

@@ -2,9 +2,10 @@
 @using BusinessEntity.Core.DomainEntities
 @using BusinessEntityEntity = BusinessEntity.Core.Classes.BusinessEntity
 @using BusinessEntity.Services
-@using BusinessEntity.Services.Backup
+@using BusinessEntity.Services.BackupRestore
 @inject SpaceHelper SpaceHelper
 @inject SpaceBackupService SpaceBackupService
+@inject SpaceRestoreService SpaceRestoreService
 
 <div class="card">
     <div class="card-body">
@@ -12,6 +13,30 @@
         <p class="card-text">
             Создание, переименование и удаление пространств.
         </p>
+
+        <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Импорт backup пространства</label>
+                <input class="form-control"
+                       @bind="ImportBackupRootPath"
+                       @bind:event="oninput"
+                       placeholder="Путь к папке backup пространства" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Имя нового пространства</label>
+                <input class="form-control"
+                       @bind="ImportTargetSpaceName"
+                       @bind:event="oninput"
+                       placeholder="Можно оставить пустым" />
+            </div>
+            <div class="col-md-auto">
+                <button class="btn btn-outline-primary"
+                        @onclick="ImportSpaceBackupAsync"
+                        disabled="@IsBusy">
+                    Импорт
+                </button>
+            </div>
+        </div>
 
         <div class="row g-2 align-items-end mb-3">
             <div class="col-md-6">
@@ -210,6 +235,8 @@
     private bool IsLoading;
     private bool IsBusy;
     private string NewSpaceName { get; set; } = string.Empty;
+    private string ImportBackupRootPath { get; set; } = string.Empty;
+    private string ImportTargetSpaceName { get; set; } = string.Empty;
     private string EditingSpaceName { get; set; } = string.Empty;
     private Guid? EditingSpaceId { get; set; }
     private Guid? DeleteCandidateId { get; set; }
@@ -236,6 +263,39 @@
                 var createdSpace = await SpaceHelper.CreateSpaceAsync(NewSpaceName);
                 NewSpaceName = string.Empty;
                 StatusMessage = $"Пространство '{createdSpace.Name}' создано.";
+                await ReloadSpacesAsync();
+            });
+    }
+
+    /// <summary>
+    /// Импортирует backup пространства в новое пространство.
+    /// </summary>
+    private async Task ImportSpaceBackupAsync()
+    {
+        await RunBusyActionAsync(
+            async () =>
+            {
+                if (string.IsNullOrWhiteSpace(ImportBackupRootPath))
+                {
+                    throw new InvalidOperationException("Укажите путь к папке backup пространства.");
+                }
+
+                var result = await SpaceRestoreService.RestoreSpaceAsync(
+                    new SpaceRestoreService.SpaceRestoreRequest
+                    {
+                        BackupRootPath = ImportBackupRootPath,
+                        TargetSpaceName = string.IsNullOrWhiteSpace(ImportTargetSpaceName)
+                            ? null
+                            : ImportTargetSpaceName.Trim(),
+                        DisableBackupForRestoredSpace = true,
+                        CleanupOnFailure = true
+                    });
+
+                ImportBackupRootPath = string.Empty;
+                ImportTargetSpaceName = string.Empty;
+                StatusMessage = result.Warnings.Count == 0
+                    ? $"Backup импортирован в пространство '{result.TargetSpaceName}'. Сущностей: {result.RestoredEntityCount}, отношений: {result.RestoredRelationCount}."
+                    : $"Backup импортирован в пространство '{result.TargetSpaceName}'. Сущностей: {result.RestoredEntityCount}, отношений: {result.RestoredRelationCount}, предупреждений: {result.Warnings.Count}.";
                 await ReloadSpacesAsync();
             });
     }

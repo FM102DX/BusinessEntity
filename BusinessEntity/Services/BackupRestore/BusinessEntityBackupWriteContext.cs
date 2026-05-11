@@ -1,6 +1,6 @@
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 
-namespace BusinessEntity.Services.Backup;
+namespace BusinessEntity.Services.BackupRestore;
 
 public sealed class BusinessEntityBackupWriteContext
 {

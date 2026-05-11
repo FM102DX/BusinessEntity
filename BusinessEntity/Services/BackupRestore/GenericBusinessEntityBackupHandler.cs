@@ -10,7 +10,7 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
 using HtmlAgilityPack;
 
-namespace BusinessEntity.Services.Backup;
+namespace BusinessEntity.Services.BackupRestore;
 
 // Базовый backup-handler для entity, которым пока не нужен специализированный формат.
 public sealed class GenericBusinessEntityBackupHandler : IBusinessEntityBackupHandler

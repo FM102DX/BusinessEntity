@@ -1,4 +1,4 @@
-# Backup policies
+# Backup/restore policies
 
 В этом каталоге лежат политики, относящиеся к backup и restore пространств.
 
