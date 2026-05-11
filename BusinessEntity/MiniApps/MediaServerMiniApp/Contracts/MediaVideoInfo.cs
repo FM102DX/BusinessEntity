@@ -12,4 +12,5 @@ public sealed class MediaVideoInfo
     public Guid? UploadedByUserId { get; set; }
     public DateTime UploadedDate { get; set; }
     public string EmbedUrl { get; set; } = string.Empty;
+    public string Comment { get; set; } = string.Empty;
 }

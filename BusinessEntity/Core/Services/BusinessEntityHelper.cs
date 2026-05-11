@@ -821,7 +821,8 @@ namespace BusinessEntity.Core.Services
                     UploadedByUserId = mediaVideo.UploadedByUserId,
                     UploadedDate = mediaVideo.UploadedDate,
                     StorageRelativePath = mediaVideo.StorageRelativePath ?? string.Empty,
-                    EmbedUrl = mediaVideo.EmbedUrl ?? string.Empty
+                    EmbedUrl = mediaVideo.EmbedUrl ?? string.Empty,
+                    Comment = mediaVideo.Comment ?? string.Empty
                 },
                 entityData.Name);
 
@@ -836,6 +837,7 @@ namespace BusinessEntity.Core.Services
             typedEntity.Data.UploadedDate = mediaVideo.UploadedDate;
             typedEntity.Data.StorageRelativePath = mediaVideo.StorageRelativePath ?? string.Empty;
             typedEntity.Data.EmbedUrl = mediaVideo.EmbedUrl ?? string.Empty;
+            typedEntity.Data.Comment = mediaVideo.Comment ?? string.Empty;
 
             return typedEntity;
         }

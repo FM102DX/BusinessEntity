@@ -1,4 +1,5 @@
 using BusinessEntity.Core.RichText;
+using BusinessEntity.Contracts;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
 using BusinessEntity.Services;
 using BusinessEntity.Settings;
@@ -46,6 +47,7 @@ namespace BusinessEntity.Components
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
         [Inject] public IMediaServerService MediaServerService { get; set; } = default!;
+        [Inject] public IUserContextService UserContextService { get; set; } = default!;
         [Inject] public IWebLoggerService? WebLogger { get; set; }
 
         private IReadOnlyList<RichTextDocumentChunk> LoadedChunks { get; set; } = Array.Empty<RichTextDocumentChunk>();
@@ -292,7 +294,7 @@ namespace BusinessEntity.Components
             IsEmbedLoading = true;
             try
             {
-                EmbedVideos = (await MediaServerService.GetVideosAsync()).ToList();
+                EmbedVideos = (await MediaServerService.GetVideosAsync(UserContextService.CurrentSpaceId)).ToList();
             }
             catch (Exception ex)
             {
@@ -320,7 +322,8 @@ namespace BusinessEntity.Components
                     stream,
                     file.Name,
                     file.ContentType,
-                    file.Size);
+                    file.Size,
+                    spaceId: UserContextService.CurrentSpaceId);
                 EmbedVideos.Insert(0, video);
                 await InsertVideoAsync(video);
             }

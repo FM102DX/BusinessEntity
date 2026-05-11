@@ -35,4 +35,7 @@ public class MediaVideo : BusinessEntityData, IBusinessEntityData
 
     // URL для HTML-встраивания и просмотра.
     public string EmbedUrl { get; set; } = string.Empty;
+
+    // Пользовательский комментарий к видео в медиатеке.
+    public string Comment { get; set; } = string.Empty;
 }

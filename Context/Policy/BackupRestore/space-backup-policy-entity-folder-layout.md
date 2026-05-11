@@ -142,7 +142,7 @@ Manifest читается людьми, роботами, индексатора
   "spaceName": "Документы",
   "createdUtc": "2026-05-09T18:40:00Z",
   "lastUpdatedUtc": "2026-05-09T19:10:00Z",
-  "applicationVersion": "0.12.0",
+  "applicationVersion": "0.13.0",
   "isComplete": true,
   "entityFolderNamePattern": "{entityType}--{entityId}--{entityName}",
   "counts": {

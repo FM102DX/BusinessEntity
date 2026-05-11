@@ -22,7 +22,8 @@ internal sealed class MediaVideoEntityDataStorageConverter : EntityDataStorageCo
             UploadedByUserId = data.UploadedByUserId,
             UploadedDate = data.UploadedDate,
             StorageRelativePath = data.StorageRelativePath ?? string.Empty,
-            EmbedUrl = data.EmbedUrl ?? string.Empty
+            EmbedUrl = data.EmbedUrl ?? string.Empty,
+            Comment = data.Comment ?? string.Empty
         });
     }
 
@@ -42,7 +43,8 @@ internal sealed class MediaVideoEntityDataStorageConverter : EntityDataStorageCo
             UploadedByUserId = body.UploadedByUserId,
             UploadedDate = body.UploadedDate == default ? DateTime.UtcNow : body.UploadedDate,
             StorageRelativePath = body.StorageRelativePath ?? string.Empty,
-            EmbedUrl = body.EmbedUrl ?? string.Empty
+            EmbedUrl = body.EmbedUrl ?? string.Empty,
+            Comment = body.Comment ?? string.Empty
         };
     }
 
@@ -77,5 +79,8 @@ internal sealed class MediaVideoEntityDataStorageConverter : EntityDataStorageCo
 
         [JsonPropertyName("embedUrl")]
         public string? EmbedUrl { get; set; }
+
+        [JsonPropertyName("comment")]
+        public string? Comment { get; set; }
     }
 }

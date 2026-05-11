@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Text.Json;
+using BusinessEntity.Core.BaseClasses.Relations;
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.DomainEntities;
@@ -49,13 +51,30 @@ public sealed class MediaServerService : IMediaServerService
         Directory.CreateDirectory(_storageRoot);
     }
 
-    public async Task<IReadOnlyList<MediaVideoInfo>> GetVideosAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MediaVideoInfo>> GetVideosAsync(
+        Guid? spaceId = null,
+        string? filter = null,
+        CancellationToken cancellationToken = default)
     {
         var entities = await _dataProviderConnector.GetAllAsync(cancellationToken);
         var result = new List<MediaVideoInfo>();
+        HashSet<Guid>? allowedVideoIds = null;
+
+        if (spaceId.HasValue)
+        {
+            var relationType = BusinessEntityRelationTypeEnum.RelatesTo.ToString();
+            allowedVideoIds = (await _dataProviderConnector.GetAllRelationsAsync(cancellationToken))
+                .Where(x => x.RelationType == relationType &&
+                            (x.ObjectAId == spaceId.Value || x.ObjectBId == spaceId.Value))
+                .Select(x => x.ObjectAId == spaceId.Value ? x.ObjectBId : x.ObjectAId)
+                .ToHashSet();
+        }
+
+        var normalizedFilter = (filter ?? string.Empty).Trim();
 
         foreach (var entity in entities
                      .Where(x => x.EntityType == BusinessEntityTypeEnum.MediaVideo)
+                     .Where(x => allowedVideoIds == null || allowedVideoIds.Contains(x.Id))
                      .OrderByDescending(x => x.CreatedDate))
         {
             var data = await _dataProviderConnector.GetDataAsync<MediaVideo>(entity.Id, cancellationToken);
@@ -64,7 +83,13 @@ public sealed class MediaServerService : IMediaServerService
                 continue;
             }
 
-            result.Add(ToInfo(entity.Id, data));
+            var info = ToInfo(entity.Id, data);
+            if (!MatchesFilter(info, normalizedFilter))
+            {
+                continue;
+            }
+
+            result.Add(info);
         }
 
         return result;
@@ -81,7 +106,9 @@ public sealed class MediaServerService : IMediaServerService
         string fileName,
         string? contentType,
         long? length,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<long>? progress = null,
+        Guid? spaceId = null)
     {
         if (content == null)
         {
@@ -137,7 +164,7 @@ public sealed class MediaServerService : IMediaServerService
                              bufferSize: 1024 * 128,
                              useAsync: true))
             {
-                await content.CopyToAsync(output, cancellationToken);
+                await CopyWithProgressAsync(content, output, progress, cancellationToken);
             }
 
             var fileInfo = new FileInfo(physicalPath);
@@ -155,10 +182,12 @@ public sealed class MediaServerService : IMediaServerService
                 UploadedByUserId = userId,
                 UploadedDate = DateTime.UtcNow,
                 StorageRelativePath = NormalizeRelativePath(relativePath),
-                EmbedUrl = BuildEmbedUrl(savedEntity.Id)
+                EmbedUrl = BuildEmbedUrl(savedEntity.Id),
+                Comment = string.Empty
             };
 
             await _dataProviderConnector.UpdateDataAsync(savedEntity.Id, data, cancellationToken);
+            await EnsureVideoSpaceRelationAsync(spaceId, savedEntity.Id, cancellationToken);
             await WriteMetadataAsync(physicalPath, data, cancellationToken);
             return ToInfo(savedEntity.Id, data);
         }
@@ -194,8 +223,27 @@ public sealed class MediaServerService : IMediaServerService
         return ToInfo(videoId, data);
     }
 
+    public async Task<MediaVideoInfo> UpdateVideoCommentAsync(Guid videoId, string comment, CancellationToken cancellationToken = default)
+    {
+        var data = await _dataProviderConnector.GetDataAsync<MediaVideo>(videoId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Payload видео '{videoId}' не найден.");
+
+        data.Comment = comment ?? string.Empty;
+        await _dataProviderConnector.UpdateDataAsync(videoId, data, cancellationToken);
+        await WriteMetadataAsync(ResolvePhysicalPath(data.StorageRelativePath), data, cancellationToken);
+        return ToInfo(videoId, data);
+    }
+
     public async Task DeleteVideoAsync(Guid videoId, CancellationToken cancellationToken = default)
     {
+        var relations = (await _dataProviderConnector.GetAllRelationsAsync(cancellationToken))
+            .Where(x => x.ObjectAId == videoId || x.ObjectBId == videoId)
+            .ToList();
+        foreach (var relation in relations)
+        {
+            await _dataProviderConnector.DeleteRelationAsync(relation.Id, cancellationToken);
+        }
+
         DeleteEntityStorageFolder(videoId);
         await _dataProviderConnector.DeleteAsync(videoId, cancellationToken);
     }
@@ -240,6 +288,60 @@ public sealed class MediaServerService : IMediaServerService
         }
     }
 
+    private async Task EnsureVideoSpaceRelationAsync(Guid? spaceId, Guid videoId, CancellationToken cancellationToken)
+    {
+        if (!spaceId.HasValue || spaceId.Value == Guid.Empty)
+        {
+            return;
+        }
+
+        var relationType = BusinessEntityRelationTypeEnum.RelatesTo.ToString();
+        var existing = await _dataProviderConnector.GetRelationsAsync(spaceId.Value, videoId, cancellationToken);
+        if (existing.Any(x => x.RelationType == relationType))
+        {
+            return;
+        }
+
+        await _dataProviderConnector.CreateRelationAsync(
+            new BusinessEntityRelation
+            {
+                ObjectAId = spaceId.Value,
+                ObjectBId = videoId,
+                RelationType = relationType,
+                RelationParams = "media-video-space"
+            },
+            cancellationToken);
+    }
+
+    private static async Task CopyWithProgressAsync(
+        Stream source,
+        Stream destination,
+        IProgress<long>? progress,
+        CancellationToken cancellationToken)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(1024 * 128);
+        var totalBytes = 0L;
+        try
+        {
+            while (true)
+            {
+                var bytesRead = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+                if (bytesRead <= 0)
+                {
+                    break;
+                }
+
+                await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                totalBytes += bytesRead;
+                progress?.Report(totalBytes);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
     private static MediaVideoInfo ToInfo(Guid id, MediaVideo data)
     {
         return new MediaVideoInfo
@@ -254,8 +356,27 @@ public sealed class MediaServerService : IMediaServerService
             DurationSeconds = data.DurationSeconds,
             UploadedByUserId = data.UploadedByUserId,
             UploadedDate = data.UploadedDate,
-            EmbedUrl = string.IsNullOrWhiteSpace(data.EmbedUrl) ? BuildEmbedUrl(id) : data.EmbedUrl
+            EmbedUrl = string.IsNullOrWhiteSpace(data.EmbedUrl) ? BuildEmbedUrl(id) : data.EmbedUrl,
+            Comment = data.Comment ?? string.Empty
         };
+    }
+
+    private static bool MatchesFilter(MediaVideoInfo video, string filter)
+    {
+        if (string.IsNullOrWhiteSpace(filter))
+        {
+            return true;
+        }
+
+        return Contains(video.DisplayName, filter) ||
+               Contains(video.FileName, filter) ||
+               Contains(video.Comment, filter);
+    }
+
+    private static bool Contains(string? value, string filter)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+               value.Contains(filter, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildEmbedUrl(Guid videoId)
@@ -311,7 +432,8 @@ public sealed class MediaServerService : IMediaServerService
                 data.UploadedByUserId,
                 data.UploadedDate,
                 data.StorageRelativePath,
-                data.EmbedUrl
+                data.EmbedUrl,
+                data.Comment
             },
             new JsonSerializerOptions { WriteIndented = true });
 
