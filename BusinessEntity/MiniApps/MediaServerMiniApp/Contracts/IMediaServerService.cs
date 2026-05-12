@@ -17,7 +17,8 @@ public interface IMediaServerService
         long? length,
         CancellationToken cancellationToken = default,
         IProgress<long>? progress = null,
-        Guid? spaceId = null);
+        Guid? spaceId = null,
+        string? clientUploadToken = null);
 
     Task<MediaVideoInfo> RenameVideoAsync(Guid videoId, string displayName, CancellationToken cancellationToken = default);
 

@@ -21,23 +21,16 @@
     </div>
 
     <div class="multimedia-actions">
-        @if (!IsUploadSelectionDisabled)
-        {
-            <label class="btn btn-primary btn-sm multimedia-upload">
-                <span class="oi oi-cloud-upload" aria-hidden="true"></span>
-                <span>Загрузить</span>
-                <input id="@UploadInputId"
-                       class="multimedia-upload__input"
-                       type="file"
-                       multiple
-                       accept="video/*"
-                       @onchange="StartVideoUploadsAsync" />
-            </label>
-        }
-        else
-        {
-            <span class="multimedia-status">Идет загрузка. Новую загрузку можно начать после завершения текущей пачки.</span>
-        }
+        <label class="btn btn-primary btn-sm multimedia-upload">
+            <span class="oi oi-cloud-upload" aria-hidden="true"></span>
+            <span>Загрузить</span>
+            <input id="@UploadInputId"
+                   class="multimedia-upload__input"
+                   type="file"
+                   multiple
+                   accept="video/*"
+                   @onchange="StartVideoUploadsAsync" />
+        </label>
         @if (!string.IsNullOrWhiteSpace(Message))
         {
             <span class="multimedia-status">@Message</span>
@@ -57,40 +50,6 @@
             <span class="multimedia-filter__funnel" aria-hidden="true"></span>
         </button>
     </div>
-
-    @if (UploadJobs.Count > 0)
-    {
-        <div class="multimedia-upload-jobs">
-            @foreach (var job in UploadJobs)
-            {
-                <div class="multimedia-upload-job" @key="job.JobId">
-                    <div class="multimedia-upload-job__header">
-                        <span class="multimedia-upload-job__name">@job.FileName</span>
-                        <span class="multimedia-upload-job__state">@GetUploadStateText(job)</span>
-                    </div>
-                    <div class="multimedia-upload-job__progress">
-                        <div class="multimedia-upload-job__bar">
-                            <div class="multimedia-upload-job__bar-fill" style="width: @GetProgressWidth(job);"></div>
-                        </div>
-                        <span class="multimedia-upload-job__numbers">@GetProgressText(job)</span>
-                        @if (IsActiveUploadJob(job))
-                        {
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-danger multimedia-upload-job__cancel"
-                                    @onclick="() => CancelUploadJobAsync(job)"
-                                    title="Прервать загрузку">
-                                <span class="oi oi-x" aria-hidden="true"></span>
-                            </button>
-                        }
-                    </div>
-                    @if (!string.IsNullOrWhiteSpace(job.ErrorMessage))
-                    {
-                        <div class="multimedia-upload-job__error">@job.ErrorMessage</div>
-                    }
-                </div>
-            }
-        </div>
-    }
 
     @if (IsLoading)
     {
@@ -176,8 +135,6 @@
     private string Message { get; set; } = string.Empty;
     private string FilterText { get; set; } = string.Empty;
     private Guid? ExpandedVideoId { get; set; }
-    private bool IsUploadSelectionDisabled => IsStartingUploadBatch || UploadJobs.Any(IsActiveUploadJob);
-
     protected override async Task OnInitializedAsync()
     {
         await LoadVideosAsync();
@@ -321,9 +278,9 @@
 
     private async Task CancelUploadJobAsync(MediaVideoUploadJobInfo job)
     {
-        await JSRuntime.InvokeVoidAsync("mediaServerUpload.cancel", job.JobId.ToString("D"));
         UploadJobTracker.CancelVideoUploadJob(job.JobId);
         LoadUploadJobs();
+        await Task.CompletedTask;
     }
 
     private void ToggleVideoFooter(MediaVideoInfo video)
@@ -412,7 +369,8 @@
     private static bool IsActiveUploadJob(MediaVideoUploadJobInfo job)
     {
         return job.State == MediaVideoUploadJobState.Queued ||
-               job.State == MediaVideoUploadJobState.Uploading;
+               job.State == MediaVideoUploadJobState.Uploading ||
+               job.State == MediaVideoUploadJobState.Processing;
     }
 
     private string GetVideoItemCssClass(MediaVideoInfo video)
@@ -433,6 +391,7 @@
         {
             MediaVideoUploadJobState.Queued => "Ожидает",
             MediaVideoUploadJobState.Uploading => "Загрузка",
+            MediaVideoUploadJobState.Processing => "Обработка",
             MediaVideoUploadJobState.Completed => "Готово",
             MediaVideoUploadJobState.Cancelled => "Отменено",
             MediaVideoUploadJobState.Failed => "Ошибка",

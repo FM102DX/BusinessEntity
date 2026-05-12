@@ -82,7 +82,10 @@ const RichTextVideo = Node.create({
         return {
             src: { default: null },
             videoId: { default: null },
-            title: { default: "" }
+            title: { default: "" },
+            uploadToken: { default: null },
+            isUploading: { default: false },
+            uploadError: { default: "" }
         };
     },
 
@@ -105,6 +108,24 @@ const RichTextVideo = Node.create({
 
     renderHTML({ node }) {
         const spanAttrs = buildInlineVideoSpanAttributes(node.attrs);
+        if (node.attrs.isUploading) {
+            return [
+                "span",
+                spanAttrs,
+                [
+                    "span",
+                    {
+                        class: node.attrs.uploadError
+                            ? "rich-text-inline-video-upload-placeholder rich-text-inline-video-upload-placeholder--failed"
+                            : "rich-text-inline-video-upload-placeholder",
+                        title: node.attrs.uploadError || node.attrs.title || "Видео загружается"
+                    },
+                    ["span", { class: "rich-text-inline-video-upload-spinner", "aria-hidden": "true" }],
+                    ["span", { class: "rich-text-inline-video-upload-play", "aria-hidden": "true" }]
+                ]
+            ];
+        }
+
         const videoAttrs = buildVideoDomAttributes(node.attrs);
         return ["span", spanAttrs, ["video", videoAttrs]];
     }
@@ -285,12 +306,36 @@ function readVideoAttributes(element) {
 
     const isVideo = element.matches?.("video") === true;
     const videoElement = isVideo ? element : element.querySelector?.("video");
+    const uploadToken =
+        element.getAttribute("data-video-upload-token") ||
+        videoElement?.getAttribute("data-video-upload-token") ||
+        "";
+    const uploadState =
+        element.getAttribute("data-video-upload-state") ||
+        videoElement?.getAttribute("data-video-upload-state") ||
+        "";
     const src = videoElement?.getAttribute("src") || element.getAttribute("src") || "";
     const parsed = parseMediaServerVideoUrl(src);
     const videoId =
         element.getAttribute("data-rich-video-id") ||
         videoElement?.getAttribute("data-rich-video-id") ||
         parsed.videoId;
+
+    if (uploadToken && uploadState) {
+        return {
+            src,
+            videoId: videoId || "",
+            title:
+                element.getAttribute("data-video-title") ||
+                videoElement?.getAttribute("title") ||
+                element.getAttribute("title") ||
+                "",
+            uploadToken,
+            isUploading: uploadState !== "complete",
+            uploadError: element.getAttribute("data-video-upload-error") || ""
+        };
+    }
+
     if (!videoId) {
         return false;
     }
@@ -308,12 +353,23 @@ function readVideoAttributes(element) {
 
 function buildInlineVideoSpanAttributes(attrs) {
     const videoId = attrs.videoId || "";
-    return {
+    const result = {
         class: "rich-text-inline-video",
         "data-rich-video-id": videoId,
         "data-video-title": attrs.title || "",
         contenteditable: "false"
     };
+
+    if (attrs.uploadToken) {
+        result["data-video-upload-token"] = attrs.uploadToken;
+        result["data-video-upload-state"] = attrs.isUploading ? "uploading" : "complete";
+    }
+
+    if (attrs.uploadError) {
+        result["data-video-upload-error"] = attrs.uploadError;
+    }
+
+    return result;
 }
 
 function buildVideoDomAttributes(attrs) {
@@ -459,6 +515,56 @@ function insertVideoNode(editor, videoId, title, url) {
             title: title || ""
         }
     }).run();
+}
+
+function insertVideoUploadPlaceholderNode(editor, uploadToken, title) {
+    if (!editor || !uploadToken) {
+        return;
+    }
+
+    editor.chain().focus().insertContent({
+        type: "richTextVideo",
+        attrs: {
+            src: "",
+            videoId: "",
+            title: title || "Видео загружается",
+            uploadToken,
+            isUploading: true,
+            uploadError: ""
+        }
+    }).run();
+}
+
+function updateVideoUploadPlaceholderNode(editor, uploadToken, attrs) {
+    if (!editor || !uploadToken) {
+        return false;
+    }
+
+    let targetPosition = null;
+    editor.state.doc.descendants((node, position) => {
+        if (node.type.name === "richTextVideo" && node.attrs.uploadToken === uploadToken) {
+            targetPosition = position;
+            return false;
+        }
+
+        return true;
+    });
+
+    if (targetPosition == null) {
+        return false;
+    }
+
+    const currentNode = editor.state.doc.nodeAt(targetPosition);
+    if (!currentNode) {
+        return false;
+    }
+
+    const transaction = editor.state.tr.setNodeMarkup(targetPosition, undefined, {
+        ...currentNode.attrs,
+        ...attrs
+    });
+    editor.view.dispatch(transaction);
+    return true;
 }
 
 async function insertDroppedVideo(editor, file) {
@@ -934,11 +1040,60 @@ function insertVideo(viewportElementId, videoId, title, url) {
     insertVideoNode(editor, videoId, title, url);
 }
 
+function insertVideoUploadPlaceholder(viewportElementId, uploadToken, title) {
+    const registry = registries.get(viewportElementId);
+    if (!registry) {
+        return;
+    }
+
+    const editor = getActiveEditor(registry);
+    insertVideoUploadPlaceholderNode(editor, uploadToken, title);
+}
+
+function completeVideoUploadPlaceholder(viewportElementId, uploadToken, videoId, title, url) {
+    const registry = registries.get(viewportElementId);
+    if (!registry || !videoId) {
+        return;
+    }
+
+    for (const state of registry.editors.values()) {
+        if (updateVideoUploadPlaceholderNode(state.editor, uploadToken, {
+            src: url || `/media-server-files/videos/${encodeURIComponent(videoId)}/original`,
+            videoId,
+            title: title || "",
+            uploadToken: null,
+            isUploading: false,
+            uploadError: ""
+        })) {
+            return;
+        }
+    }
+}
+
+function failVideoUploadPlaceholder(viewportElementId, uploadToken, errorMessage) {
+    const registry = registries.get(viewportElementId);
+    if (!registry) {
+        return;
+    }
+
+    for (const state of registry.editors.values()) {
+        if (updateVideoUploadPlaceholderNode(state.editor, uploadToken, {
+            isUploading: true,
+            uploadError: errorMessage || "Не удалось загрузить видео"
+        })) {
+            return;
+        }
+    }
+}
+
 window.richTextEditor = {
     syncEditors,
     collectEditors,
     destroyEditors,
     markClean,
     runCommand,
-    insertVideo
+    insertVideo,
+    insertVideoUploadPlaceholder,
+    completeVideoUploadPlaceholder,
+    failVideoUploadPlaceholder
 };

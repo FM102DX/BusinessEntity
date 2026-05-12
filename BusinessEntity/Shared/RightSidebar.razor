@@ -1,7 +1,6 @@
 @* Persistent right sidebar for settings/widgets *@
 @using BusinessEntity.Services
 @using BusinessEntity.Models
-@using global::BusinessEntity.Core.Classes
 @using System.Timers
 @using System.Globalization
 
@@ -18,6 +17,8 @@
             <div class="widget-title">Дата и время</div>
             <div class="widget-body">@NowString</div>
         </div>
+
+        <MediaServerUploadWidget />
 
         @if (RichTextMessages.Messages.Count > 0)
         {

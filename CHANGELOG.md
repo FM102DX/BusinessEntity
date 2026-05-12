@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-05-12 09:31:55 +03:00
+
+### MAJOR-FEATURES
+
+#### MediaServer MiniApp
+- Добавлен долгоживущий `MediaServerUploadManager`: MediaServerMiniApp принимает video upload job, сохраняет входящий файл во временное хранилище и обрабатывает его в hosted-сервисе независимо от открытых UI-страниц.
+- Embed-загрузка видео в rich-doc переведена на upload jobs с `clientUploadToken`: в документ сразу вставляется placeholder, а после серверного события конкретный placeholder заменяется готовым video object.
+
+#### Upload progress widget
+- Активные загрузки видео вынесены из страницы мультимедиа в правый widget `Загрузки`; widget отображается только при активных jobs и показывает прогресс/отмену.
+
+### MINOR-FEATURES
+
+#### Upload reliability
+- Добавлено событие ошибки video upload, чтобы placeholder в rich-doc переходил в failed-состояние вместо бесконечного ожидания.
+- `IMessageBus` переведен в singleton, чтобы события MediaServerMiniApp доходили из серверных upload jobs до открытых rich-doc компонентов.
+
+#### Multimedia UI
+- Со страницы `Мультимедиа` убраны inline progress bars загрузки, так как прогресс теперь централизован в правом widget.
+
+#### Docker build
+- `.dockerignore` исключает runtime storage и крупные артефакты из build context, чтобы пересборка контейнера не отправляла в Docker несколько гигабайт пользовательских данных.
+
 ## [0.13.0] - 2026-05-11 19:41:49 +03:00
 
 ### MAJOR-FEATURES

@@ -7,6 +7,7 @@ using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
+using ReactiveUI;
 
 namespace BusinessEntity.Components
 {
@@ -17,14 +18,15 @@ namespace BusinessEntity.Components
         private const double MaxEstimatedChunkHeight = 8000;
         private const int ProgrammaticScrollSuppressionMs = 350;
         private const string ProgrammaticScrollBehavior = "auto";
-        private const long MaxVideoUploadBytes = 2L * 1024L * 1024L * 1024L;
-
         private readonly Dictionary<long, double> _chunkHeights = new();
         private readonly Dictionary<long, EditorChunkDraft> _dirtyDrafts = new();
         private readonly HashSet<long> _dirtySortOrders = new();
         private DotNetObjectReference<RichTextDocumentEditorViewport>? _dotNetReference;
+        private IDisposable? _mediaVideoUploadedSubscription;
+        private IDisposable? _mediaVideoUploadFailedSubscription;
         private RichTextDocumentChunkWindow? _appliedInitialWindow;
         private RichTextDocumentSettings _settings = new();
+        private readonly HashSet<string> _pendingVideoUploadTokens = new(StringComparer.OrdinalIgnoreCase);
         private bool _viewportRegistered;
         private bool _isLoadingWindow;
         private bool _pendingEditorSync;
@@ -48,6 +50,7 @@ namespace BusinessEntity.Components
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
         [Inject] public IMediaServerService MediaServerService { get; set; } = default!;
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
+        [Inject] public IMessageBus MessageBus { get; set; } = default!;
         [Inject] public IWebLoggerService? WebLogger { get; set; }
 
         private IReadOnlyList<RichTextDocumentChunk> LoadedChunks { get; set; } = Array.Empty<RichTextDocumentChunk>();
@@ -56,16 +59,19 @@ namespace BusinessEntity.Components
         private double TopSpacerPx { get; set; }
         private double BottomSpacerPx { get; set; }
         private bool HasDirtyDrafts => _dirtyDrafts.Count > 0 || _dirtySortOrders.Count > 0;
-        private bool IsEmbedPanelOpen { get; set; }
-        private bool IsEmbedLoading { get; set; }
-        private string EmbedMessage { get; set; } = string.Empty;
-        private List<MediaVideoInfo> EmbedVideos { get; set; } = new();
+        private bool IsEmbedPickerOpen { get; set; }
         private string TopSpacerStyle => $"height: {Math.Max(TopSpacerPx, 0):0.##}px;";
         private string BottomSpacerStyle => $"height: {Math.Max(BottomSpacerPx, 0):0.##}px;";
 
         protected override async Task OnInitializedAsync()
         {
             _settings = await RichTextDocumentSettingsService.GetSettingsAsync();
+            _mediaVideoUploadedSubscription = MessageBus
+                .Listen<MediaVideoUploadedMessage>()
+                .Subscribe(message => _ = HandleMediaVideoUploadedMessageAsync(message));
+            _mediaVideoUploadFailedSubscription = MessageBus
+                .Listen<MediaVideoUploadFailedMessage>()
+                .Subscribe(message => _ = HandleMediaVideoUploadFailedMessageAsync(message));
         }
 
         protected override void OnParametersSet()
@@ -279,58 +285,16 @@ namespace BusinessEntity.Components
             return JS.InvokeVoidAsync("richTextEditor.runCommand", ViewportElementId, command).AsTask();
         }
 
-        private async Task ToggleEmbedPanelAsync()
+        private async Task OpenEmbedPickerAsync()
         {
-            IsEmbedPanelOpen = !IsEmbedPanelOpen;
-            EmbedMessage = string.Empty;
-            if (IsEmbedPanelOpen)
-            {
-                await LoadEmbedVideosAsync();
-            }
+            IsEmbedPickerOpen = true;
+            await Task.CompletedTask;
         }
 
-        private async Task LoadEmbedVideosAsync()
+        private Task CloseEmbedPickerAsync()
         {
-            IsEmbedLoading = true;
-            try
-            {
-                EmbedVideos = (await MediaServerService.GetVideosAsync(UserContextService.CurrentSpaceId)).ToList();
-            }
-            catch (Exception ex)
-            {
-                EmbedMessage = ex.Message;
-            }
-            finally
-            {
-                IsEmbedLoading = false;
-            }
-        }
-
-        private async Task UploadAndEmbedVideoAsync(InputFileChangeEventArgs eventArgs)
-        {
-            var file = eventArgs.File;
-            if (file == null)
-            {
-                return;
-            }
-
-            EmbedMessage = string.Empty;
-            try
-            {
-                await using var stream = file.OpenReadStream(MaxVideoUploadBytes);
-                var video = await MediaServerService.UploadVideoAsync(
-                    stream,
-                    file.Name,
-                    file.ContentType,
-                    file.Size,
-                    spaceId: UserContextService.CurrentSpaceId);
-                EmbedVideos.Insert(0, video);
-                await InsertVideoAsync(video);
-            }
-            catch (Exception ex)
-            {
-                EmbedMessage = ex.Message;
-            }
+            IsEmbedPickerOpen = false;
+            return Task.CompletedTask;
         }
 
         private async Task InsertVideoAsync(MediaVideoInfo video)
@@ -346,20 +310,71 @@ namespace BusinessEntity.Components
                 video.Id.ToString("D"),
                 video.DisplayName,
                 video.EmbedUrl);
-            IsEmbedPanelOpen = false;
+            IsEmbedPickerOpen = false;
         }
 
-        private static string FormatVideoDuration(double? durationSeconds)
+        private async Task<string?> InsertUploadingVideoAsync(MediaVideoFileSelection selection)
         {
-            if (!durationSeconds.HasValue || durationSeconds.Value <= 0)
+            if (selection == null)
             {
-                return "--:--";
+                return null;
             }
 
-            var duration = TimeSpan.FromSeconds(durationSeconds.Value);
-            return duration.TotalHours >= 1
-                ? duration.ToString(@"hh\:mm\:ss")
-                : duration.ToString(@"mm\:ss");
+            var uploadToken = Guid.NewGuid().ToString("N");
+            _pendingVideoUploadTokens.Add(uploadToken);
+            var title = Path.GetFileNameWithoutExtension(selection.FileName);
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                title = selection.FileName;
+            }
+
+            await JS.InvokeVoidAsync(
+                "richTextEditor.insertVideoUploadPlaceholder",
+                ViewportElementId,
+                uploadToken,
+                title);
+
+            return uploadToken;
+        }
+
+        private Task HandleMediaVideoUploadedMessageAsync(MediaVideoUploadedMessage message)
+        {
+            if (message == null || string.IsNullOrWhiteSpace(message.ClientUploadToken) || message.Video == null)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (!_pendingVideoUploadTokens.Remove(message.ClientUploadToken))
+            {
+                return Task.CompletedTask;
+            }
+
+            return InvokeAsync(() => JS.InvokeVoidAsync(
+                "richTextEditor.completeVideoUploadPlaceholder",
+                ViewportElementId,
+                message.ClientUploadToken,
+                message.Video.Id.ToString("D"),
+                message.Video.DisplayName,
+                message.Video.EmbedUrl).AsTask());
+        }
+
+        private Task HandleMediaVideoUploadFailedMessageAsync(MediaVideoUploadFailedMessage message)
+        {
+            if (message == null || string.IsNullOrWhiteSpace(message.ClientUploadToken))
+            {
+                return Task.CompletedTask;
+            }
+
+            if (!_pendingVideoUploadTokens.Remove(message.ClientUploadToken))
+            {
+                return Task.CompletedTask;
+            }
+
+            return InvokeAsync(() => JS.InvokeVoidAsync(
+                "richTextEditor.failVideoUploadPlaceholder",
+                ViewportElementId,
+                message.ClientUploadToken,
+                message.ErrorMessage).AsTask());
         }
 
         [JSInvokable]
@@ -1054,6 +1069,8 @@ namespace BusinessEntity.Components
             }
 
             _dotNetReference?.Dispose();
+            _mediaVideoUploadedSubscription?.Dispose();
+            _mediaVideoUploadFailedSubscription?.Dispose();
         }
 
         private sealed class EditorChunkDraft

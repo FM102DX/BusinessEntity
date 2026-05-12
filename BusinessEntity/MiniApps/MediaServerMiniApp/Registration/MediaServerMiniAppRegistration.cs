@@ -10,6 +10,9 @@ public static class MediaServerMiniAppRegistration
     {
         services.AddSingleton<MediaServerUploadJobRegistry>();
         services.AddSingleton<IMediaServerUploadJobTracker>(provider => provider.GetRequiredService<MediaServerUploadJobRegistry>());
+        services.AddSingleton<MediaServerUploadManager>();
+        services.AddSingleton<IMediaServerUploadManager>(provider => provider.GetRequiredService<MediaServerUploadManager>());
+        services.AddHostedService(provider => provider.GetRequiredService<MediaServerUploadManager>());
         services.AddScoped<MediaServerService>();
         services.AddScoped<IMediaServerService>(provider => provider.GetRequiredService<MediaServerService>());
         services.AddScoped<IMediaServerMiniApp, Facade.MediaServerMiniApp>();

@@ -21,7 +21,8 @@
         dotNetReference.invokeMethodAsync(methodName).catch(function () { });
     }
 
-    function startVideoUpload(file, dotNetReference) {
+    function startVideoUpload(file, dotNetReference, options) {
+        options = options || {};
         const jobId = createJobId();
         const xhr = new XMLHttpRequest();
         let lastNotifyAt = 0;
@@ -41,6 +42,9 @@
         xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name || "video"));
         xhr.setRequestHeader("X-Content-Type", file.type || "application/octet-stream");
         xhr.setRequestHeader("X-File-Length", String(file.size || 0));
+        if (options.clientUploadToken) {
+            xhr.setRequestHeader("X-Client-Upload-Token", encodeURIComponent(options.clientUploadToken));
+        }
 
         xhr.upload.onprogress = function () {
             notifyChanged(false);
@@ -63,6 +67,7 @@
 
         xhr.send(file);
         notifyChanged(true);
+        return jobId;
     }
 
     window.mediaServerUpload = {
@@ -79,6 +84,18 @@
 
             input.value = "";
             return files.length;
+        },
+
+        startFirstVideo: function (inputId, clientUploadToken, dotNetReference) {
+            const input = document.getElementById(inputId);
+            if (!input || !input.files || input.files.length === 0) {
+                return "";
+            }
+
+            const file = input.files[0];
+            const jobId = startVideoUpload(file, dotNetReference, { clientUploadToken: clientUploadToken || "" });
+            input.value = "";
+            return jobId;
         },
 
         cancel: function (jobId) {

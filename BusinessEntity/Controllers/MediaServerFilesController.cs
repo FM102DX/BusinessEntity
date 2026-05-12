@@ -12,15 +12,18 @@ public sealed class MediaServerFilesController : ControllerBase
 {
     private readonly IMediaServerService _mediaServerService;
     private readonly MediaServerUploadJobRegistry _uploadJobs;
+    private readonly IMediaServerUploadManager _uploadManager;
     private readonly IUserContextService _userContextService;
 
     public MediaServerFilesController(
         IMediaServerService mediaServerService,
         MediaServerUploadJobRegistry uploadJobs,
+        IMediaServerUploadManager uploadManager,
         IUserContextService userContextService)
     {
         _mediaServerService = mediaServerService;
         _uploadJobs = uploadJobs;
+        _uploadManager = uploadManager;
         _userContextService = userContextService;
     }
 
@@ -104,29 +107,39 @@ public sealed class MediaServerFilesController : ControllerBase
         }
 
         var length = TryReadLength(Request.Headers["X-File-Length"].FirstOrDefault()) ?? Request.ContentLength;
-        _uploadJobs.RegisterVideoUploadJob(jobId, fileName, contentType ?? "application/octet-stream", length);
+        var clientUploadToken = DecodeHeaderValue(Request.Headers["X-Client-Upload-Token"].FirstOrDefault());
+        var spaceId = RequireCurrentSpaceId();
+        _uploadJobs.RegisterVideoUploadJob(
+            jobId,
+            fileName,
+            contentType ?? "application/octet-stream",
+            length,
+            spaceId,
+            clientUploadToken);
         _uploadJobs.MarkVideoUploadJobUploading(jobId);
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             HttpContext.RequestAborted,
             _uploadJobs.GetCancellationToken(jobId));
 
-        var progress = new Progress<long>(uploadedBytes =>
-            _uploadJobs.ReportVideoUploadProgress(jobId, uploadedBytes));
-
         try
         {
-            var result = await _mediaServerService.UploadVideoAsync(
+            var temporaryFilePath = await _uploadManager.SaveIncomingVideoToTemporaryFileAsync(
+                jobId,
                 Request.Body,
+                linkedCts.Token);
+
+            _uploadJobs.MarkVideoUploadJobProcessing(jobId);
+            _uploadManager.EnqueueVideoProcessing(
+                jobId,
+                temporaryFilePath,
                 fileName,
                 contentType,
                 length,
-                linkedCts.Token,
-                progress,
-                RequireCurrentSpaceId());
+                spaceId,
+                clientUploadToken);
 
-            _uploadJobs.CompleteVideoUploadJob(jobId, result);
-            return Ok(_uploadJobs.GetVideoUploadJob(jobId));
+            return Accepted(_uploadJobs.GetVideoUploadJob(jobId));
         }
         catch (OperationCanceledException)
         {

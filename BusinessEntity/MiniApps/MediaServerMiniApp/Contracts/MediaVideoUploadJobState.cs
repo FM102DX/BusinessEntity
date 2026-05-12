@@ -4,7 +4,8 @@ public enum MediaVideoUploadJobState
 {
     Queued = 0,
     Uploading = 1,
-    Completed = 2,
-    Cancelled = 3,
-    Failed = 4
+    Processing = 2,
+    Completed = 3,
+    Cancelled = 4,
+    Failed = 5
 }

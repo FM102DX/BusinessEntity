@@ -14,6 +14,8 @@ public sealed class MediaVideoUploadJobInfo
     public DateTime? CompletedDate { get; set; }
     public Guid? VideoId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public Guid? SpaceId { get; set; }
+    public string ClientUploadToken { get; set; } = string.Empty;
 
     public double? ProgressPercent
     {

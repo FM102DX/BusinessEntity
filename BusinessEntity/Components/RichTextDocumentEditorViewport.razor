@@ -1,5 +1,4 @@
 @using BusinessEntity.Core.RichText
-@using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts
 @using Microsoft.AspNetCore.Components
 @implements IAsyncDisposable
 
@@ -18,57 +17,21 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 1" @onclick='@(() => RunEditorCommandAsync("toggleHeading1"))'>H1</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 2" @onclick='@(() => RunEditorCommandAsync("toggleHeading2"))'>H2</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 3" @onclick='@(() => RunEditorCommandAsync("toggleHeading3"))'>H3</button>
-        <div class="rich-text-document-editor__embed">
-            <button type="button" class="btn btn-sm btn-outline-secondary" title="Embed" @onclick="ToggleEmbedPanelAsync">
-                <span class="oi oi-link-intact" aria-hidden="true"></span>
-                <span>Embed</span>
-            </button>
-            @if (IsEmbedPanelOpen)
-            {
-                <div class="rich-text-document-editor__embed-panel">
-                    <div class="rich-text-document-editor__embed-actions">
-                        <label class="btn btn-sm btn-primary rich-text-document-editor__embed-upload">
-                            <span class="oi oi-cloud-upload" aria-hidden="true"></span>
-                            <span>Видео</span>
-                            <InputFile OnChange="UploadAndEmbedVideoAsync" accept="video/*" />
-                        </label>
-                    </div>
-                    @if (IsEmbedLoading)
-                    {
-                        <div class="rich-text-document-editor__embed-empty">Загрузка...</div>
-                    }
-                    else if (EmbedVideos.Count == 0)
-                    {
-                        <div class="rich-text-document-editor__embed-empty">Видео пока не загружены.</div>
-                    }
-                    else
-                    {
-                        <div class="rich-text-document-editor__embed-list">
-                            @foreach (var video in EmbedVideos)
-                            {
-                                <button type="button"
-                                        class="rich-text-document-editor__embed-item"
-                                        @key="video.Id"
-                                        @onclick="() => InsertVideoAsync(video)">
-                                    <span>@video.DisplayName</span>
-                                    <span>@FormatVideoDuration(video.DurationSeconds)</span>
-                                </button>
-                            }
-                        </div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(EmbedMessage))
-                    {
-                        <div class="rich-text-document-editor__embed-empty">@EmbedMessage</div>
-                    }
-                </div>
-            }
-        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Embed" @onclick="OpenEmbedPickerAsync">
+            <span class="oi oi-link-intact" aria-hidden="true"></span>
+            <span>Embed</span>
+        </button>
 
         @if (HasDirtyDrafts)
         {
             <span class="rich-text-document-editor__dirty">Есть несохраненные изменения</span>
         }
     </div>
+
+    <EmbedObjectPicker IsOpen="@IsEmbedPickerOpen"
+                       OnClosed="CloseEmbedPickerAsync"
+                       OnVideoSelected="InsertVideoAsync"
+                       OnVideoFileSelected="InsertUploadingVideoAsync" />
 
     <div id="@ViewportElementId" class="rich-text-document-editor__viewport" tabindex="0">
         @if (IsInitialContentLoading && LoadedChunks.Count == 0)

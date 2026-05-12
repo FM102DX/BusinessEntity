@@ -11,9 +11,11 @@ public sealed class MediaServerUploadJobRegistry : IMediaServerUploadJobTracker
         Guid jobId,
         string fileName,
         string contentType,
-        long? totalBytes)
+        long? totalBytes,
+        Guid? spaceId = null,
+        string? clientUploadToken = null)
     {
-        var record = new UploadJobRecord(jobId, fileName, contentType, totalBytes);
+        var record = new UploadJobRecord(jobId, fileName, contentType, totalBytes, spaceId, clientUploadToken);
         var existing = _jobs.AddOrUpdate(
             jobId,
             record,
@@ -45,6 +47,14 @@ public sealed class MediaServerUploadJobRegistry : IMediaServerUploadJobTracker
         if (_jobs.TryGetValue(jobId, out var record))
         {
             record.ReportProgress(uploadedBytes);
+        }
+    }
+
+    public void MarkVideoUploadJobProcessing(Guid jobId)
+    {
+        if (_jobs.TryGetValue(jobId, out var record))
+        {
+            record.MarkProcessing();
         }
     }
 
@@ -123,7 +133,8 @@ public sealed class MediaServerUploadJobRegistry : IMediaServerUploadJobTracker
     private static bool IsActive(MediaVideoUploadJobState state)
     {
         return state == MediaVideoUploadJobState.Queued ||
-               state == MediaVideoUploadJobState.Uploading;
+               state == MediaVideoUploadJobState.Uploading ||
+               state == MediaVideoUploadJobState.Processing;
     }
 
     private sealed class UploadJobRecord : IDisposable
@@ -139,12 +150,20 @@ public sealed class MediaServerUploadJobRegistry : IMediaServerUploadJobTracker
         private Guid? _videoId;
         private string _displayName = string.Empty;
 
-        public UploadJobRecord(Guid jobId, string fileName, string contentType, long? totalBytes)
+        public UploadJobRecord(
+            Guid jobId,
+            string fileName,
+            string contentType,
+            long? totalBytes,
+            Guid? spaceId,
+            string? clientUploadToken)
         {
             JobId = jobId;
             FileName = fileName;
             ContentType = contentType;
             TotalBytes = totalBytes;
+            SpaceId = spaceId;
+            ClientUploadToken = clientUploadToken ?? string.Empty;
             CreatedDate = DateTime.UtcNow;
         }
 
@@ -152,6 +171,8 @@ public sealed class MediaServerUploadJobRegistry : IMediaServerUploadJobTracker
         public string FileName { get; }
         public string ContentType { get; }
         public long? TotalBytes { get; }
+        public Guid? SpaceId { get; }
+        public string ClientUploadToken { get; }
         public DateTime CreatedDate { get; }
         public CancellationToken CancellationToken => _cancellationTokenSource.Token;
 
@@ -179,6 +200,24 @@ public sealed class MediaServerUploadJobRegistry : IMediaServerUploadJobTracker
                 _uploadedBytes = Math.Max(_uploadedBytes, uploadedBytes);
                 _state = MediaVideoUploadJobState.Uploading;
                 _startedDate ??= DateTime.UtcNow;
+            }
+        }
+
+        public void MarkProcessing()
+        {
+            lock (_syncRoot)
+            {
+                if (!IsActive(_state))
+                {
+                    return;
+                }
+
+                _state = MediaVideoUploadJobState.Processing;
+                _startedDate ??= DateTime.UtcNow;
+                if (TotalBytes.HasValue && TotalBytes.Value > 0)
+                {
+                    _uploadedBytes = Math.Max(_uploadedBytes, TotalBytes.Value);
+                }
             }
         }
 
@@ -253,7 +292,9 @@ public sealed class MediaServerUploadJobRegistry : IMediaServerUploadJobTracker
                     StartedDate = _startedDate,
                     CompletedDate = _completedDate,
                     VideoId = _videoId,
-                    DisplayName = _displayName
+                    DisplayName = _displayName,
+                    SpaceId = SpaceId,
+                    ClientUploadToken = ClientUploadToken
                 };
             }
         }

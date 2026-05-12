@@ -9,6 +9,7 @@ using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using ReactiveUI;
 
 namespace BusinessEntity.MiniApps.MediaServerMiniApp.Internal;
 
@@ -20,18 +21,21 @@ public sealed class MediaServerService : IMediaServerService
 
     private readonly IDataProviderConnector _dataProviderConnector;
     private readonly IBusinessEntityFactory _businessEntityFactory;
+    private readonly IMessageBus _messageBus;
     private readonly IUserConnector? _userConnector;
     private readonly string _storageRoot;
 
     public MediaServerService(
         IDataProviderConnector dataProviderConnector,
         IBusinessEntityFactory businessEntityFactory,
+        IMessageBus messageBus,
         IWebHostEnvironment environment,
         IConfiguration configuration,
         IUserConnector? userConnector = null)
     {
         _dataProviderConnector = dataProviderConnector;
         _businessEntityFactory = businessEntityFactory;
+        _messageBus = messageBus;
         _userConnector = userConnector;
 
         var contentRoot = environment.ContentRootPath ?? AppContext.BaseDirectory;
@@ -108,7 +112,8 @@ public sealed class MediaServerService : IMediaServerService
         long? length,
         CancellationToken cancellationToken = default,
         IProgress<long>? progress = null,
-        Guid? spaceId = null)
+        Guid? spaceId = null,
+        string? clientUploadToken = null)
     {
         if (content == null)
         {
@@ -189,7 +194,9 @@ public sealed class MediaServerService : IMediaServerService
             await _dataProviderConnector.UpdateDataAsync(savedEntity.Id, data, cancellationToken);
             await EnsureVideoSpaceRelationAsync(spaceId, savedEntity.Id, cancellationToken);
             await WriteMetadataAsync(physicalPath, data, cancellationToken);
-            return ToInfo(savedEntity.Id, data);
+            var result = ToInfo(savedEntity.Id, data);
+            _messageBus.SendMessage(new MediaVideoUploadedMessage(clientUploadToken, result, spaceId));
+            return result;
         }
         catch
         {

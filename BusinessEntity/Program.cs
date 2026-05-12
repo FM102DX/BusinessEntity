@@ -144,7 +144,7 @@ namespace BusinessEntity
             builder.Services.AddScoped<IRichDocFormatConverterFactory, RichDocFormatConverterFactory>();
             builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentImportService>();
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
-            builder.Services.AddScoped<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
+            builder.Services.AddSingleton<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();
             builder.Services.AddSingleton<IBusinessEntityBackupHandler, GenericBusinessEntityBackupHandler>();
             builder.Services.AddSingleton<IBusinessEntityRestoreHandler, GenericBusinessEntityRestoreHandler>();
