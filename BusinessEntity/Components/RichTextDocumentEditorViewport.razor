@@ -17,6 +17,22 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 1" @onclick='@(() => RunEditorCommandAsync("toggleHeading1"))'>H1</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 2" @onclick='@(() => RunEditorCommandAsync("toggleHeading2"))'>H2</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Heading 3" @onclick='@(() => RunEditorCommandAsync("toggleHeading3"))'>H3</button>
+        <span class="rich-text-document-editor__toolbar-separator" aria-hidden="true"></span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Вставить таблицу" @onclick='@(() => RunEditorCommandAsync("insertTable"))'>
+            <span class="oi oi-grid-three-up" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Переключить заголовок таблицы" @onclick='@(() => RunEditorCommandAsync("toggleTableHeaderRow"))'>
+            <span class="oi oi-check" aria-hidden="true"></span>
+            <span>TH</span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Добавить строку" @onclick='@(() => RunEditorCommandAsync("addTableRow"))'>R+</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Удалить строку" @onclick='@(() => RunEditorCommandAsync("deleteTableRow"))'>R-</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Добавить столбец" @onclick='@(() => RunEditorCommandAsync("addTableColumn"))'>C+</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Удалить столбец" @onclick='@(() => RunEditorCommandAsync("deleteTableColumn"))'>C-</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Удалить таблицу" @onclick='@(() => RunEditorCommandAsync("deleteTable"))'>
+            <span class="oi oi-trash" aria-hidden="true"></span>
+        </button>
+        <span class="rich-text-document-editor__toolbar-separator" aria-hidden="true"></span>
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Embed" @onclick="OpenEmbedPickerAsync">
             <span class="oi oi-link-intact" aria-hidden="true"></span>
             <span>Embed</span>

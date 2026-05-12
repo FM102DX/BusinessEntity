@@ -2,6 +2,10 @@ import { Editor, Node } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
 import Paragraph from "@tiptap/extension-paragraph";
+import Table from "@tiptap/extension-table";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import TableRow from "@tiptap/extension-table-row";
 import Underline from "@tiptap/extension-underline";
 
 const CustomHeading = Heading.extend({
@@ -140,6 +144,13 @@ const extensions = [
     CustomHeading.configure({ levels: [1, 2, 3] }),
     RichTextImage,
     RichTextVideo,
+    Table.configure({
+        resizable: false,
+        allowTableNodeSelection: true
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
     Underline
 ];
 
@@ -1027,7 +1038,123 @@ function runCommand(viewportElementId, command) {
         case "toggleHeading3":
             editor.chain().focus().toggleHeading({ level: 3 }).run();
             break;
+        case "insertTable":
+            insertTableWithPrompt(editor);
+            break;
+        case "toggleTableHeaderRow":
+            toggleFirstTableHeaderRow(editor);
+            break;
+        case "addTableRow":
+            editor.chain().focus().addRowAfter().run();
+            break;
+        case "deleteTableRow":
+            editor.chain().focus().deleteRow().run();
+            break;
+        case "addTableColumn":
+            editor.chain().focus().addColumnAfter().run();
+            break;
+        case "deleteTableColumn":
+            editor.chain().focus().deleteColumn().run();
+            break;
+        case "deleteTable":
+            editor.chain().focus().deleteTable().run();
+            break;
     }
+}
+
+function insertTableWithPrompt(editor) {
+    if (!editor) {
+        return;
+    }
+
+    const sizeText = window.prompt("Размер таблицы: строки x столбцы", "3x3");
+    if (!sizeText) {
+        return;
+    }
+
+    const match = String(sizeText).trim().match(/^(\d+)\s*[xх*,;:]\s*(\d+)$/i);
+    if (!match) {
+        return;
+    }
+
+    const rows = Math.max(1, Math.min(50, Number(match[1])));
+    const cols = Math.max(1, Math.min(20, Number(match[2])));
+    if (!Number.isFinite(rows) || !Number.isFinite(cols)) {
+        return;
+    }
+
+    editor.chain().focus().insertTable({
+        rows,
+        cols,
+        withHeaderRow: false
+    }).run();
+}
+
+function toggleFirstTableHeaderRow(editor) {
+    if (!editor) {
+        return;
+    }
+
+    const tableInfo = findSelectedTable(editor);
+    if (!tableInfo || tableInfo.node.childCount === 0) {
+        return;
+    }
+
+    const tableCellType = editor.schema.nodes.tableCell;
+    const tableHeaderType = editor.schema.nodes.tableHeader;
+    if (!tableCellType || !tableHeaderType) {
+        return;
+    }
+
+    const firstRow = tableInfo.node.firstChild;
+    if (!firstRow || firstRow.childCount === 0) {
+        return;
+    }
+
+    let hasOnlyHeaderCells = true;
+    firstRow.forEach(cell => {
+        if (cell.type !== tableHeaderType) {
+            hasOnlyHeaderCells = false;
+        }
+    });
+
+    const targetType = hasOnlyHeaderCells ? tableCellType : tableHeaderType;
+    let transaction = editor.state.tr;
+    let cellPosition = tableInfo.position + 2;
+
+    firstRow.forEach(cell => {
+        transaction = transaction.setNodeMarkup(
+            cellPosition,
+            targetType,
+            cell.attrs,
+            cell.marks);
+        cellPosition += cell.nodeSize;
+    });
+
+    if (transaction.docChanged) {
+        editor.view.dispatch(transaction);
+        editor.view.focus();
+    }
+}
+
+function findSelectedTable(editor) {
+    const selection = editor?.state?.selection;
+    if (!selection) {
+        return null;
+    }
+
+    const resolved = selection.$from;
+    for (let depth = resolved.depth; depth > 0; depth--) {
+        const node = resolved.node(depth);
+        if (node?.type?.name === "table") {
+            return {
+                node,
+                position: resolved.before(depth)
+            };
+        }
+    }
+
+    return null;
 }
 
 function insertVideo(viewportElementId, videoId, title, url) {

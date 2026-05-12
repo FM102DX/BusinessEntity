@@ -19,6 +19,12 @@
     line-height: 1;
 }
 
+.rich-text-document-editor__toolbar-separator {
+    align-self: stretch;
+    border-left: 1px solid #d9e1ea;
+    margin: 0 0.15rem;
+}
+
 .rich-text-document-editor__dirty {
     color: #7a4d00;
     font-size: 0.9rem;
@@ -102,6 +108,41 @@
 ::deep .rich-text-tiptap-content h2,
 ::deep .rich-text-tiptap-content h3 {
     scroll-margin-top: 12px;
+}
+
+::deep .rich-text-tiptap-content table {
+    border-collapse: collapse;
+    margin: 0 0 1rem 0;
+    table-layout: fixed;
+    width: 100%;
+}
+
+::deep .rich-text-tiptap-content td,
+::deep .rich-text-tiptap-content th {
+    border: 1px solid #b9c6d5;
+    min-width: 3rem;
+    padding: 0.35rem 0.45rem;
+    position: relative;
+    vertical-align: top;
+}
+
+::deep .rich-text-tiptap-content th {
+    background: #f1effa;
+    font-weight: 700;
+}
+
+::deep .rich-text-tiptap-content td > :last-child,
+::deep .rich-text-tiptap-content th > :last-child {
+    margin-bottom: 0;
+}
+
+::deep .rich-text-tiptap-content .selectedCell::after {
+    background: rgba(43, 111, 214, 0.12);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 1;
 }
 
 ::deep .rich-text-tiptap-content .rich-text-image {

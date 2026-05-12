@@ -37,6 +37,31 @@
     scroll-margin-top: 12px;
 }
 
+.rich-text-document-viewport table {
+    border-collapse: collapse;
+    margin: 0 0 1rem 0;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.rich-text-document-viewport td,
+.rich-text-document-viewport th {
+    border: 1px solid #b9c6d5;
+    min-width: 3rem;
+    padding: 0.35rem 0.45rem;
+    vertical-align: top;
+}
+
+.rich-text-document-viewport th {
+    background: #f1effa;
+    font-weight: 700;
+}
+
+.rich-text-document-viewport td > :last-child,
+.rich-text-document-viewport th > :last-child {
+    margin-bottom: 0;
+}
+
 .rich-text-document-viewport .rich-text-image {
     margin: 0 0 1rem 0;
 }
