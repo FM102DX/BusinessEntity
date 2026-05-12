@@ -135,6 +135,45 @@ const RichTextVideo = Node.create({
     }
 });
 
+const RichTextTable = Table.extend({
+    addAttributes() {
+        return {
+            ...(this.parent?.() ?? {}),
+            rowNumbers: {
+                default: false,
+                parseHTML: element => element.getAttribute("data-rich-table-row-numbers") === "true",
+                renderHTML: attributes => attributes.rowNumbers ? { "data-rich-table-row-numbers": "true" } : {}
+            }
+        };
+    }
+});
+
+const RichTextTableCell = TableCell.extend({
+    addAttributes() {
+        return {
+            ...(this.parent?.() ?? {}),
+            rowNumber: {
+                default: false,
+                parseHTML: element => element.getAttribute("data-rich-table-row-number") === "true",
+                renderHTML: attributes => attributes.rowNumber ? { "data-rich-table-row-number": "true" } : {}
+            }
+        };
+    }
+});
+
+const RichTextTableHeader = TableHeader.extend({
+    addAttributes() {
+        return {
+            ...(this.parent?.() ?? {}),
+            rowNumber: {
+                default: false,
+                parseHTML: element => element.getAttribute("data-rich-table-row-number") === "true",
+                renderHTML: attributes => attributes.rowNumber ? { "data-rich-table-row-number": "true" } : {}
+            }
+        };
+    }
+});
+
 const extensions = [
     StarterKit.configure({
         heading: false,
@@ -144,13 +183,13 @@ const extensions = [
     CustomHeading.configure({ levels: [1, 2, 3] }),
     RichTextImage,
     RichTextVideo,
-    Table.configure({
+    RichTextTable.configure({
         resizable: false,
         allowTableNodeSelection: true
     }),
     TableRow,
-    TableHeader,
-    TableCell,
+    RichTextTableHeader,
+    RichTextTableCell,
     Underline
 ];
 
@@ -1044,17 +1083,24 @@ function runCommand(viewportElementId, command) {
         case "toggleTableHeaderRow":
             toggleFirstTableHeaderRow(editor);
             break;
+        case "toggleTableRowNumbers":
+            toggleTableRowNumbers(editor);
+            break;
         case "addTableRow":
             editor.chain().focus().addRowAfter().run();
+            renumberSelectedTableIfEnabled(editor);
             break;
         case "deleteTableRow":
             editor.chain().focus().deleteRow().run();
+            renumberSelectedTableIfEnabled(editor);
             break;
         case "addTableColumn":
             editor.chain().focus().addColumnAfter().run();
+            renumberSelectedTableIfEnabled(editor);
             break;
         case "deleteTableColumn":
             editor.chain().focus().deleteColumn().run();
+            renumberSelectedTableIfEnabled(editor);
             break;
         case "deleteTable":
             editor.chain().focus().deleteTable().run();
@@ -1134,7 +1180,145 @@ function toggleFirstTableHeaderRow(editor) {
     if (transaction.docChanged) {
         editor.view.dispatch(transaction);
         editor.view.focus();
+        renumberSelectedTableIfEnabled(editor);
     }
+}
+
+function toggleTableRowNumbers(editor) {
+    if (!editor) {
+        return;
+    }
+
+    const tableInfo = findSelectedTable(editor);
+    if (!tableInfo) {
+        return;
+    }
+
+    setTableRowNumbers(editor, !isTableRowNumberingEnabled(tableInfo.node));
+}
+
+function renumberSelectedTableIfEnabled(editor) {
+    const tableInfo = findSelectedTable(editor);
+    if (!tableInfo || !isTableRowNumberingEnabled(tableInfo.node)) {
+        return;
+    }
+
+    setTableRowNumbers(editor, true);
+}
+
+function setTableRowNumbers(editor, enabled) {
+    const tableInfo = findSelectedTable(editor);
+    if (!tableInfo) {
+        return;
+    }
+
+    const tableNode = tableInfo.node;
+    const tableCellType = editor.schema.nodes.tableCell;
+    const tableHeaderType = editor.schema.nodes.tableHeader;
+    const paragraphType = editor.schema.nodes.paragraph;
+    if (!tableCellType || !tableHeaderType || !paragraphType) {
+        return;
+    }
+
+    const headerEnabled = isFirstTableRowHeader(tableNode, tableHeaderType);
+    const rowsWithoutNumbers = getRowsWithoutNumberColumn(tableNode, tableCellType, tableHeaderType, paragraphType);
+    const nextRows = enabled
+        ? rowsWithoutNumbers.map((row, rowIndex) => {
+            const numberCellType = headerEnabled && rowIndex === 0 ? tableHeaderType : tableCellType;
+            const label = headerEnabled && rowIndex === 0 ? "№" : String(headerEnabled ? rowIndex : rowIndex + 1);
+            const numberCell = createTextTableCell(numberCellType, paragraphType, label, true);
+            return row.type.create(row.attrs, [numberCell, ...Array.from(row.content.content)], row.marks);
+        })
+        : rowsWithoutNumbers;
+
+    const nextTable = tableNode.type.create(
+        {
+            ...tableNode.attrs,
+            rowNumbers: enabled
+        },
+        nextRows,
+        tableNode.marks);
+
+    const transaction = editor.state.tr.replaceWith(
+        tableInfo.position,
+        tableInfo.position + tableNode.nodeSize,
+        nextTable);
+
+    editor.view.dispatch(transaction);
+    editor.view.focus();
+}
+
+function getRowsWithoutNumberColumn(tableNode, tableCellType, tableHeaderType, paragraphType) {
+    const headerEnabled = isFirstTableRowHeader(tableNode, tableHeaderType);
+    const result = [];
+
+    tableNode.forEach((row, _offset, rowIndex) => {
+        const cells = Array.from(row.content.content);
+        const firstCell = cells[0];
+        const hasGeneratedNumberCell = firstCell?.attrs?.rowNumber === true || tableNode.attrs?.rowNumbers === true;
+        const remainingCells = hasGeneratedNumberCell ? cells.slice(1) : cells;
+
+        if (remainingCells.length === 0) {
+            const fallbackType = headerEnabled && rowIndex === 0 ? tableHeaderType : tableCellType;
+            remainingCells.push(createTextTableCell(fallbackType, paragraphType, "", false));
+        }
+
+        result.push(row.type.create(row.attrs, remainingCells, row.marks));
+    });
+
+    return result;
+}
+
+function createTextTableCell(cellType, paragraphType, text, rowNumber) {
+    const paragraph = text
+        ? paragraphType.create(null, cellType.schema.text(text))
+        : paragraphType.create();
+
+    return cellType.create(
+        {
+            rowNumber
+        },
+        paragraph);
+}
+
+function isTableRowNumberingEnabled(tableNode) {
+    if (tableNode?.attrs?.rowNumbers === true) {
+        return true;
+    }
+
+    let enabled = false;
+    tableNode?.forEach(row => {
+        if (row.firstChild?.attrs?.rowNumber === true) {
+            enabled = true;
+        }
+    });
+
+    return enabled;
+}
+
+function isFirstTableRowHeader(tableNode, tableHeaderType) {
+    const firstRow = tableNode?.firstChild;
+    if (!firstRow || firstRow.childCount === 0) {
+        return false;
+    }
+
+    let result = true;
+    firstRow.forEach(cell => {
+        if (cell.type !== tableHeaderType || cell.attrs?.rowNumber === true) {
+            result = false;
+        }
+    });
+
+    if (!result && firstRow.childCount > 1 && firstRow.firstChild?.attrs?.rowNumber === true) {
+        result = true;
+        firstRow.forEach((cell, _offset, index) => {
+            if (index > 0 && cell.type !== tableHeaderType) {
+                result = false;
+            }
+        });
+    }
+
+    return result;
 }
 
 function findSelectedTable(editor) {

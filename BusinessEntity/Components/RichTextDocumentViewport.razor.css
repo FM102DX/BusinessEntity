@@ -31,56 +31,65 @@
     padding: 0.25rem 0;
 }
 
-.rich-text-document-viewport h1,
-.rich-text-document-viewport h2,
-.rich-text-document-viewport h3 {
+.rich-text-document-viewport ::deep h1,
+.rich-text-document-viewport ::deep h2,
+.rich-text-document-viewport ::deep h3 {
     scroll-margin-top: 12px;
 }
 
-.rich-text-document-viewport table {
+.rich-text-document-viewport ::deep table {
     border-collapse: collapse;
     margin: 0 0 1rem 0;
     table-layout: fixed;
     width: 100%;
 }
 
-.rich-text-document-viewport td,
-.rich-text-document-viewport th {
+.rich-text-document-viewport ::deep td,
+.rich-text-document-viewport ::deep th {
     border: 1px solid #b9c6d5;
     min-width: 3rem;
     padding: 0.35rem 0.45rem;
     vertical-align: top;
 }
 
-.rich-text-document-viewport th {
+.rich-text-document-viewport ::deep th {
     background: #f1effa;
     font-weight: 700;
 }
 
-.rich-text-document-viewport td > :last-child,
-.rich-text-document-viewport th > :last-child {
+.rich-text-document-viewport ::deep td[data-rich-table-row-number="true"],
+.rich-text-document-viewport ::deep th[data-rich-table-row-number="true"] {
+    background: #f8f6ff;
+    color: #536075;
+    font-weight: 700;
+    text-align: center;
+    width: 3.25rem;
+}
+
+.rich-text-document-viewport ::deep td > :last-child,
+.rich-text-document-viewport ::deep th > :last-child {
     margin-bottom: 0;
 }
 
-.rich-text-document-viewport .rich-text-image {
+.rich-text-document-viewport ::deep .rich-text-image {
     margin: 0 0 1rem 0;
 }
 
-.rich-text-document-viewport .rich-text-image img {
+.rich-text-document-viewport ::deep .rich-text-image img {
     max-width: 100%;
     height: auto;
     display: block;
     cursor: pointer;
 }
 
-.rich-text-document-viewport .rich-text-inline-image {
+.rich-text-document-viewport ::deep .rich-text-inline-image {
     display: inline-block;
     max-width: 100%;
     line-height: 0;
     vertical-align: top;
 }
 
-.rich-text-document-viewport .rich-text-inline-image img {
+.rich-text-document-viewport ::deep .rich-text-inline-image img {
     max-width: 100%;
     height: auto;
     display: inline-block;
@@ -88,15 +97,15 @@
     vertical-align: top;
 }
 
-.rich-text-document-viewport .rich-text-video,
-.rich-text-document-viewport .rich-text-inline-video {
+.rich-text-document-viewport ::deep .rich-text-video,
+.rich-text-document-viewport ::deep .rich-text-inline-video {
     display: inline-block;
     max-width: 100%;
     vertical-align: top;
 }
 
-.rich-text-document-viewport .rich-text-inline-video video,
-.rich-text-document-viewport .rich-text-video video {
+.rich-text-document-viewport ::deep .rich-text-inline-video video,
+.rich-text-document-viewport ::deep .rich-text-video video {
     height: 300px;
     max-width: 100%;
     display: inline-block;

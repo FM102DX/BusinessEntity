@@ -131,6 +131,15 @@
     font-weight: 700;
 }
 
+::deep .rich-text-tiptap-content td[data-rich-table-row-number="true"],
+::deep .rich-text-tiptap-content th[data-rich-table-row-number="true"] {
+    background: #f8f6ff;
+    color: #536075;
+    font-weight: 700;
+    text-align: center;
+    width: 3.25rem;
+}
+
 ::deep .rich-text-tiptap-content td > :last-child,
 ::deep .rich-text-tiptap-content th > :last-child {
     margin-bottom: 0;

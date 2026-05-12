@@ -118,6 +118,21 @@ namespace BusinessEntity.Services.RichTextImport
                 return;
             }
 
+            if (nodeName == "table")
+            {
+                var tableHtml = await SanitizeTableHtmlAsync(node, files, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(tableHtml))
+                {
+                    blocks.Add(new RichTextBlock
+                    {
+                        Kind = "table",
+                        Html = tableHtml
+                    });
+                }
+
+                return;
+            }
+
             if (nodeName is "p" or "div")
             {
                 // Если контейнер содержит block-level потомков, обрабатываем их как самостоятельные блоки.
@@ -161,7 +176,170 @@ namespace BusinessEntity.Services.RichTextImport
             }
 
             var nodeName = node.Name.ToLowerInvariant();
-            return nodeName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "p" or "div";
+            return nodeName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "p" or "div" or "table";
+        }
+
+        // Санитизирует table-html как отдельный блочный объект rich-документа.
+        private async Task<string> SanitizeTableHtmlAsync(
+            HtmlNode tableNode,
+            List<RichTextEmbeddedFile> files,
+            CancellationToken cancellationToken)
+        {
+            var builder = new StringBuilder();
+            await AppendSanitizedTableHtmlAsync(tableNode, builder, files, cancellationToken);
+            return builder.ToString().Trim();
+        }
+
+        // Рекурсивно собирает безопасную table-разметку. Разрешены только структура таблицы,
+        // простые абзацы/форматирование внутри ячеек и inline media markers.
+        private async Task AppendSanitizedTableHtmlAsync(
+            HtmlNode node,
+            StringBuilder builder,
+            List<RichTextEmbeddedFile> files,
+            CancellationToken cancellationToken)
+        {
+            if (node.NodeType == HtmlNodeType.Text)
+            {
+                builder.Append(WebUtility.HtmlEncode(HtmlEntity.DeEntitize(node.InnerText ?? string.Empty)));
+                return;
+            }
+
+            if (node.NodeType != HtmlNodeType.Element)
+            {
+                return;
+            }
+
+            var nodeName = node.Name.ToLowerInvariant();
+            if (TryReadExistingVideo(node, out var existingVideo))
+            {
+                AppendInlineVideoMarker(builder, existingVideo);
+                return;
+            }
+
+            if (TryReadExistingEmbeddedImage(node, out var existingImage))
+            {
+                AppendInlineImageMarker(builder, existingImage);
+                return;
+            }
+
+            if (nodeName == "img")
+            {
+                var imageFile = await TryImportImageAsync(node, cancellationToken);
+                if (imageFile != null)
+                {
+                    files.Add(imageFile);
+                    AppendInlineImageMarker(
+                        builder,
+                        new InlineImageDescriptor
+                        {
+                            ImageId = imageFile.ImageId,
+                            DisplayVariant = imageFile.Variant,
+                            AltText = node.GetAttributeValue("alt", string.Empty),
+                            Width = ReadPositivePixelValue(node, "width"),
+                            Height = ReadPositivePixelValue(node, "height")
+                        });
+                }
+
+                return;
+            }
+
+            if (nodeName is "table" or "thead" or "tbody" or "tfoot" or "tr" or "td" or "th")
+            {
+                AppendTableTagStart(builder, node);
+                foreach (var child in node.ChildNodes)
+                {
+                    await AppendSanitizedTableHtmlAsync(child, builder, files, cancellationToken);
+                }
+
+                builder.Append("</").Append(nodeName).Append('>');
+                return;
+            }
+
+            if (nodeName == "br")
+            {
+                builder.Append("<br />");
+                return;
+            }
+
+            if (nodeName == "p")
+            {
+                builder.Append("<p>");
+                foreach (var child in node.ChildNodes)
+                {
+                    await AppendSanitizedTableHtmlAsync(child, builder, files, cancellationToken);
+                }
+
+                builder.Append("</p>");
+                return;
+            }
+
+            if (nodeName is "strong" or "b" or "em" or "i" or "u")
+            {
+                var normalizedTag = nodeName switch
+                {
+                    "b" => "strong",
+                    "i" => "em",
+                    _ => nodeName
+                };
+
+                builder.Append('<').Append(normalizedTag).Append('>');
+                foreach (var child in node.ChildNodes)
+                {
+                    await AppendSanitizedTableHtmlAsync(child, builder, files, cancellationToken);
+                }
+
+                builder.Append("</").Append(normalizedTag).Append('>');
+                return;
+            }
+
+            foreach (var child in node.ChildNodes)
+            {
+                await AppendSanitizedTableHtmlAsync(child, builder, files, cancellationToken);
+            }
+        }
+
+        private static void AppendTableTagStart(StringBuilder builder, HtmlNode node)
+        {
+            var nodeName = node.Name.ToLowerInvariant();
+            builder.Append('<').Append(nodeName);
+
+            if (nodeName == "table" && IsTruthyAttribute(node, "data-rich-table-row-numbers"))
+            {
+                builder.Append(" data-rich-table-row-numbers=\"true\"");
+            }
+
+            if (nodeName is "td" or "th")
+            {
+                AppendPositiveIntAttribute(builder, node, "colspan");
+                AppendPositiveIntAttribute(builder, node, "rowspan");
+                if (IsTruthyAttribute(node, "data-rich-table-row-number"))
+                {
+                    builder.Append(" data-rich-table-row-number=\"true\"");
+                }
+            }
+
+            builder.Append('>');
+        }
+
+        private static void AppendPositiveIntAttribute(StringBuilder builder, HtmlNode node, string name)
+        {
+            var value = ReadPositiveInt(node.GetAttributeValue(name, string.Empty));
+            if (value > 0)
+            {
+                builder.Append(' ')
+                    .Append(name)
+                    .Append("=\"")
+                    .Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                    .Append('"');
+            }
+        }
+
+        private static bool IsTruthyAttribute(HtmlNode node, string name)
+        {
+            var value = node.GetAttributeValue(name, string.Empty);
+            return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, name, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
         }
 
         private static RichTextBlock? TryBuildExistingEmbeddedImageBlock(HtmlNode imageNode)

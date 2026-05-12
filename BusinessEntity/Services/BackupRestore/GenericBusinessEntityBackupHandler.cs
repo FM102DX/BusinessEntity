@@ -396,6 +396,10 @@ public sealed class GenericBusinessEntityBackupHandler : IBusinessEntityBackupHa
         builder.AppendLine("    body { font-family: Arial, sans-serif; line-height: 1.55; margin: 32px auto; max-width: 980px; padding: 0 24px; color: #102033; }");
         builder.AppendLine("    h1, h2, h3, h4, h5, h6 { line-height: 1.2; margin: 1.2em 0 0.45em; }");
         builder.AppendLine("    p { margin: 0.75em 0; }");
+        builder.AppendLine("    table { border-collapse: collapse; margin: 1em 0; table-layout: fixed; width: 100%; }");
+        builder.AppendLine("    td, th { border: 1px solid #b9c6d5; padding: 0.35rem 0.45rem; vertical-align: top; }");
+        builder.AppendLine("    th { background: #f1effa; font-weight: 700; }");
+        builder.AppendLine("    td[data-rich-table-row-number='true'], th[data-rich-table-row-number='true'] { background: #f8f6ff; color: #536075; font-weight: 700; text-align: center; width: 3.25rem; }");
         builder.AppendLine("    img { max-width: 100%; height: auto; cursor: zoom-in; }");
         builder.AppendLine("    .rich-text-image { margin: 1em 0; }");
         builder.AppendLine("    .rich-text-inline-image { display: inline-block; vertical-align: top; }");
@@ -456,6 +460,10 @@ public sealed class GenericBusinessEntityBackupHandler : IBusinessEntityBackupHa
                     builder.AppendLine(BuildImageHtml(block, attachments, "p"));
                     break;
 
+                case "table":
+                    builder.AppendLine(BuildTableHtmlForExport(block.Html, attachments));
+                    break;
+
                 case "paragraph":
                 default:
                     builder.Append("<p>");
@@ -466,6 +474,153 @@ public sealed class GenericBusinessEntityBackupHandler : IBusinessEntityBackupHa
         }
 
         return builder.ToString();
+    }
+
+    private static string BuildTableHtmlForExport(
+        string? html,
+        IReadOnlyDictionary<string, string> attachments)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var document = new HtmlDocument
+        {
+            OptionFixNestedTags = true
+        };
+        document.LoadHtml($"<root>{html}</root>");
+
+        var root = document.DocumentNode.SelectSingleNode("//root") ?? document.DocumentNode;
+        var builder = new StringBuilder();
+        foreach (var child in root.ChildNodes)
+        {
+            AppendTableHtmlForExport(child, attachments, builder);
+        }
+
+        return builder.ToString();
+    }
+
+    private static void AppendTableHtmlForExport(
+        HtmlNode node,
+        IReadOnlyDictionary<string, string> attachments,
+        StringBuilder builder)
+    {
+        if (node.NodeType == HtmlNodeType.Text)
+        {
+            builder.Append(WebUtility.HtmlEncode(HtmlEntity.DeEntitize(node.InnerText ?? string.Empty)));
+            return;
+        }
+
+        if (node.NodeType != HtmlNodeType.Element)
+        {
+            return;
+        }
+
+        if (TryReadInlineImage(node, out var image))
+        {
+            builder.Append(BuildInlineImageHtml(image, attachments));
+            return;
+        }
+
+        var nodeName = node.Name.ToLowerInvariant();
+        if (nodeName is "table" or "thead" or "tbody" or "tfoot" or "tr" or "td" or "th")
+        {
+            AppendTableTagStart(builder, node);
+            foreach (var child in node.ChildNodes)
+            {
+                AppendTableHtmlForExport(child, attachments, builder);
+            }
+
+            builder.Append("</").Append(nodeName).Append('>');
+            return;
+        }
+
+        if (nodeName == "br")
+        {
+            builder.Append("<br />");
+            return;
+        }
+
+        if (nodeName == "p")
+        {
+            builder.Append("<p>");
+            foreach (var child in node.ChildNodes)
+            {
+                AppendTableHtmlForExport(child, attachments, builder);
+            }
+
+            builder.Append("</p>");
+            return;
+        }
+
+        if (nodeName is "strong" or "b" or "em" or "i" or "u")
+        {
+            var normalizedTag = nodeName switch
+            {
+                "b" => "strong",
+                "i" => "em",
+                _ => nodeName
+            };
+
+            builder.Append('<').Append(normalizedTag).Append('>');
+            foreach (var child in node.ChildNodes)
+            {
+                AppendTableHtmlForExport(child, attachments, builder);
+            }
+
+            builder.Append("</").Append(normalizedTag).Append('>');
+            return;
+        }
+
+        foreach (var child in node.ChildNodes)
+        {
+            AppendTableHtmlForExport(child, attachments, builder);
+        }
+    }
+
+    private static void AppendTableTagStart(StringBuilder builder, HtmlNode node)
+    {
+        var nodeName = node.Name.ToLowerInvariant();
+        builder.Append('<').Append(nodeName);
+
+        if (nodeName == "table" && IsTruthyAttribute(node, "data-rich-table-row-numbers"))
+        {
+            builder.Append(" data-rich-table-row-numbers=\"true\"");
+        }
+
+        if (nodeName is "td" or "th")
+        {
+            AppendPositiveIntAttribute(builder, node, "colspan");
+            AppendPositiveIntAttribute(builder, node, "rowspan");
+            if (IsTruthyAttribute(node, "data-rich-table-row-number"))
+            {
+                builder.Append(" data-rich-table-row-number=\"true\"");
+            }
+        }
+
+        builder.Append('>');
+    }
+
+    private static void AppendPositiveIntAttribute(StringBuilder builder, HtmlNode node, string name)
+    {
+        var value = ReadPositiveInt(node.GetAttributeValue(name, string.Empty));
+        if (value > 0)
+        {
+            builder.Append(' ')
+                .Append(name)
+                .Append("=\"")
+                .Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                .Append('"');
+        }
+    }
+
+    private static bool IsTruthyAttribute(HtmlNode node, string name)
+    {
+        var value = node.GetAttributeValue(name, string.Empty);
+        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, name, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildImageHtml(

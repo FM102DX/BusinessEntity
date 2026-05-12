@@ -6,7 +6,7 @@ namespace BusinessEntity.Core.RichText
     // Блок rich-text документа в нормализованном MVP-формате.
     public class RichTextBlock
     {
-        // Тип блока: paragraph / heading / image / video.
+        // Тип блока: paragraph / heading / image / video / table.
         [JsonPropertyName("kind")]
         public string Kind { get; set; } = "paragraph";
 
@@ -14,7 +14,7 @@ namespace BusinessEntity.Core.RichText
         [JsonPropertyName("level")]
         public int Level { get; set; }
 
-        // Inline-HTML содержимое paragraph/heading блока, включая безопасные inline image markers.
+        // Inline-HTML содержимое paragraph/heading блока или безопасный table-html для table-блока.
         [JsonPropertyName("html")]
         public string Html { get; set; } = string.Empty;
 

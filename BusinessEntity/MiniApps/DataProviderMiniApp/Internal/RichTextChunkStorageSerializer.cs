@@ -76,6 +76,9 @@ internal static class RichTextChunkStorageSerializer
                         builder.Append(block.VideoTitle);
                     }
                     break;
+                case "table":
+                    builder.Append(BuildTablePlainText(block.Html));
+                    break;
             }
         }
 
@@ -116,6 +119,9 @@ internal static class RichTextChunkStorageSerializer
                     break;
                 case "video":
                     AppendRenderedVideoBlock(block, builder);
+                    break;
+                case "table":
+                    builder.Append(BuildTableHtmlCache(businessEntityId, block.Html));
                     break;
             }
         }
@@ -217,6 +223,54 @@ internal static class RichTextChunkStorageSerializer
         return builder.ToString();
     }
 
+    private static string BuildTablePlainText(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var document = LoadInlineHtmlDocument(html);
+        var root = document.DocumentNode.SelectSingleNode("//root") ?? document.DocumentNode;
+        var builder = new StringBuilder();
+
+        foreach (var row in root.Descendants("tr"))
+        {
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            var cells = row.ChildNodes
+                .Where(x => x.NodeType == HtmlNodeType.Element && x.Name.ToLowerInvariant() is "td" or "th")
+                .Select(x => BuildInlineText(x.InnerHtml))
+                .Where(x => !string.IsNullOrWhiteSpace(x));
+
+            builder.Append(string.Join(" ", cells));
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string BuildTableHtmlCache(Guid businessEntityId, string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var document = LoadInlineHtmlDocument(html);
+        var root = document.DocumentNode.SelectSingleNode("//root") ?? document.DocumentNode;
+        var builder = new StringBuilder();
+
+        foreach (var child in root.ChildNodes)
+        {
+            AppendTableHtmlCache(businessEntityId, child, builder);
+        }
+
+        return builder.ToString();
+    }
+
     // Загружает fragment inline-разметки в искусственный root для безопасного обхода.
     private static HtmlDocument LoadInlineHtmlDocument(string? html)
     {
@@ -227,6 +281,131 @@ internal static class RichTextChunkStorageSerializer
 
         document.LoadHtml($"<root>{html ?? string.Empty}</root>");
         return document;
+    }
+
+    private static void AppendTableHtmlCache(Guid businessEntityId, HtmlNode node, StringBuilder builder)
+    {
+        if (node.NodeType == HtmlNodeType.Text)
+        {
+            builder.Append(WebUtility.HtmlEncode(HtmlEntity.DeEntitize(node.InnerText ?? string.Empty)));
+            return;
+        }
+
+        if (node.NodeType != HtmlNodeType.Element)
+        {
+            return;
+        }
+
+        if (TryReadInlineImage(node, out var image))
+        {
+            AppendRenderedInlineImage(businessEntityId, image, builder);
+            return;
+        }
+
+        if (TryReadInlineVideo(node, out var video))
+        {
+            AppendRenderedInlineVideo(video, builder);
+            return;
+        }
+
+        var nodeName = node.Name.ToLowerInvariant();
+        if (nodeName is "table" or "thead" or "tbody" or "tfoot" or "tr" or "td" or "th")
+        {
+            AppendTableTagStart(builder, node);
+            foreach (var child in node.ChildNodes)
+            {
+                AppendTableHtmlCache(businessEntityId, child, builder);
+            }
+
+            builder.Append("</").Append(nodeName).Append('>');
+            return;
+        }
+
+        if (nodeName == "br")
+        {
+            builder.Append("<br />");
+            return;
+        }
+
+        if (nodeName == "p")
+        {
+            builder.Append("<p>");
+            foreach (var child in node.ChildNodes)
+            {
+                AppendTableHtmlCache(businessEntityId, child, builder);
+            }
+
+            builder.Append("</p>");
+            return;
+        }
+
+        if (nodeName is "strong" or "b" or "em" or "i" or "u")
+        {
+            var normalizedTag = nodeName switch
+            {
+                "b" => "strong",
+                "i" => "em",
+                _ => nodeName
+            };
+
+            builder.Append('<').Append(normalizedTag).Append('>');
+            foreach (var child in node.ChildNodes)
+            {
+                AppendTableHtmlCache(businessEntityId, child, builder);
+            }
+
+            builder.Append("</").Append(normalizedTag).Append('>');
+            return;
+        }
+
+        foreach (var child in node.ChildNodes)
+        {
+            AppendTableHtmlCache(businessEntityId, child, builder);
+        }
+    }
+
+    private static void AppendTableTagStart(StringBuilder builder, HtmlNode node)
+    {
+        var nodeName = node.Name.ToLowerInvariant();
+        builder.Append('<').Append(nodeName);
+
+        if (nodeName == "table" && IsTruthyAttribute(node, "data-rich-table-row-numbers"))
+        {
+            builder.Append(" data-rich-table-row-numbers=\"true\"");
+        }
+
+        if (nodeName is "td" or "th")
+        {
+            AppendPositiveIntAttribute(builder, node, "colspan");
+            AppendPositiveIntAttribute(builder, node, "rowspan");
+            if (IsTruthyAttribute(node, "data-rich-table-row-number"))
+            {
+                builder.Append(" data-rich-table-row-number=\"true\"");
+            }
+        }
+
+        builder.Append('>');
+    }
+
+    private static void AppendPositiveIntAttribute(StringBuilder builder, HtmlNode node, string name)
+    {
+        var value = ReadPositiveInt(node.GetAttributeValue(name, string.Empty));
+        if (value > 0)
+        {
+            builder.Append(' ')
+                .Append(name)
+                .Append("=\"")
+                .Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                .Append('"');
+        }
+    }
+
+    private static bool IsTruthyAttribute(HtmlNode node, string name)
+    {
+        var value = node.GetAttributeValue(name, string.Empty);
+        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, name, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
     }
 
     // Добавляет текстовое представление inline-узла, включая alt для inline-картинок.

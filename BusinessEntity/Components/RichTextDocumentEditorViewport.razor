@@ -25,6 +25,7 @@
             <span class="oi oi-check" aria-hidden="true"></span>
             <span>TH</span>
         </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Переключить нумерацию строк" @onclick='@(() => RunEditorCommandAsync("toggleTableRowNumbers"))'>№</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Добавить строку" @onclick='@(() => RunEditorCommandAsync("addTableRow"))'>R+</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Удалить строку" @onclick='@(() => RunEditorCommandAsync("deleteTableRow"))'>R-</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Добавить столбец" @onclick='@(() => RunEditorCommandAsync("addTableColumn"))'>C+</button>
