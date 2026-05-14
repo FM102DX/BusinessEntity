@@ -213,6 +213,7 @@ const extensions = [
 ];
 
 const registries = new Map();
+const editorDebugContexts = new WeakMap();
 let activeImageMenu = null;
 
 function getRegistry(viewportElementId) {
@@ -272,6 +273,30 @@ function renderColumnWidths(attributes) {
     return widths ? { "data-colwidth": widths.join(",") } : {};
 }
 
+function isTableDebugEnabled() {
+    try {
+        if (window.localStorage?.getItem("richDocTableDebug") === "0") {
+            return false;
+        }
+
+        return window.richDocTableDebug === true || window.localStorage?.getItem("richDocTableDebug") === "1";
+    } catch {
+        return window.richDocTableDebug === true;
+    }
+}
+
+function isTableDebugWebLoggerEnabled() {
+    try {
+        return window.localStorage?.getItem("richDocTableDebug") !== "0";
+    } catch {
+        return true;
+    }
+}
+
+function roundMetric(value) {
+    return Number.isFinite(value) ? Math.round(value * 10) / 10 : null;
+}
+
 function readPixelWidth(value) {
     const match = String(value ?? "").match(/([0-9]+(?:\.[0-9]+)?)/);
     if (!match) {
@@ -297,6 +322,169 @@ function readRenderedTableColumnWidths(tableElement) {
 
     const widths = columns.map(column => readPixelWidth(column.style?.width || column.getAttribute("width")));
     return widths.some(width => width != null) ? widths : [];
+}
+
+function getTableDebugSnapshot(editor) {
+    const editorDom = editor?.view?.dom;
+    if (!editorDom) {
+        return [];
+    }
+
+    return Array.from(editorDom.querySelectorAll("table")).map((table, tableIndex) => {
+        const tableRect = table.getBoundingClientRect();
+        const colgroup = Array.from(table.children)
+            .find(child => child.tagName?.toLowerCase() === "colgroup");
+        const columns = colgroup
+            ? Array.from(colgroup.children).filter(child => child.tagName?.toLowerCase() === "col")
+            : [];
+        const firstRow = table.rows?.[0] ?? null;
+
+        return {
+            tableIndex,
+            tableHeight: roundMetric(tableRect.height),
+            tableWidth: roundMetric(tableRect.width),
+            handleCount: table.querySelectorAll(".column-resize-handle").length,
+            rowHeights: Array.from(table.rows ?? []).map(row => roundMetric(row.getBoundingClientRect().height)),
+            columnStyles: columns.map(column => column.style?.width || column.getAttribute("width") || ""),
+            firstRowCellWidths: firstRow
+                ? Array.from(firstRow.cells).map(cell => ({
+                    tag: cell.tagName.toLowerCase(),
+                    width: roundMetric(cell.getBoundingClientRect().width),
+                    dataColwidth: cell.getAttribute("data-colwidth") || "",
+                    colwidth: cell.getAttribute("colwidth") || ""
+                }))
+                : []
+        };
+    });
+}
+
+function debugTableMetrics(source, editor, extra = {}) {
+    const writeToConsole = isTableDebugEnabled();
+    const writeToWebLogger = isTableDebugWebLoggerEnabled();
+    if (!writeToConsole && !writeToWebLogger) {
+        return;
+    }
+
+    const payload = {
+        source,
+        ...extra,
+        tables: getTableDebugSnapshot(editor)
+    };
+
+    if (writeToConsole) {
+        console.debug("[rich-doc-table]", source, payload);
+    }
+
+    const context = editorDebugContexts.get(editor);
+    const dotNetReference = context?.registry?.dotNetReference;
+    if (!writeToWebLogger || !dotNetReference) {
+        return;
+    }
+
+    dotNetReference
+        .invokeMethodAsync(
+            "OnTableDebug",
+            JSON.stringify({
+                sortOrder: context.sortOrder,
+                ...payload
+            }))
+        .catch(() => {});
+}
+
+function normalizeTableResizeHandles(root) {
+    if (!root) {
+        return;
+    }
+
+    root.querySelectorAll?.(".column-resize-handle").forEach(handle => {
+        handle.style.setProperty("display", "none", "important");
+        handle.style.setProperty("position", "fixed", "important");
+        handle.style.setProperty("left", "-10000px", "important");
+        handle.style.setProperty("top", "-10000px", "important");
+        handle.style.setProperty("width", "0", "important");
+        handle.style.setProperty("height", "0", "important");
+        handle.style.setProperty("min-width", "0", "important");
+        handle.style.setProperty("min-height", "0", "important");
+        handle.style.setProperty("margin", "0", "important");
+        handle.style.setProperty("padding", "0", "important");
+        handle.style.setProperty("border", "0", "important");
+        handle.style.setProperty("overflow", "hidden", "important");
+        handle.style.setProperty("line-height", "0", "important");
+        handle.style.setProperty("font-size", "0", "important");
+        handle.style.setProperty("contain", "strict", "important");
+        handle.setAttribute("aria-hidden", "true");
+    });
+}
+
+function attachTableResizeHandleGuard(host) {
+    normalizeTableResizeHandles(host);
+
+    const observer = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node instanceof Element) {
+                    if (node.classList.contains("column-resize-handle") || node.querySelector?.(".column-resize-handle")) {
+                        normalizeTableResizeHandles(host);
+                        return;
+                    }
+                }
+            }
+        }
+    });
+
+    observer.observe(host, {
+        childList: true,
+        subtree: true
+    });
+
+    return () => observer.disconnect();
+}
+
+function attachTableDebugging(editor, host, registry, sortOrder) {
+    let lastLoggedAt = 0;
+    editorDebugContexts.set(editor, { registry, sortOrder });
+
+    const onMouseMove = event => {
+        if (!isTableDebugEnabled()) {
+            return;
+        }
+
+        const target = event.target instanceof Element ? event.target : null;
+        const cell = target?.closest?.("td, th");
+        normalizeTableResizeHandles(host);
+        if (!cell || !host.contains(cell)) {
+            return;
+        }
+
+        const rect = cell.getBoundingClientRect();
+        const isNearEdge = event.clientX - rect.left <= 8 || rect.right - event.clientX <= 8;
+        const hasHandle = host.querySelector(".column-resize-handle") != null;
+        if (!isNearEdge && !hasHandle) {
+            return;
+        }
+
+        const now = Date.now();
+        if (now - lastLoggedAt < 900) {
+            return;
+        }
+
+        lastLoggedAt = now;
+        debugTableMetrics("hover", editor, {
+            sortOrder,
+            nearEdge: isNearEdge,
+            targetTag: cell.tagName.toLowerCase(),
+            targetRect: {
+                height: roundMetric(rect.height),
+                width: roundMetric(rect.width)
+            }
+        });
+    };
+
+    host.addEventListener("mousemove", onMouseMove, true);
+    return () => {
+        host.removeEventListener("mousemove", onMouseMove, true);
+        editorDebugContexts.delete(editor);
+    };
 }
 
 function applyColumnWidthsToSerializedTable(tableElement, columnWidths) {
@@ -349,6 +537,10 @@ function serializeEditorHtml(editor) {
     serializedTables.forEach((serializedTable, index) => {
         const columnWidths = readRenderedTableColumnWidths(renderedTables[index]);
         applyColumnWidthsToSerializedTable(serializedTable, columnWidths);
+    });
+
+    debugTableMetrics("serialize", editor, {
+        serializedTableCount: serializedTables.length
     });
 
     return template.innerHTML;
@@ -1028,7 +1220,9 @@ function createEditor(viewportElementId, registry, host, item) {
         originalHtml: providedOriginalHtml == null
             ? serializeEditorHtml(editor)
             : providedOriginalHtml,
-        isDirty: isDraft
+        isDirty: isDraft,
+        disposeTableDebugging: attachTableDebugging(editor, host, registry, sortOrder),
+        disposeTableResizeHandleGuard: attachTableResizeHandleGuard(host)
     };
 
     registry.editors.set(sortOrder, state);
@@ -1091,6 +1285,8 @@ function syncEditors(viewportElementId, chunks, dotNetReference, documentId) {
         }
 
         notifyEditorDisposed(registry, state, "sync-window");
+        state.disposeTableDebugging?.();
+        state.disposeTableResizeHandleGuard?.();
         state.editor.destroy();
         registry.editors.delete(sortOrder);
     }
@@ -1141,6 +1337,8 @@ function destroyEditors(viewportElementId) {
 
     for (const state of registry.editors.values()) {
         notifyEditorDisposed(registry, state, "destroy-viewport");
+        state.disposeTableDebugging?.();
+        state.disposeTableResizeHandleGuard?.();
         state.editor.destroy();
     }
 
@@ -1529,6 +1727,19 @@ function failVideoUploadPlaceholder(viewportElementId, uploadToken, errorMessage
     }
 }
 
+function enableTableDebug(enabled = true) {
+    window.richDocTableDebug = enabled === true;
+    try {
+        if (enabled === true) {
+            window.localStorage?.setItem("richDocTableDebug", "1");
+        } else {
+            window.localStorage?.removeItem("richDocTableDebug");
+        }
+    } catch {
+        // The in-memory flag above still works if localStorage is unavailable.
+    }
+}
+
 window.richTextEditor = {
     syncEditors,
     collectEditors,
@@ -1538,5 +1749,6 @@ window.richTextEditor = {
     insertVideo,
     insertVideoUploadPlaceholder,
     completeVideoUploadPlaceholder,
-    failVideoUploadPlaceholder
+    failVideoUploadPlaceholder,
+    enableTableDebug
 };

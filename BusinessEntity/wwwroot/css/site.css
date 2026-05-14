@@ -168,6 +168,46 @@ a, .btn-link {
     box-sizing: border-box;
 }
 
+.ProseMirror table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+    border: 1px solid #b9c6d5;
+    min-width: 3rem;
+    padding: 0.35rem 0.45rem;
+    vertical-align: top;
+}
+
+.ProseMirror th {
+    background: #f1effa;
+    font-weight: 700;
+}
+
+.ProseMirror td[data-rich-table-row-number="true"],
+.ProseMirror th[data-rich-table-row-number="true"] {
+    background: #f8f6ff;
+    color: #536075;
+    font-weight: 700;
+    text-align: center;
+    width: 3.25rem;
+}
+
+.ProseMirror td > :last-child,
+.ProseMirror th > :last-child {
+    margin-bottom: 0;
+}
+
+.rich-text-tiptap-content td > p:last-of-type,
+.rich-text-tiptap-content th > p:last-of-type,
+.ProseMirror td > p:last-of-type,
+.ProseMirror th > p:last-of-type {
+    margin-bottom: 0;
+}
+
 .rich-text-tiptap-content.resize-cursor,
 .ProseMirror.resize-cursor {
     cursor: col-resize;
@@ -188,7 +228,7 @@ a, .btn-link {
     margin: 0 !important;
     padding: 0 !important;
     border: 0 !important;
-    display: block !important;
+    display: none !important;
     overflow: hidden !important;
     line-height: 0 !important;
     font-size: 0 !important;

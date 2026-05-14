@@ -423,6 +423,21 @@ namespace BusinessEntity.Components
         }
 
         [JSInvokable]
+        public Task OnTableDebug(string message)
+        {
+            var safeMessage = message ?? string.Empty;
+            if (safeMessage.Length > 4000)
+            {
+                safeMessage = safeMessage[..4000] + "...";
+            }
+
+            return LogEditorViewportAsync(
+                "[rich-doc-table] " +
+                $"entityId={BusinessEntityId:D} viewport={ViewportElementId} " +
+                safeMessage);
+        }
+
+        [JSInvokable]
         public async Task OnVirtualViewportScrolled(double scrollTop, double clientHeight, double scrollHeight)
         {
             if (_isLoadingWindow || BusinessEntityId == Guid.Empty || TotalChunkCount <= 0)

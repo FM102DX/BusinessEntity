@@ -144,6 +144,7 @@
     margin: 0 !important;
     padding: 0 !important;
     border: 0 !important;
+    display: none !important;
     overflow: hidden !important;
     line-height: 0 !important;
     font-size: 0 !important;
@@ -189,6 +190,11 @@
 
 ::deep .rich-text-tiptap-content td > :last-child,
 ::deep .rich-text-tiptap-content th > :last-child {
+    margin-bottom: 0;
+}
+
+::deep .rich-text-tiptap-content td > p:last-of-type,
+::deep .rich-text-tiptap-content th > p:last-of-type {
     margin-bottom: 0;
 }
 
