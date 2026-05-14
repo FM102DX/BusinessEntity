@@ -156,3 +156,64 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+/* Rich document table column resize is created dynamically by Tiptap/ProseMirror.
+   Keep the resize handle out of table layout flow so hovering a column border
+   does not change row height. */
+.rich-text-tiptap-content td,
+.rich-text-tiptap-content th,
+.ProseMirror td,
+.ProseMirror th {
+    position: relative;
+    box-sizing: border-box;
+}
+
+.rich-text-tiptap-content.resize-cursor,
+.ProseMirror.resize-cursor {
+    cursor: col-resize;
+}
+
+.rich-text-tiptap-content .column-resize-handle,
+.ProseMirror .column-resize-handle,
+.column-resize-handle {
+    position: absolute !important;
+    right: -3px !important;
+    top: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    display: block !important;
+    overflow: hidden !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+    z-index: 20;
+    background: transparent !important;
+    pointer-events: none;
+}
+
+.rich-text-tiptap-content .column-resize-handle *,
+.ProseMirror .column-resize-handle *,
+.column-resize-handle * {
+    display: none !important;
+}
+
+.rich-text-tiptap-content td:has(.column-resize-handle)::before,
+.rich-text-tiptap-content th:has(.column-resize-handle)::before,
+.ProseMirror td:has(.column-resize-handle)::before,
+.ProseMirror th:has(.column-resize-handle)::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -3px;
+    bottom: 0;
+    width: 6px;
+    z-index: 20;
+    background: rgba(43, 111, 214, 0.35);
+    pointer-events: none;
+}

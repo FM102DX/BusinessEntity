@@ -120,10 +120,57 @@
 ::deep .rich-text-tiptap-content td,
 ::deep .rich-text-tiptap-content th {
     border: 1px solid #b9c6d5;
+    box-sizing: border-box;
     min-width: 3rem;
     padding: 0.35rem 0.45rem;
     position: relative;
     vertical-align: top;
+}
+
+::deep .rich-text-tiptap-content.resize-cursor {
+    cursor: col-resize;
+}
+
+::deep .rich-text-tiptap-content .column-resize-handle {
+    position: absolute !important;
+    right: -3px !important;
+    top: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+    z-index: 20;
+    background: transparent !important;
+    pointer-events: none;
+}
+
+::deep .rich-text-tiptap-content .column-resize-handle * {
+    display: none !important;
+}
+
+::deep .rich-text-tiptap-content td:has(.column-resize-handle)::before,
+::deep .rich-text-tiptap-content th:has(.column-resize-handle)::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -3px;
+    bottom: 0;
+    width: 6px;
+    z-index: 20;
+    background: rgba(43, 111, 214, 0.35);
+    pointer-events: none;
+}
+
+::deep .rich-text-tiptap-content .column-resize-dragging {
+    background: rgba(43, 111, 214, 0.05);
 }
 
 ::deep .rich-text-tiptap-content th {

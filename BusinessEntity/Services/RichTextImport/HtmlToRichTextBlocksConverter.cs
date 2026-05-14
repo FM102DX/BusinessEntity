@@ -312,6 +312,7 @@ namespace BusinessEntity.Services.RichTextImport
             {
                 AppendPositiveIntAttribute(builder, node, "colspan");
                 AppendPositiveIntAttribute(builder, node, "rowspan");
+                AppendColumnWidthsAttribute(builder, node);
                 if (IsTruthyAttribute(node, "data-rich-table-row-number"))
                 {
                     builder.Append(" data-rich-table-row-number=\"true\"");
@@ -332,6 +333,39 @@ namespace BusinessEntity.Services.RichTextImport
                     .Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture))
                     .Append('"');
             }
+        }
+
+        private static void AppendColumnWidthsAttribute(StringBuilder builder, HtmlNode node)
+        {
+            var value = NormalizePositiveIntList(node.GetAttributeValue("data-colwidth", string.Empty));
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                value = NormalizePositiveIntList(node.GetAttributeValue("colwidth", string.Empty));
+            }
+
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                builder.Append(" data-colwidth=\"")
+                    .Append(value)
+                    .Append('"');
+            }
+        }
+
+        private static string NormalizePositiveIntList(string? rawValue)
+        {
+            if (string.IsNullOrWhiteSpace(rawValue))
+            {
+                return string.Empty;
+            }
+
+            var values = rawValue
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(ReadPositiveInt)
+                .Where(x => x > 0)
+                .Select(x => Math.Min(x, 5000).ToString(System.Globalization.CultureInfo.InvariantCulture))
+                .ToArray();
+
+            return values.Length > 0 ? string.Join(",", values) : string.Empty;
         }
 
         private static bool IsTruthyAttribute(HtmlNode node, string name)

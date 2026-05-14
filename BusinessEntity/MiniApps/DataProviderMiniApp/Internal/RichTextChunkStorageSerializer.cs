@@ -378,6 +378,24 @@ internal static class RichTextChunkStorageSerializer
         {
             AppendPositiveIntAttribute(builder, node, "colspan");
             AppendPositiveIntAttribute(builder, node, "rowspan");
+            var columnWidths = NormalizePositiveIntList(node.GetAttributeValue("data-colwidth", string.Empty));
+            if (string.IsNullOrWhiteSpace(columnWidths))
+            {
+                columnWidths = NormalizePositiveIntList(node.GetAttributeValue("colwidth", string.Empty));
+            }
+
+            if (!string.IsNullOrWhiteSpace(columnWidths))
+            {
+                builder.Append(" data-colwidth=\"").Append(columnWidths).Append('"');
+                var renderedWidth = SumPositiveIntList(columnWidths);
+                if (renderedWidth > 0)
+                {
+                    builder.Append(" style=\"width: ")
+                        .Append(renderedWidth.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                        .Append("px;\"");
+                }
+            }
+
             if (IsTruthyAttribute(node, "data-rich-table-row-number"))
             {
                 builder.Append(" data-rich-table-row-number=\"true\"");
@@ -398,6 +416,34 @@ internal static class RichTextChunkStorageSerializer
                 .Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture))
                 .Append('"');
         }
+    }
+
+    private static string NormalizePositiveIntList(string? rawValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return string.Empty;
+        }
+
+        var values = rawValue
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(ReadPositiveInt)
+            .Where(x => x > 0)
+            .Select(x => Math.Min(x, 5000).ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .ToArray();
+
+        return values.Length > 0 ? string.Join(",", values) : string.Empty;
+    }
+
+    private static int SumPositiveIntList(string normalizedValue)
+    {
+        var total = 0;
+        foreach (var item in normalizedValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            total += ReadPositiveInt(item);
+        }
+
+        return total;
     }
 
     private static bool IsTruthyAttribute(HtmlNode node, string name)

@@ -152,6 +152,14 @@ const RichTextTableCell = TableCell.extend({
     addAttributes() {
         return {
             ...(this.parent?.() ?? {}),
+            colwidth: {
+                default: null,
+                parseHTML: element => parseColumnWidths(
+                    element.getAttribute("data-colwidth") ||
+                    element.getAttribute("colwidth") ||
+                    ""),
+                renderHTML: attributes => renderColumnWidths(attributes)
+            },
             rowNumber: {
                 default: false,
                 parseHTML: element => element.getAttribute("data-rich-table-row-number") === "true",
@@ -165,6 +173,14 @@ const RichTextTableHeader = TableHeader.extend({
     addAttributes() {
         return {
             ...(this.parent?.() ?? {}),
+            colwidth: {
+                default: null,
+                parseHTML: element => parseColumnWidths(
+                    element.getAttribute("data-colwidth") ||
+                    element.getAttribute("colwidth") ||
+                    ""),
+                renderHTML: attributes => renderColumnWidths(attributes)
+            },
             rowNumber: {
                 default: false,
                 parseHTML: element => element.getAttribute("data-rich-table-row-number") === "true",
@@ -184,7 +200,10 @@ const extensions = [
     RichTextImage,
     RichTextVideo,
     RichTextTable.configure({
-        resizable: false,
+        resizable: true,
+        handleWidth: 7,
+        cellMinWidth: 40,
+        lastColumnResizable: false,
         allowTableNodeSelection: true
     }),
     TableRow,
@@ -221,6 +240,118 @@ function toPositiveInt(value) {
     return Number.isFinite(number) && number > 0
         ? Math.round(number)
         : null;
+}
+
+function parseColumnWidths(value) {
+    if (typeof value !== "string" || value.trim().length === 0) {
+        return null;
+    }
+
+    const widths = value
+        .split(",")
+        .map(part => toPositiveInt(part))
+        .filter(width => width != null);
+
+    return widths.length > 0 ? widths : null;
+}
+
+function normalizeColumnWidths(value) {
+    if (!Array.isArray(value)) {
+        return null;
+    }
+
+    const widths = value
+        .map(width => toPositiveInt(width))
+        .filter(width => width != null);
+
+    return widths.length > 0 ? widths : null;
+}
+
+function renderColumnWidths(attributes) {
+    const widths = normalizeColumnWidths(attributes?.colwidth);
+    return widths ? { "data-colwidth": widths.join(",") } : {};
+}
+
+function readPixelWidth(value) {
+    const match = String(value ?? "").match(/([0-9]+(?:\.[0-9]+)?)/);
+    if (!match) {
+        return null;
+    }
+
+    return toPositiveInt(match[1]);
+}
+
+function readRenderedTableColumnWidths(tableElement) {
+    if (!tableElement) {
+        return [];
+    }
+
+    const colgroup = Array.from(tableElement.children)
+        .find(child => child.tagName?.toLowerCase() === "colgroup");
+    const columns = colgroup
+        ? Array.from(colgroup.children).filter(child => child.tagName?.toLowerCase() === "col")
+        : [];
+    if (columns.length === 0) {
+        return [];
+    }
+
+    const widths = columns.map(column => readPixelWidth(column.style?.width || column.getAttribute("width")));
+    return widths.some(width => width != null) ? widths : [];
+}
+
+function applyColumnWidthsToSerializedTable(tableElement, columnWidths) {
+    if (!tableElement || !Array.isArray(columnWidths) || columnWidths.length === 0) {
+        return;
+    }
+
+    const rows = Array.from(tableElement.querySelectorAll("tr"))
+        .filter(row => row.closest("table") === tableElement);
+
+    for (const row of rows) {
+        let columnIndex = 0;
+        const cells = Array.from(row.children)
+            .filter(cell => cell.matches?.("td, th"));
+
+        for (const cell of cells) {
+            const colspan = toPositiveInt(cell.getAttribute("colspan")) || 1;
+            const cellWidths = columnWidths
+                .slice(columnIndex, columnIndex + colspan)
+                .filter(width => width != null);
+
+            if (cellWidths.length > 0) {
+                cell.setAttribute("data-colwidth", cellWidths.join(","));
+            }
+
+            columnIndex += colspan;
+        }
+    }
+}
+
+function serializeEditorHtml(editor) {
+    const html = editor?.getHTML?.() ?? "";
+    const editorDom = editor?.view?.dom;
+    if (!editorDom || !html.includes("<table")) {
+        return html;
+    }
+
+    const renderedTables = Array.from(editorDom.querySelectorAll("table"));
+    if (renderedTables.length === 0) {
+        return html;
+    }
+
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const serializedTables = Array.from(template.content.querySelectorAll("table"));
+    if (serializedTables.length === 0) {
+        return html;
+    }
+
+    serializedTables.forEach((serializedTable, index) => {
+        const columnWidths = readRenderedTableColumnWidths(renderedTables[index]);
+        applyColumnWidthsToSerializedTable(serializedTable, columnWidths);
+    });
+
+    return template.innerHTML;
 }
 
 function readImageAttributes(element) {
@@ -881,7 +1012,7 @@ function createEditor(viewportElementId, registry, host, item) {
                             chunkId: state.chunkId,
                             sortOrder: state.sortOrder,
                             originalHtml: state.originalHtml,
-                            html: state.editor.getHTML(),
+                            html: serializeEditorHtml(state.editor),
                             isDirty: true
                         },
                         !wasDirty).catch(() => {});
@@ -895,7 +1026,7 @@ function createEditor(viewportElementId, registry, host, item) {
         chunkId,
         sortOrder,
         originalHtml: providedOriginalHtml == null
-            ? editor.getHTML()
+            ? serializeEditorHtml(editor)
             : providedOriginalHtml,
         isDirty: isDraft
     };
@@ -953,7 +1084,7 @@ function syncEditors(viewportElementId, chunks, dotNetReference, documentId) {
             itemsBySortOrder.set(sortOrder, {
                 chunkId: state.chunkId,
                 sortOrder: state.sortOrder,
-                html: state.editor.getHTML(),
+                html: serializeEditorHtml(state.editor),
                 originalHtml: state.originalHtml,
                 isDraft: true
             });
@@ -987,8 +1118,9 @@ function collectEditors(viewportElementId) {
     }
 
     return Array.from(registry.editors.values()).map(state => {
-        const isDirty = state.isDirty === true;
-        const html = isDirty ? state.editor.getHTML() : "";
+        const currentHtml = serializeEditorHtml(state.editor);
+        const isDirty = state.isDirty === true || currentHtml !== state.originalHtml;
+        const html = isDirty ? currentHtml : "";
         return {
             chunkId: state.chunkId,
             sortOrder: state.sortOrder,
@@ -1030,7 +1162,7 @@ function markClean(viewportElementId, sortOrders) {
             continue;
         }
 
-        state.originalHtml = state.editor.getHTML();
+        state.originalHtml = serializeEditorHtml(state.editor);
         state.isDirty = false;
     }
 }
