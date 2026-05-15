@@ -7,6 +7,7 @@ import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import TableRow from "@tiptap/extension-table-row";
 import Underline from "@tiptap/extension-underline";
+import { TextSelection } from "@tiptap/pm/state";
 
 const CustomHeading = Heading.extend({
     addAttributes() {
@@ -1635,6 +1636,8 @@ function setTableRowNumbers(editor, enabled) {
         return;
     }
 
+    const wasEnabled = isTableRowNumberingEnabled(tableNode);
+    const cursorContext = captureTableCursorContext(editor, tableInfo, wasEnabled);
     const headerEnabled = isFirstTableRowHeader(tableNode, tableHeaderType);
     const rowsWithoutNumbers = getRowsWithoutNumberColumn(tableNode, tableCellType, tableHeaderType, paragraphType);
     const nextRows = enabled
@@ -1659,10 +1662,93 @@ function setTableRowNumbers(editor, enabled) {
         tableInfo.position + tableNode.nodeSize,
         nextTable);
 
-    dispatchTransactionKeepingSelection(editor, transaction);
+    dispatchTransactionKeepingSelection(
+        editor,
+        transaction,
+        getTableCursorRestorePosition(nextTable, tableInfo.position, cursorContext, enabled));
 }
 
-function dispatchTransactionKeepingSelection(editor, transaction) {
+function captureTableCursorContext(editor, tableInfo, rowNumbersEnabled) {
+    const selection = editor?.state?.selection;
+    const resolved = selection?.$from;
+    if (!resolved || !tableInfo) {
+        return null;
+    }
+
+    let tableDepth = -1;
+    let rowDepth = -1;
+    let cellDepth = -1;
+    for (let depth = resolved.depth; depth > 0; depth--) {
+        const nodeName = resolved.node(depth)?.type?.name;
+        if (nodeName === "table" && tableDepth < 0) {
+            tableDepth = depth;
+        } else if (nodeName === "tableRow" && rowDepth < 0) {
+            rowDepth = depth;
+        } else if ((nodeName === "tableCell" || nodeName === "tableHeader") && cellDepth < 0) {
+            cellDepth = depth;
+        }
+    }
+
+    if (tableDepth < 0 || rowDepth < 0 || cellDepth < 0) {
+        return null;
+    }
+
+    const rowIndex = resolved.index(tableDepth);
+    const cellIndex = resolved.index(rowDepth);
+    const cellStart = resolved.before(cellDepth);
+    const offsetInsideCell = Math.max(0, resolved.pos - (cellStart + 1));
+
+    return {
+        rowIndex,
+        dataCellIndex: rowNumbersEnabled && cellIndex > 0 ? cellIndex - 1 : cellIndex,
+        offsetInsideCell
+    };
+}
+
+function getTableCursorRestorePosition(tableNode, tablePosition, cursorContext, rowNumbersEnabled) {
+    if (!tableNode || !cursorContext || tableNode.childCount === 0) {
+        return null;
+    }
+
+    const rowIndex = Math.min(Math.max(cursorContext.rowIndex, 0), tableNode.childCount - 1);
+    const rowInfo = getChildNodeAndOffset(tableNode, rowIndex);
+    const row = rowInfo?.node;
+    if (!row || row.childCount === 0) {
+        return null;
+    }
+
+    const desiredCellIndex = rowNumbersEnabled
+        ? cursorContext.dataCellIndex + 1
+        : cursorContext.dataCellIndex;
+    const cellIndex = Math.min(Math.max(desiredCellIndex, 0), row.childCount - 1);
+    const cellInfo = getChildNodeAndOffset(row, cellIndex);
+    const cell = cellInfo?.node;
+    if (!cell) {
+        return null;
+    }
+
+    const cellPosition = tablePosition + 1 + rowInfo.offset + 1 + cellInfo.offset;
+    const cellContentStart = cellPosition + 1;
+    const cellContentEnd = Math.max(cellContentStart, cellPosition + cell.nodeSize - 1);
+    return Math.min(cellContentStart + Math.max(cursorContext.offsetInsideCell, 0), cellContentEnd);
+}
+
+function getChildNodeAndOffset(parentNode, childIndex) {
+    if (!parentNode || childIndex < 0 || childIndex >= parentNode.childCount) {
+        return null;
+    }
+
+    let result = null;
+    parentNode.forEach((node, offset, index) => {
+        if (index === childIndex) {
+            result = { node, offset };
+        }
+    });
+
+    return result;
+}
+
+function dispatchTransactionKeepingSelection(editor, transaction, targetPosition = null) {
     if (!editor || !transaction) {
         return;
     }
@@ -1670,7 +1756,10 @@ function dispatchTransactionKeepingSelection(editor, transaction) {
     const previousSelection = editor.state.selection;
     if (transaction.docChanged && previousSelection) {
         try {
-            transaction = transaction.setSelection(previousSelection.map(transaction.doc, transaction.mapping));
+            transaction = transaction.setSelection(
+                targetPosition == null
+                    ? previousSelection.map(transaction.doc, transaction.mapping)
+                    : TextSelection.near(transaction.doc.resolve(targetPosition), 1));
         } catch {
             // If ProseMirror cannot map the exact cursor position, dispatch the document change anyway.
         }

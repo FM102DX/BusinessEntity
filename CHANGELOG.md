@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-05-15 11:15:08 +03:00
+
+### MINOR-FEATURES
+
+#### Rich-document tables
+- Исправлено поведение toggle-нумерации строк таблицы: после нажатия `№` курсор остается в той же логической ячейке таблицы, а не уходит из таблицы.
+
 ## [0.13.1] - 2026-05-12 09:31:55 +03:00
 
 ### MAJOR-FEATURES
