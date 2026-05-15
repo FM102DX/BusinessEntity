@@ -19,6 +19,18 @@
     line-height: 1;
 }
 
+.rich-text-document-editor__toolbar .rich-text-document-editor__toggle-button.active,
+.rich-text-document-editor__toolbar .rich-text-document-editor__toggle-button.rich-text-document-editor__toggle-button--active {
+    color: #ffffff;
+    background: #2b6fd6;
+    border-color: #2b6fd6;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.rich-text-document-editor__table-control--hidden {
+    display: none;
+}
+
 .rich-text-document-editor__toolbar-separator {
     align-self: stretch;
     border-left: 1px solid #d9e1ea;

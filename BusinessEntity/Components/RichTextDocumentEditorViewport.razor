@@ -21,16 +21,28 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" title="Вставить таблицу" @onclick='@(() => RunEditorCommandAsync("insertTable"))'>
             <span class="oi oi-grid-three-up" aria-hidden="true"></span>
         </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" title="Переключить заголовок таблицы" @onclick='@(() => RunEditorCommandAsync("toggleTableHeaderRow"))'>
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary rich-text-document-editor__toggle-button rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden"
+                title="Переключить заголовок таблицы"
+                data-rich-text-editor-command="toggleTableHeaderRow"
+                data-rich-text-editor-table-control="true"
+                aria-pressed="false"
+                @onclick='@(() => RunEditorCommandAsync("toggleTableHeaderRow"))'>
             <span class="oi oi-check" aria-hidden="true"></span>
             <span>TH</span>
         </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" title="Переключить нумерацию строк" @onclick='@(() => RunEditorCommandAsync("toggleTableRowNumbers"))'>№</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" title="Добавить строку" @onclick='@(() => RunEditorCommandAsync("addTableRow"))'>R+</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" title="Удалить строку" @onclick='@(() => RunEditorCommandAsync("deleteTableRow"))'>R-</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" title="Добавить столбец" @onclick='@(() => RunEditorCommandAsync("addTableColumn"))'>C+</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" title="Удалить столбец" @onclick='@(() => RunEditorCommandAsync("deleteTableColumn"))'>C-</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" title="Удалить таблицу" @onclick='@(() => RunEditorCommandAsync("deleteTable"))'>
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary rich-text-document-editor__toggle-button rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden"
+                title="Переключить нумерацию строк"
+                data-rich-text-editor-command="toggleTableRowNumbers"
+                data-rich-text-editor-table-control="true"
+                aria-pressed="false"
+                @onclick='@(() => RunEditorCommandAsync("toggleTableRowNumbers"))'>№</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden" title="Добавить строку" data-rich-text-editor-table-control="true" @onclick='@(() => RunEditorCommandAsync("addTableRow"))'>R+</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden" title="Удалить строку" data-rich-text-editor-table-control="true" @onclick='@(() => RunEditorCommandAsync("deleteTableRow"))'>R-</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden" title="Добавить столбец" data-rich-text-editor-table-control="true" @onclick='@(() => RunEditorCommandAsync("addTableColumn"))'>C+</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden" title="Удалить столбец" data-rich-text-editor-table-control="true" @onclick='@(() => RunEditorCommandAsync("deleteTableColumn"))'>C-</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary rich-text-document-editor__table-control rich-text-document-editor__table-control--hidden" title="Удалить таблицу" data-rich-text-editor-table-control="true" @onclick='@(() => RunEditorCommandAsync("deleteTable"))'>
             <span class="oi oi-trash" aria-hidden="true"></span>
         </button>
         <span class="rich-text-document-editor__toolbar-separator" aria-hidden="true"></span>

@@ -223,12 +223,83 @@ function getRegistry(viewportElementId) {
             editors: new Map(),
             activeSortOrder: null,
             dotNetReference: null,
-            documentId: null
+            documentId: null,
+            toolbarGuardElement: null
         };
         registries.set(viewportElementId, registry);
     }
 
     return registry;
+}
+
+function getEditorToolbar(viewportElementId) {
+    const viewport = document.getElementById(viewportElementId);
+    return viewport
+        ?.closest(".rich-text-document-editor")
+        ?.querySelector(".rich-text-document-editor__toolbar") ?? null;
+}
+
+function ensureToolbarGuard(viewportElementId, registry) {
+    const toolbar = getEditorToolbar(viewportElementId);
+    if (!toolbar || registry.toolbarGuardElement === toolbar) {
+        return;
+    }
+
+    toolbar.addEventListener("mousedown", event => {
+        const button = event.target?.closest?.("[data-rich-text-editor-command]");
+        if (!button || !toolbar.contains(button)) {
+            return;
+        }
+
+        // Keep the ProseMirror selection alive while a toolbar button is clicked.
+        event.preventDefault();
+    });
+
+    registry.toolbarGuardElement = toolbar;
+}
+
+function setToolbarToggleState(toolbar, command, active) {
+    const button = toolbar.querySelector(`[data-rich-text-editor-command="${command}"]`);
+    if (!button) {
+        return;
+    }
+
+    const normalizedActive = active === true;
+    button.classList.toggle("active", normalizedActive);
+    button.classList.toggle("rich-text-document-editor__toggle-button--active", normalizedActive);
+    button.setAttribute("aria-pressed", normalizedActive ? "true" : "false");
+}
+
+function setToolbarTableControlsVisible(toolbar, visible) {
+    const normalizedVisible = visible === true;
+    toolbar
+        .querySelectorAll("[data-rich-text-editor-table-control=\"true\"]")
+        .forEach(control => {
+            control.classList.toggle("rich-text-document-editor__table-control--hidden", !normalizedVisible);
+            control.toggleAttribute("hidden", !normalizedVisible);
+            control.setAttribute("aria-hidden", normalizedVisible ? "false" : "true");
+        });
+}
+
+function syncToolbarState(viewportElementId, registry, editor) {
+    ensureToolbarGuard(viewportElementId, registry);
+
+    const toolbar = getEditorToolbar(viewportElementId);
+    if (!toolbar) {
+        return;
+    }
+
+    const tableInfo = editor ? findSelectedTable(editor) : null;
+    const tableHeaderType = editor?.schema?.nodes?.tableHeader ?? null;
+    setToolbarTableControlsVisible(toolbar, !!tableInfo);
+    setToolbarToggleState(
+        toolbar,
+        "toggleTableHeaderRow",
+        tableInfo && tableHeaderType && isFirstTableRowHeader(tableInfo.node, tableHeaderType));
+    setToolbarToggleState(
+        toolbar,
+        "toggleTableRowNumbers",
+        tableInfo && isTableRowNumberingEnabled(tableInfo.node));
 }
 
 function toSortOrder(value) {
@@ -1169,7 +1240,8 @@ function createEditor(viewportElementId, registry, host, item) {
     const providedOriginalHtml = item.originalHtml ?? item.OriginalHtml ?? null;
     const isDraft = Boolean(item.isDraft ?? item.IsDraft ?? false);
 
-    const editor = new Editor({
+    let editor = null;
+    editor = new Editor({
         element: host,
         extensions,
         content: html || "<p></p>",
@@ -1191,6 +1263,11 @@ function createEditor(viewportElementId, registry, host, item) {
         },
         onFocus: () => {
             registry.activeSortOrder = sortOrder;
+            syncToolbarState(viewportElementId, registry, editor);
+        },
+        onSelectionUpdate: () => {
+            registry.activeSortOrder = sortOrder;
+            syncToolbarState(viewportElementId, registry, editor);
         },
         onUpdate: () => {
             const state = registry.editors.get(sortOrder);
@@ -1210,6 +1287,8 @@ function createEditor(viewportElementId, registry, host, item) {
                         !wasDirty).catch(() => {});
                 }
             }
+
+            syncToolbarState(viewportElementId, registry, editor);
         }
     });
 
@@ -1227,6 +1306,10 @@ function createEditor(viewportElementId, registry, host, item) {
 
     registry.editors.set(sortOrder, state);
     host.dataset.richTextEditorInitialized = "true";
+    ensureToolbarGuard(viewportElementId, registry);
+    if (registry.activeSortOrder === sortOrder) {
+        syncToolbarState(viewportElementId, registry, editor);
+    }
 }
 
 function notifyEditorDisposed(registry, state, reason) {
@@ -1253,6 +1336,7 @@ function syncEditors(viewportElementId, chunks, dotNetReference, documentId) {
     const registry = getRegistry(viewportElementId);
     registry.dotNetReference = dotNetReference ?? registry.dotNetReference;
     registry.documentId = documentId ?? registry.documentId;
+    ensureToolbarGuard(viewportElementId, registry);
     const visibleSortOrders = new Set();
     const items = Array.isArray(chunks) ? chunks : [];
     const itemsBySortOrder = new Map();
@@ -1436,6 +1520,8 @@ function runCommand(viewportElementId, command) {
             editor.chain().focus().deleteTable().run();
             break;
     }
+
+    syncToolbarState(viewportElementId, registry, editor);
 }
 
 function insertTableWithPrompt(editor) {
@@ -1508,8 +1594,7 @@ function toggleFirstTableHeaderRow(editor) {
     });
 
     if (transaction.docChanged) {
-        editor.view.dispatch(transaction);
-        editor.view.focus();
+        dispatchTransactionKeepingSelection(editor, transaction);
         renumberSelectedTableIfEnabled(editor);
     }
 }
@@ -1573,6 +1658,23 @@ function setTableRowNumbers(editor, enabled) {
         tableInfo.position,
         tableInfo.position + tableNode.nodeSize,
         nextTable);
+
+    dispatchTransactionKeepingSelection(editor, transaction);
+}
+
+function dispatchTransactionKeepingSelection(editor, transaction) {
+    if (!editor || !transaction) {
+        return;
+    }
+
+    const previousSelection = editor.state.selection;
+    if (transaction.docChanged && previousSelection) {
+        try {
+            transaction = transaction.setSelection(previousSelection.map(transaction.doc, transaction.mapping));
+        } catch {
+            // If ProseMirror cannot map the exact cursor position, dispatch the document change anyway.
+        }
+    }
 
     editor.view.dispatch(transaction);
     editor.view.focus();
