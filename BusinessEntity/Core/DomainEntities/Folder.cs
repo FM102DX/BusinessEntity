@@ -15,6 +15,8 @@ namespace BusinessEntity.Core.DomainEntities
         // Папка всегда имеет тип Folder
         public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Folder;
 
+        public bool IsPublic { get; set; }
+
         // Совместимое свойство старого контракта IBusinessEntity
         BusinessEntityTypeEnum IBusinessEntity.BusinessEntityType
         {

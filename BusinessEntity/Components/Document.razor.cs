@@ -15,6 +15,10 @@ namespace BusinessEntity.Components
         [Parameter] public global::BusinessEntity.Core.Classes.BusinessEntity? Entity { get; set; }
         [Parameter] public IReadOnlyList<global::BusinessEntity.Core.Classes.BusinessEntityData>? DataList { get; set; }
         [Parameter] public bool StartInEditMode { get; set; }
+        [Parameter] public bool CanEdit { get; set; } = true;
+        [Parameter] public bool CanChangePublicFlag { get; set; }
+        [Parameter] public bool IsPublic { get; set; }
+        [Parameter] public EventCallback<bool> OnPublicChanged { get; set; }
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
@@ -37,7 +41,7 @@ namespace BusinessEntity.Components
             LocalData = DataList?.ToList() ?? new List<global::BusinessEntity.Core.Classes.BusinessEntityData>();
             EditBody = ViewText;
 
-            if (StartInEditMode)
+            if (StartInEditMode && CanEdit)
             {
                 IsEditing = true;
             }
@@ -45,7 +49,10 @@ namespace BusinessEntity.Components
 
         private void EnterEditMode()
         {
-            IsEditing = true;
+            if (CanEdit)
+            {
+                IsEditing = true;
+            }
         }
 
         private void CancelEdit()
@@ -60,7 +67,7 @@ namespace BusinessEntity.Components
 
         private async Task SaveAsync()
         {
-            if (Entity == null) return;
+            if (Entity == null || !CanEdit) return;
             IsSaving = true;
             try
             {
@@ -78,6 +85,9 @@ namespace BusinessEntity.Components
                         Name = Entity.Name,
                         EntityType = global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Document,
                         Tag = LocalData[0].Tag,
+                        PublishedVersion = LocalData[0] is global::BusinessEntity.Core.DomainEntities.Document existingDocument
+                            ? existingDocument.PublishedVersion
+                            : 0,
                         Text = EditBody ?? string.Empty
                     }
                     : new global::BusinessEntity.Core.DomainEntities.Document
@@ -85,6 +95,7 @@ namespace BusinessEntity.Components
                         Id = Entity.Id,
                         Name = Entity.Name,
                         EntityType = global::BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Document,
+                        PublishedVersion = 0,
                         Text = EditBody ?? string.Empty
                     };
 
@@ -127,6 +138,17 @@ namespace BusinessEntity.Components
             {
                 IsSaving = false;
             }
+        }
+
+        private Task HandlePublicChangedAsync(ChangeEventArgs args)
+        {
+            if (!CanChangePublicFlag)
+            {
+                return Task.CompletedTask;
+            }
+
+            var value = args.Value is bool boolValue && boolValue;
+            return OnPublicChanged.InvokeAsync(value);
         }
 
         private static string GetBodyText(global::BusinessEntity.Core.Classes.BusinessEntityData data)

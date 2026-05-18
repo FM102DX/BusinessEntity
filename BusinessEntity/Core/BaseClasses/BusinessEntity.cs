@@ -12,6 +12,12 @@ public class BusinessEntity: IBusinessEntity
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
     // Дата последнего изменения сущности
     public DateTime LastModifiedDate { get; set; } = DateTime.UtcNow;
+    // Локальный пользователь, создавший сущность
+    public Guid? CreatedByUserId { get; set; }
+    // Локальный пользователь, последним изменивший сущность
+    public Guid? LastModifiedByUserId { get; set; }
+    // Признак общей видимости документа.
+    public bool IsPublic { get; set; }
     // Отображаемое имя сущности
     public string Name { get; set; } = string.Empty;
     // Совместимое имя типа для старого кода

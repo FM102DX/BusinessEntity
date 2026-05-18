@@ -52,6 +52,12 @@ public sealed class EntityDataStorageCodec
                 $"Storage envelope kind '{envelope.Kind}' cannot be converted to requested type '{typeof(TData).Name}'.");
         }
 
+        if (typedData is BusinessEntityData businessEntityData)
+        {
+            businessEntityData.CreatedByUserId = envelope.CreatedByUserId;
+            businessEntityData.LastModifiedByUserId = envelope.LastModifiedByUserId;
+        }
+
         return typedData;
     }
 }

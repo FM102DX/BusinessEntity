@@ -17,6 +17,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
         {
             services.AddScoped<UserMiniAppState>();
             services.AddScoped<BusinessEntityUserFactory>();
+            services.AddScoped<AuthentikManagementClient>();
             services.AddScoped<IUserMiniAppRepository<UserDto>, UserDtoEfRepository>();
             services.AddScoped<IUserMiniAppRepository<UserPropertyDto>, UserPropertyDtoEfRepository>();
             services.AddScoped<UserMiniAppService>();

@@ -14,6 +14,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
 
         private readonly UserMiniAppState _state;
         private readonly BusinessEntityUserFactory _userFactory;
+        private readonly AuthentikManagementClient _authentikManagementClient;
         private readonly IUserMiniAppRepository<UserDto> _userRepository;
         private readonly IUserMiniAppRepository<UserPropertyDto> _userPropertyRepository;
 
@@ -21,11 +22,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         public UserMiniAppService(
             UserMiniAppState state,
             BusinessEntityUserFactory userFactory,
+            AuthentikManagementClient authentikManagementClient,
             IUserMiniAppRepository<UserDto> userRepository,
             IUserMiniAppRepository<UserPropertyDto> userPropertyRepository)
         {
             _state = state;
             _userFactory = userFactory;
+            _authentikManagementClient = authentikManagementClient;
             _userRepository = userRepository;
             _userPropertyRepository = userPropertyRepository;
         }
@@ -68,17 +71,35 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 .OrderBy(user => user.DateCreated)
                 .FirstOrDefault();
 
-            var displayedName = string.IsNullOrWhiteSpace(currentUser.UserName)
+            var authentikLogin = string.IsNullOrWhiteSpace(currentUser.UserName)
                 ? externalId
                 : currentUser.UserName;
 
             if (existingUser != null)
             {
                 var userData = ReadUserData(existingUser);
+                var shouldUpdate = false;
+
+                if (string.IsNullOrWhiteSpace(userData.ExtId))
+                {
+                    userData.ExtId = externalId;
+                    shouldUpdate = true;
+                }
+
+                if (string.IsNullOrWhiteSpace(userData.AuthentikLogin))
+                {
+                    userData.AuthentikLogin = authentikLogin;
+                    shouldUpdate = true;
+                }
+
                 if (string.IsNullOrWhiteSpace(userData.DisplayedName))
                 {
-                    userData.DisplayedName = displayedName;
-                    userData.ExtId = externalId;
+                    userData.DisplayedName = authentikLogin;
+                    shouldUpdate = true;
+                }
+
+                if (shouldUpdate)
+                {
                     existingUser.Payload = SerializeUserData(userData);
                     existingUser.DateLastModified = DateTime.UtcNow;
                     await _userRepository.UpdateAsync(existingUser, cancellationToken);
@@ -94,7 +115,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 ExternalId = externalId,
                 Payload = SerializeUserData(new UserData
                 {
-                    DisplayedName = displayedName,
+                    AuthentikLogin = authentikLogin,
+                    DisplayedName = authentikLogin,
                     ExtId = externalId
                 }),
                 DateCreated = now,
@@ -144,6 +166,119 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 await _userRepository.DeleteAsync(user.Id, cancellationToken);
             }
 
+            return true;
+        }
+
+        // Возвращает пользователей приложения из Authentik и материализует их локальные DTO.
+        public async Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default)
+        {
+            var authentikUsers = await _authentikManagementClient.GetApplicationUsersAsync(cancellationToken);
+            var localUsers = (await _userRepository.GetAllAsync(null, cancellationToken)).ToList();
+            var records = new List<UserAdministrationRecord>();
+
+            foreach (var authentikUser in authentikUsers)
+            {
+                var localUser = await UpsertLocalUserFromAuthentikAsync(authentikUser, localUsers, cancellationToken);
+                records.Add(MapAdministrationRecord(localUser, authentikUser));
+            }
+
+            return records
+                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayedName) ? user.AuthentikLogin : user.DisplayedName)
+                .ThenBy(user => user.AuthentikLogin)
+                .ThenBy(user => user.ExternalId)
+                .ToList();
+        }
+
+        // Создает пользователя в Authentik, перечитывает Authentik-список и материализует локальную DTO.
+        public async Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default)
+        {
+            var createdAuthentikUser = await _authentikManagementClient.CreateApplicationUserAsync(cancellationToken);
+            var authentikUsers = await _authentikManagementClient.GetApplicationUsersAsync(cancellationToken);
+            var reloadedAuthentikUser = authentikUsers.FirstOrDefault(user => user.Pk == createdAuthentikUser.Pk)
+                                        ?? createdAuthentikUser;
+            var localUsers = (await _userRepository.GetAllAsync(null, cancellationToken)).ToList();
+            var localUser = await UpsertLocalUserFromAuthentikAsync(reloadedAuthentikUser, localUsers, cancellationToken);
+            return MapAdministrationRecord(localUser, reloadedAuthentikUser);
+        }
+
+        // Обновляет Authentik username при необходимости, затем сохраняет локальное отображаемое имя.
+        public async Task<UserAdministrationRecord> UpdateAdministrationUserAsync(
+            Guid userId,
+            UserAdministrationSaveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (userId == Guid.Empty)
+            {
+                throw new ArgumentException("Пользователь не выбран.", nameof(userId));
+            }
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user == null)
+            {
+                throw new KeyNotFoundException("Пользователь не найден.");
+            }
+
+            var authentikLogin = NormalizeRequiredText(request.AuthentikLogin, "Логин в аутентик");
+            var displayedName = NormalizeOptionalText(request.DisplayedName);
+            if (string.IsNullOrWhiteSpace(displayedName))
+            {
+                displayedName = authentikLogin;
+            }
+
+            var userData = ReadUserData(user);
+            var authentikUser = await ResolveAuthentikUserAsync(userData, user.ExternalId, cancellationToken);
+            if (!string.Equals(authentikUser.Username, authentikLogin, StringComparison.Ordinal))
+            {
+                authentikUser = await _authentikManagementClient.UpdateUsernameAsync(
+                    authentikUser.Pk,
+                    authentikLogin,
+                    cancellationToken);
+            }
+
+            user.ExternalId = authentikUser.Uid;
+            user.Payload = SerializeUserData(new UserData
+            {
+                AuthentikUserPk = authentikUser.Pk,
+                AuthentikUserUuid = authentikUser.Uuid,
+                AuthentikLogin = authentikUser.Username,
+                DisplayedName = displayedName,
+                ExtId = authentikUser.Uid
+            });
+            user.DateLastModified = DateTime.UtcNow;
+
+            await _userRepository.UpdateAsync(user, cancellationToken);
+            return MapAdministrationRecord(user, authentikUser);
+        }
+
+        // Удаляет Authentik-пользователя, затем локальную user-запись и все ее user properties.
+        public async Task<bool> DeleteAdministrationUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            if (userId == Guid.Empty)
+            {
+                return false;
+            }
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user == null)
+            {
+                return false;
+            }
+
+            var userData = ReadUserData(user);
+            var authentikUser = await ResolveAuthentikUserAsync(userData, user.ExternalId, cancellationToken);
+            await _authentikManagementClient.DeleteUserAsync(authentikUser.Pk, cancellationToken);
+
+            var properties = await _userPropertyRepository.GetAllAsync(
+                property => property.ParentEntityId == userId,
+                cancellationToken);
+
+            // User properties подчинены UserDto и не должны оставаться orphan-строками.
+            foreach (var property in properties)
+            {
+                await _userPropertyRepository.DeleteAsync(property.Id, cancellationToken);
+            }
+
+            await _userRepository.DeleteAsync(userId, cancellationToken);
             return true;
         }
 
@@ -276,25 +411,204 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
 
         private static UserData ReadUserData(UserDto user)
         {
+            UserData userData;
             if (string.IsNullOrWhiteSpace(user.Payload))
             {
-                return new UserData { ExtId = user.ExternalId };
+                userData = new UserData { ExtId = user.ExternalId };
+            }
+            else
+            {
+                try
+                {
+                    userData = JsonSerializer.Deserialize<UserData>(user.Payload, UserMiniAppJsonOptions.Default)
+                               ?? new UserData { ExtId = user.ExternalId };
+                }
+                catch (JsonException)
+                {
+                    userData = new UserData { ExtId = user.ExternalId };
+                }
             }
 
-            try
-            {
-                return JsonSerializer.Deserialize<UserData>(user.Payload, UserMiniAppJsonOptions.Default)
-                       ?? new UserData { ExtId = user.ExternalId };
-            }
-            catch (JsonException)
-            {
-                return new UserData { ExtId = user.ExternalId };
-            }
+            userData.ExtId = string.IsNullOrWhiteSpace(userData.ExtId) ? user.ExternalId : userData.ExtId;
+            return userData;
         }
 
         private static string SerializeUserData(UserData userData)
         {
             return JsonSerializer.Serialize(userData, UserMiniAppJsonOptions.Default);
+        }
+
+        // Создает или обновляет локальную DTO по записи Authentik.
+        private async Task<UserDto> UpsertLocalUserFromAuthentikAsync(
+            AuthentikUserRecord authentikUser,
+            List<UserDto> localUsers,
+            CancellationToken cancellationToken)
+        {
+            var localUser = FindLocalUser(authentikUser, localUsers);
+            if (localUser == null)
+            {
+                var now = DateTime.UtcNow;
+                var created = new UserDto
+                {
+                    Id = Guid.NewGuid(),
+                    ExternalId = authentikUser.Uid,
+                    Payload = SerializeUserData(BuildUserData(authentikUser, authentikUser.Username)),
+                    DateCreated = now,
+                    DateLastModified = now
+                };
+
+                created = await _userRepository.AddAsync(created, cancellationToken);
+                localUsers.Add(created);
+                return created;
+            }
+
+            var currentData = ReadUserData(localUser);
+            var currentDisplayedName = NormalizeOptionalText(currentData.DisplayedName);
+            var previousLogin = NormalizeOptionalText(currentData.AuthentikLogin);
+            var displayedName = string.IsNullOrWhiteSpace(currentDisplayedName) ||
+                                string.Equals(currentDisplayedName, previousLogin, StringComparison.Ordinal)
+                ? authentikUser.Username
+                : currentDisplayedName;
+            var nextData = BuildUserData(authentikUser, displayedName);
+            var shouldUpdate =
+                !string.Equals(localUser.ExternalId, authentikUser.Uid, StringComparison.Ordinal) ||
+                !UserDataEquals(currentData, nextData);
+
+            if (!shouldUpdate)
+            {
+                return localUser;
+            }
+
+            localUser.ExternalId = authentikUser.Uid;
+            localUser.Payload = SerializeUserData(nextData);
+            localUser.DateLastModified = DateTime.UtcNow;
+            await _userRepository.UpdateAsync(localUser, cancellationToken);
+            return localUser;
+        }
+
+        // Находит Authentik-пользователя для локальной DTO из актуального списка пользователей приложения.
+        private async Task<AuthentikUserRecord> ResolveAuthentikUserAsync(
+            UserData userData,
+            string externalId,
+            CancellationToken cancellationToken)
+        {
+            var authentikUsers = await _authentikManagementClient.GetApplicationUsersAsync(cancellationToken);
+            var authentikUser = authentikUsers.FirstOrDefault(user =>
+                userData.AuthentikUserPk > 0 && user.Pk == userData.AuthentikUserPk);
+
+            authentikUser ??= authentikUsers.FirstOrDefault(user =>
+                !string.IsNullOrWhiteSpace(userData.AuthentikUserUuid) &&
+                string.Equals(user.Uuid, userData.AuthentikUserUuid, StringComparison.OrdinalIgnoreCase));
+            authentikUser ??= authentikUsers.FirstOrDefault(user =>
+                !string.IsNullOrWhiteSpace(userData.ExtId) &&
+                string.Equals(user.Uid, userData.ExtId, StringComparison.OrdinalIgnoreCase));
+            authentikUser ??= authentikUsers.FirstOrDefault(user =>
+                !string.IsNullOrWhiteSpace(externalId) &&
+                string.Equals(user.Uid, externalId, StringComparison.OrdinalIgnoreCase));
+            authentikUser ??= authentikUsers.FirstOrDefault(user =>
+                !string.IsNullOrWhiteSpace(userData.AuthentikLogin) &&
+                string.Equals(user.Username, userData.AuthentikLogin, StringComparison.OrdinalIgnoreCase));
+
+            if (authentikUser == null)
+            {
+                throw new InvalidOperationException("Пользователь не найден среди пользователей приложения в Authentik.");
+            }
+
+            return authentikUser;
+        }
+
+        // Формирует DTO административного UI из Authentik user и локального payload.
+        private static UserAdministrationRecord MapAdministrationRecord(
+            UserDto user,
+            AuthentikUserRecord authentikUser)
+        {
+            var userData = ReadUserData(user);
+            var displayedName = NormalizeOptionalText(userData.DisplayedName);
+
+            return new UserAdministrationRecord
+            {
+                Id = user.Id,
+                AuthentikUserPk = authentikUser.Pk,
+                AuthentikUserUuid = authentikUser.Uuid,
+                ExternalId = authentikUser.Uid,
+                AuthentikLogin = authentikUser.Username,
+                DisplayedName = string.IsNullOrWhiteSpace(displayedName) ? authentikUser.Username : displayedName,
+                IsActive = authentikUser.IsActive,
+                DateCreated = user.DateCreated,
+                DateLastModified = user.DateLastModified
+            };
+        }
+
+        private static UserDto? FindLocalUser(AuthentikUserRecord authentikUser, IEnumerable<UserDto> localUsers)
+        {
+            foreach (var localUser in localUsers)
+            {
+                var userData = ReadUserData(localUser);
+                if (userData.AuthentikUserPk > 0 && userData.AuthentikUserPk == authentikUser.Pk)
+                {
+                    return localUser;
+                }
+
+                if (!string.IsNullOrWhiteSpace(userData.AuthentikUserUuid) &&
+                    string.Equals(userData.AuthentikUserUuid, authentikUser.Uuid, StringComparison.OrdinalIgnoreCase))
+                {
+                    return localUser;
+                }
+
+                if (string.Equals(localUser.ExternalId, authentikUser.Uid, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(userData.ExtId, authentikUser.Uid, StringComparison.OrdinalIgnoreCase))
+                {
+                    return localUser;
+                }
+            }
+
+            return null;
+        }
+
+        private static UserData BuildUserData(AuthentikUserRecord authentikUser, string displayedName)
+        {
+            return new UserData
+            {
+                AuthentikUserPk = authentikUser.Pk,
+                AuthentikUserUuid = authentikUser.Uuid,
+                AuthentikLogin = authentikUser.Username,
+                DisplayedName = displayedName,
+                ExtId = authentikUser.Uid
+            };
+        }
+
+        private static bool UserDataEquals(UserData left, UserData right)
+        {
+            return left.AuthentikUserPk == right.AuthentikUserPk &&
+                   string.Equals(left.AuthentikUserUuid, right.AuthentikUserUuid, StringComparison.Ordinal) &&
+                   string.Equals(left.AuthentikLogin, right.AuthentikLogin, StringComparison.Ordinal) &&
+                   string.Equals(left.DisplayedName, right.DisplayedName, StringComparison.Ordinal) &&
+                   string.Equals(left.ExtId, right.ExtId, StringComparison.Ordinal);
+        }
+
+        // Нормализует обязательное короткое текстовое поле.
+        private static string NormalizeRequiredText(string? value, string fieldName)
+        {
+            var normalized = NormalizeOptionalText(value);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                throw new ArgumentException($"{fieldName} не может быть пустым.", fieldName);
+            }
+
+            return normalized;
+        }
+
+        // Нормализует пробелы в коротком текстовом поле.
+        private static string NormalizeOptionalText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return string.Join(
+                " ",
+                value.Split(default(string[]), StringSplitOptions.RemoveEmptyEntries));
         }
 
         // Определяет стабильный внешний идентификатор пользователя из нормализованной user-модели.

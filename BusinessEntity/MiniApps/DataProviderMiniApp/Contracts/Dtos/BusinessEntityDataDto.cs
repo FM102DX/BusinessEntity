@@ -7,5 +7,6 @@ public class BusinessEntityDataDto : BaseEntity
 {
     public Guid BusinessEntityId { get; set; }
     public int Version { get; set; } = 1;
+    public string VersionDescription { get; set; } = string.Empty;
     public string Data { get; set; } = string.Empty;
 }

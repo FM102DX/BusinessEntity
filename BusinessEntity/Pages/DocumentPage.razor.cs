@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
 using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 
 namespace BusinessEntity.Pages
 {
@@ -22,9 +25,17 @@ namespace BusinessEntity.Pages
         private string? DataText;
         private bool IsLoading = true;
         private string? Error;
-        private bool StartInEditMode => string.Equals(EditQuery, "1", StringComparison.OrdinalIgnoreCase) || string.Equals(EditQuery, "true", StringComparison.OrdinalIgnoreCase);
+        private bool RequestedEditMode => string.Equals(EditQuery, "1", StringComparison.OrdinalIgnoreCase) || string.Equals(EditQuery, "true", StringComparison.OrdinalIgnoreCase);
+        private bool StartInEditMode => RequestedEditMode && CanEditDocument;
+        private bool IsDocumentOwner { get; set; }
+        private bool IsCurrentUserAdmin { get; set; }
+        private bool HasFullDocumentAccess { get; set; }
+        private bool CanEditDocument => HasFullDocumentAccess;
+        private bool CanChangePublicFlag => IsDocumentOwner;
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
+        [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
+        [Inject] public IUserConnector UserConnector { get; set; } = default!;
 
         protected override async Task OnParametersSetAsync()
         {
@@ -44,7 +55,31 @@ namespace BusinessEntity.Pages
                     return;
                 }
 
-                var list = await Helper.GetData(Entity);
+                var latestDocument = await DataProviderConnector.GetDataAsync<global::BusinessEntity.Core.DomainEntities.Document>(Id);
+                await ResolveAccessAsync();
+                if (!HasFullDocumentAccess && (latestDocument?.PublishedVersion ?? 0) <= 0)
+                {
+                    Entity = null;
+                    DataList = null;
+                    Error = "Документ недоступен: опубликованная версия отсутствует.";
+                    return;
+                }
+
+                IReadOnlyList<global::BusinessEntity.Core.Classes.BusinessEntityData>? list;
+                if (HasFullDocumentAccess)
+                {
+                    list = await Helper.GetData(Entity);
+                }
+                else
+                {
+                    var publishedData = await DataProviderConnector.GetDataVersionAsync<global::BusinessEntity.Core.DomainEntities.Document>(
+                        Id,
+                        latestDocument!.PublishedVersion);
+                    list = publishedData == null
+                        ? Array.Empty<global::BusinessEntity.Core.Classes.BusinessEntityData>()
+                        : new global::BusinessEntity.Core.Classes.BusinessEntityData[] { publishedData };
+                }
+
                 DataList = list;
                 if (list != null && list.Any())
                 {
@@ -72,6 +107,42 @@ namespace BusinessEntity.Pages
                 global::BusinessEntity.Core.DomainEntities.Document document => document.Text ?? string.Empty,
                 _ => string.Empty
             };
+        }
+
+        private async Task ResolveAccessAsync()
+        {
+            IsDocumentOwner = false;
+            IsCurrentUserAdmin = false;
+            HasFullDocumentAccess = false;
+            if (Entity == null)
+            {
+                return;
+            }
+
+            var user = await UserConnector.EnsureCurrentUserAsync();
+            var businessUser = await UserConnector.GetCurrentUserAsync();
+            IsDocumentOwner = user != null && Entity.CreatedByUserId == user.Id;
+            IsCurrentUserAdmin = IsAccessAdmin(businessUser);
+            HasFullDocumentAccess = IsCurrentUserAdmin || IsDocumentOwner || Entity.IsPublic;
+        }
+
+        private static bool IsAccessAdmin(BusinessEntityUser? user)
+        {
+            return user?.IsAkadmin == true ||
+                   user?.IsGeneralAdmin == true ||
+                   string.Equals(user?.UserName, "admin", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task HandlePublicChangedAsync(bool value)
+        {
+            if (Entity == null || !CanChangePublicFlag)
+            {
+                return;
+            }
+
+            Entity.IsPublic = value;
+            Entity.LastModifiedDate = DateTime.UtcNow;
+            await DataProviderConnector.UpdateAsync(Entity);
         }
     }
 }

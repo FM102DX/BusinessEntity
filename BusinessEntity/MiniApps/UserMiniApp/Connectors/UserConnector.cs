@@ -63,6 +63,33 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
             return _userMiniApp.DeleteCurrentUserAsync(cancellationToken);
         }
 
+        // Возвращает локальных пользователей через публичный контракт user mini-app.
+        public Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetAdministrationUsersAsync(cancellationToken);
+        }
+
+        // Создает пользователя приложения в Authentik через публичный контракт user mini-app.
+        public Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.CreateAdministrationUserAsync(cancellationToken);
+        }
+
+        // Обновляет локального пользователя через публичный контракт user mini-app.
+        public Task<UserAdministrationRecord> UpdateAdministrationUserAsync(
+            Guid userId,
+            UserAdministrationSaveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.UpdateAdministrationUserAsync(userId, request, cancellationToken);
+        }
+
+        // Удаляет локального пользователя через публичный контракт user mini-app.
+        public Task<bool> DeleteAdministrationUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.DeleteAdministrationUserAsync(userId, cancellationToken);
+        }
+
         // Возвращает только список групп поверх общего объекта пользователя.
         public async Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default)
         {

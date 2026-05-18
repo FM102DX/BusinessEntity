@@ -13,6 +13,9 @@ internal static class DataProviderMapper
             Id = dto.Id,
             CreatedDate = dto.CreatedDate,
             LastModifiedDate = dto.LastModifiedDate,
+            CreatedByUserId = dto.CreatedByUserId,
+            LastModifiedByUserId = dto.LastModifiedByUserId,
+            IsPublic = dto.IsPublic,
             Name = dto.Name,
             BusinessEntityType = dto.BusinessEntityType,
             EntityType = dto.EntityType
@@ -27,6 +30,9 @@ internal static class DataProviderMapper
             Id = entityData.Id,
             CreatedDate = entityData.CreatedDate,
             LastModifiedDate = entityData.LastModifiedDate,
+            CreatedByUserId = entityData.CreatedByUserId,
+            LastModifiedByUserId = entityData.LastModifiedByUserId,
+            IsPublic = entityData.IsPublic,
             Name = entityData.Name,
             BusinessEntityType = entityData.BusinessEntityType,
             EntityType = entityData.EntityType

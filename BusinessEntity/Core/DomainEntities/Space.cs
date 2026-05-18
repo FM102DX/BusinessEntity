@@ -15,6 +15,8 @@ namespace BusinessEntity.Core.DomainEntities
         // Пространство всегда имеет тип Space
         public override BusinessEntityTypeEnum EntityType { get; set; } = BusinessEntityTypeEnum.Space;
 
+        public bool IsPublic { get; set; }
+
         // Совместимое свойство старого контракта IBusinessEntity
         BusinessEntityTypeEnum IBusinessEntity.BusinessEntityType
         {

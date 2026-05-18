@@ -31,5 +31,8 @@ namespace BusinessEntity.Core.DomainEntities
 
         // Поддержка картинок в текущем manifest-е.
         public bool SupportsImages { get; set; } = true;
+
+        // Номер версии rich-text документа, которая считается опубликованной. 0 означает, что публикация не задана.
+        public int PublishedVersion { get; set; }
     }
 }

@@ -12,6 +12,17 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
         Task<UserDto?> EnsureCurrentUserAsync(CancellationToken cancellationToken = default);
         // Удаляет локальную учетную запись текущего пользователя вместе с ее техническими свойствами.
         Task<bool> DeleteCurrentUserAsync(CancellationToken cancellationToken = default);
+        // Возвращает локальных пользователей для страницы администрирования.
+        Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default);
+        // Создает пользователя приложения в Authentik через user mini-app.
+        Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default);
+        // Обновляет локального пользователя через user mini-app.
+        Task<UserAdministrationRecord> UpdateAdministrationUserAsync(
+            Guid userId,
+            UserAdministrationSaveRequest request,
+            CancellationToken cancellationToken = default);
+        // Удаляет локального пользователя через user mini-app.
+        Task<bool> DeleteAdministrationUserAsync(Guid userId, CancellationToken cancellationToken = default);
         // Возвращает все группы текущего пользователя.
         Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default);
         // Проверяет membership текущего пользователя в конкретной группе.

@@ -71,7 +71,9 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         private void SubscribeBusinessEntityDataMessages()
         {
             _subscriptions.Add(_messageBus.Listen<GetBusinessEntityDataRequest>().Subscribe(request => _ = HandleGetDataAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<GetBusinessEntityDataVersionRequest>().Subscribe(request => _ = HandleGetDataVersionAsync(request)));
             _subscriptions.Add(_messageBus.Listen<GetBusinessEntityDataVersionsRequest>().Subscribe(request => _ = HandleGetDataVersionsAsync(request)));
+            _subscriptions.Add(_messageBus.Listen<UpdateBusinessEntityDataVersionDescriptionRequest>().Subscribe(request => _ = HandleUpdateVersionDescriptionAsync(request)));
             _subscriptions.Add(_messageBus.Listen<UpdateBusinessEntityDataRequest>().Subscribe(request => _ = HandleUpdateDataAsync(request)));
         }
 
@@ -135,6 +137,26 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
         }
 
+        // Обрабатывает запрос на чтение JSON-envelope payload конкретной версии сущности.
+        private async Task HandleGetDataVersionAsync(GetBusinessEntityDataVersionRequest request)
+        {
+            try
+            {
+                var data = await _dataProviderService.GetDataPayloadRecordAsync(
+                    request.BusinessEntityId,
+                    request.Version);
+                _messageBus.SendMessage(new GetBusinessEntityDataVersionResponse(
+                    request.RequestId,
+                    data?.Data,
+                    data?.Version <= 0 ? 1 : data?.Version ?? 1));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load business entityData data {RecordId} version {Version}.", request.BusinessEntityId, request.Version);
+                _messageBus.SendMessage(new GetBusinessEntityDataVersionResponse(request.RequestId, null, ErrorMessage: ex.Message));
+            }
+        }
+
         // Обрабатывает запрос на чтение списка версий payload сущности.
         private async Task HandleGetDataVersionsAsync(GetBusinessEntityDataVersionsRequest request)
         {
@@ -147,6 +169,24 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             {
                 _logger.LogError(ex, "Failed to load business entityData versions {RecordId}.", request.BusinessEntityId);
                 _messageBus.SendMessage(new GetBusinessEntityDataVersionsResponse(request.RequestId, Array.Empty<BusinessEntityDataVersionInfo>(), ex.Message));
+            }
+        }
+
+        // Обрабатывает команду на изменение описания версии payload сущности.
+        private async Task HandleUpdateVersionDescriptionAsync(UpdateBusinessEntityDataVersionDescriptionRequest request)
+        {
+            try
+            {
+                await _dataProviderService.UpdateDataVersionDescriptionAsync(
+                    request.BusinessEntityId,
+                    request.Version,
+                    request.VersionDescription);
+                _messageBus.SendMessage(new UpdateBusinessEntityDataVersionDescriptionResponse(request.RequestId, true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update business entityData version description {RecordId} version {Version}.", request.BusinessEntityId, request.Version);
+                _messageBus.SendMessage(new UpdateBusinessEntityDataVersionDescriptionResponse(request.RequestId, false, ex.Message));
             }
         }
 
@@ -217,7 +257,11 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             try
             {
                 // _webLogger?.Information($"[мини-апп:data-provider] [bus:received] [entity-data:update] Получено UpdateBusinessEntityDataRequest requestId={request.RequestId} entityId={request.BusinessEntityId} payloadLength={request.Data?.Length ?? 0}");
-                await _dataProviderService.UpdateDataPayloadAsync(request.BusinessEntityId, request.Data, request.HasVersions);
+                await _dataProviderService.UpdateDataPayloadAsync(
+                    request.BusinessEntityId,
+                    request.Data,
+                    request.HasVersions,
+                    lastModifiedByUserId: request.LastModifiedByUserId);
                 _messageBus.SendMessage(new UpdateBusinessEntityDataResponse(request.RequestId, true));
             }
             catch (Exception ex)

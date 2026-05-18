@@ -18,12 +18,19 @@ namespace BusinessEntity.Components
         [Parameter] public int VersionsRefreshToken { get; set; }
         [Parameter] public int ViewedVersion { get; set; } = 1;
         [Parameter] public int LatestVersion { get; set; } = 1;
+        [Parameter] public int PublishedVersion { get; set; }
         [Parameter] public bool CanEditViewedVersion { get; set; } = true;
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
         [Parameter] public EventCallback<InputFileChangeEventArgs> OnImportSelected { get; set; }
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
         [Parameter] public EventCallback<RichTextDocumentEditorSaveRequest> OnEditorSaved { get; set; }
         [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
+        [Parameter] public EventCallback OnPublishRequested { get; set; }
+        [Parameter] public EventCallback<bool> OnPublicChanged { get; set; }
+        [Parameter] public bool CanPublish { get; set; }
+        [Parameter] public bool CanChangePublicFlag { get; set; }
+        [Parameter] public bool IsPublic { get; set; }
+        [Parameter] public bool CanBrowseVersions { get; set; } = true;
 
         private RichTextDocumentEditView? EditView { get; set; }
         private bool IsEditMode { get; set; }
@@ -78,6 +85,28 @@ namespace BusinessEntity.Components
             await SaveEditorChangesAsync();
         }
 
+        private async Task HandlePublishAsync()
+        {
+            if (!CanPublish)
+            {
+                return;
+            }
+
+            if (IsEditMode && !await SaveEditorChangesAsync())
+            {
+                return;
+            }
+
+            await OnPublishRequested.InvokeAsync();
+        }
+
+        private Task HandlePublicChangedAsync(bool value)
+        {
+            return CanChangePublicFlag
+                ? OnPublicChanged.InvokeAsync(value)
+                : Task.CompletedTask;
+        }
+
         private async Task HandleReadModeAsync(RichTextDocumentViewportPosition? visiblePosition)
         {
             if (await SaveEditorChangesAsync())
@@ -112,12 +141,15 @@ namespace BusinessEntity.Components
                     return false;
                 }
 
+                var versionDescription = EditView.VersionDescription;
                 var savedCount = await EditView.SaveAsync();
                 await OnEditorSaved.InvokeAsync(new RichTextDocumentEditorSaveRequest
                 {
                     SavedChunkCount = savedCount,
-                    Title = EditableEntityName
+                    Title = EditableEntityName,
+                    VersionDescription = versionDescription
                 });
+                EditView.ClearVersionDescription();
 
                 return true;
             }

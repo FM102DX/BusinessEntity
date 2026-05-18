@@ -40,6 +40,12 @@ public class BusinessEntity<T> : BusinessEntity where T : class, IBusinessEntity
         _data.Id = Id;
         _data.LastModifiedDate = LastModifiedDate;
 
+        if (_data is BusinessEntityData businessEntityData)
+        {
+            businessEntityData.CreatedByUserId = CreatedByUserId;
+            businessEntityData.LastModifiedByUserId = LastModifiedByUserId;
+        }
+
         // Переносим дату создания только один раз
         if (_data.CreatedDate == default)
         {

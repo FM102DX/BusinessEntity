@@ -136,6 +136,25 @@
     overflow-y: auto;
 }
 
+.rich-text-document-versions__description {
+    margin-bottom: 0.75rem;
+}
+
+.rich-text-document-versions__description-label {
+    display: block;
+    color: #6f7f95;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+.rich-text-document-versions__description-input {
+    min-height: 4rem;
+    resize: vertical;
+    font-size: 0.82rem;
+}
+
 .rich-text-document-versions__table {
     width: 100%;
     border-collapse: collapse;
@@ -158,14 +177,22 @@
     text-transform: uppercase;
 }
 
+.rich-text-document-versions__table th:first-child,
 .rich-text-document-versions__table td:first-child {
-    width: 4.5rem;
+    width: 6.2rem;
     color: #1f3855;
     font-weight: 600;
 }
 
-.rich-text-document-versions__table td:last-child {
+.rich-text-document-versions__table td:nth-child(2) {
     color: #526173;
+}
+
+.rich-text-document-versions__table th:nth-child(3),
+.rich-text-document-versions__table td:nth-child(3) {
+    width: 7rem;
+    color: #526173;
+    overflow-wrap: anywhere;
 }
 
 .rich-text-document-versions__row {
@@ -180,12 +207,38 @@
     background: #e8f1ff;
 }
 
-.rich-text-document-versions__latest {
-    display: block;
-    color: #6f7f95;
+.rich-text-document-versions__row--published {
+    box-shadow: inset 3px 0 0 #2b8a3e;
+}
+
+.rich-text-document-versions__markers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.18rem;
+    margin-top: 0.2rem;
+}
+
+.rich-text-document-versions__marker {
+    border: 1px solid #c8d5e4;
+    border-radius: 4px;
+    color: #526173;
     font-size: 0.68rem;
-    font-weight: 500;
+    font-weight: 700;
     line-height: 1.2;
+    padding: 0.08rem 0.22rem;
+    text-transform: lowercase;
+}
+
+.rich-text-document-versions__marker--draft {
+    background: #fff5db;
+    border-color: #e1b954;
+    color: #7a5600;
+}
+
+.rich-text-document-versions__marker--published {
+    background: #e8f7ee;
+    border-color: #75b887;
+    color: #236934;
 }
 
 .rich-text-document-versions__empty,

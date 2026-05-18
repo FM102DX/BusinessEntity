@@ -17,6 +17,10 @@ namespace BusinessEntity.Core.Classes
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
         // Дата последнего изменения data-объекта
         public DateTime LastModifiedDate { get; set; } = DateTime.UtcNow;
+        // Локальный пользователь, создавший связанный бизнес-объект
+        public Guid? CreatedByUserId { get; set; }
+        // Локальный пользователь, последним изменивший связанный бизнес-объект
+        public Guid? LastModifiedByUserId { get; set; }
 
         // Имя, синхронизируемое с родительской entity
         public string Name { get; set; } = string.Empty;

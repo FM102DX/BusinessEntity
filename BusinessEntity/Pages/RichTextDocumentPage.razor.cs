@@ -3,6 +3,8 @@ using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.Components;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
@@ -19,6 +21,7 @@ namespace BusinessEntity.Pages
         [Inject] public RichTextDocumentSettingsService RichTextDocumentSettingsService { get; set; } = default!;
         [Inject] public RichTextDocumentMessagePanelService MessagePanel { get; set; } = default!;
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
+        [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
 
         private BusinessEntity.Core.Classes.BusinessEntity? Entity;
@@ -37,7 +40,12 @@ namespace BusinessEntity.Pages
         private int VersionsRefreshToken { get; set; }
         private int ViewedVersion { get; set; } = 1;
         private int LatestVersion { get; set; } = 1;
-        private bool CanEditViewedVersion => ViewedVersion >= LatestVersion;
+        private bool IsDocumentOwner { get; set; }
+        private bool IsCurrentUserAdmin { get; set; }
+        private bool HasFullDocumentAccess { get; set; }
+        private bool CanEditViewedVersion => HasFullDocumentAccess && ViewedVersion >= LatestVersion;
+        private bool CanPublishDocument => HasFullDocumentAccess;
+        private bool CanChangePublicFlag => IsDocumentOwner;
         private Guid _messagesForDocumentId;
         private Guid _loadedDocumentId;
         private const int OutlineChunkBatchSize = 5;
@@ -89,7 +97,21 @@ namespace BusinessEntity.Pages
 
                 Entity = shell.Entity;
                 Manifest = shell.Manifest;
+                await ResolveAccessAsync(cancellationToken);
+                if (!CanReadCurrentDocument())
+                {
+                    Entity = null;
+                    Manifest = null;
+                    Error = "Документ недоступен: опубликованная версия отсутствует.";
+                    return;
+                }
+
                 await RefreshVersionsAsync(cancellationToken);
+                if (!HasFullDocumentAccess)
+                {
+                    ViewedVersion = Math.Min(Manifest.PublishedVersion, LatestVersion);
+                }
+
                 IsInitialContentLoading = true;
                 IsOutlineLoading = true;
                 _ = LoadInitialChunkWindowAsync(Id, version, ViewedVersion, cancellationToken);
@@ -353,11 +375,25 @@ namespace BusinessEntity.Pages
                     statusParts.Add("название сохранено");
                 }
 
+                var versionDescription = (request.VersionDescription ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(versionDescription))
+                {
+                    statusParts.Add("описание версии сохранено");
+                }
+
                 SetStatusMessage(statusParts.Count == 0
                     ? "Нет изменений для сохранения."
                     : string.Join("; ", statusParts) + ".");
                 VersionsRefreshToken++;
                 await RefreshVersionsAsync();
+
+                if (!string.IsNullOrWhiteSpace(versionDescription))
+                {
+                    await DataProviderConnector.UpdateDataVersionDescriptionAsync(Id, LatestVersion, versionDescription);
+                    VersionsRefreshToken++;
+                    await RefreshVersionsAsync();
+                }
+
                 ViewedVersion = LatestVersion;
 
                 IsOutlineLoading = true;
@@ -384,6 +420,11 @@ namespace BusinessEntity.Pages
         private async Task OnVersionSelectedAsync(int version)
         {
             if (Entity == null || version <= 0 || version == ViewedVersion)
+            {
+                return;
+            }
+
+            if (!HasFullDocumentAccess && version != Manifest?.PublishedVersion)
             {
                 return;
             }
@@ -417,6 +458,96 @@ namespace BusinessEntity.Pages
             {
                 ViewedVersion = LatestVersion;
             }
+        }
+
+        private async Task OnPublishRequestedAsync()
+        {
+            if (Entity == null || Manifest == null || !CanPublishDocument)
+            {
+                return;
+            }
+
+            Error = null;
+
+            try
+            {
+                var versionToPublish = ViewedVersion <= 0 ? LatestVersion : ViewedVersion;
+                Manifest.PublishedVersion = Math.Max(versionToPublish, 1);
+                Manifest.Name = Entity.Name;
+                Manifest.Tag = string.IsNullOrWhiteSpace(Manifest.Tag)
+                    ? BusinessEntityTypeEnum.RichTextDocument.ToString()
+                    : Manifest.Tag;
+
+                await DataProviderConnector.UpdateDataInPlaceAsync(Id, Manifest);
+                SetStatusMessage($"Опубликована версия {Manifest.PublishedVersion}.");
+                VersionsRefreshToken++;
+                await RefreshVersionsAsync();
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+                SetStatusMessage(null);
+            }
+        }
+
+        private async Task OnPublicChangedAsync(bool value)
+        {
+            if (Entity == null || !CanChangePublicFlag)
+            {
+                return;
+            }
+
+            Error = null;
+
+            try
+            {
+                Entity.IsPublic = value;
+                Entity.LastModifiedDate = DateTime.UtcNow;
+                await DataProviderConnector.UpdateAsync(Entity);
+                MessageBus.SendMessage(new EntityUpdatedMessage(Entity));
+                SetStatusMessage(value ? "Документ сделан общим." : "Документ больше не общий.");
+            }
+            catch (Exception ex)
+            {
+                Entity.IsPublic = !value;
+                Error = ex.Message;
+                SetStatusMessage(null);
+            }
+        }
+
+        private async Task ResolveAccessAsync(CancellationToken cancellationToken)
+        {
+            IsDocumentOwner = false;
+            IsCurrentUserAdmin = false;
+            HasFullDocumentAccess = false;
+
+            if (Entity == null)
+            {
+                return;
+            }
+
+            var user = await UserConnector.EnsureCurrentUserAsync(cancellationToken);
+            var businessUser = await UserConnector.GetCurrentUserAsync(cancellationToken);
+            IsDocumentOwner = user != null && Entity.CreatedByUserId == user.Id;
+            IsCurrentUserAdmin = IsAccessAdmin(businessUser);
+            HasFullDocumentAccess = IsCurrentUserAdmin || IsDocumentOwner || Entity.IsPublic;
+        }
+
+        private static bool IsAccessAdmin(BusinessEntityUser? user)
+        {
+            return user?.IsAkadmin == true ||
+                   user?.IsGeneralAdmin == true ||
+                   string.Equals(user?.UserName, "admin", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool CanReadCurrentDocument()
+        {
+            if (Entity == null || Manifest == null)
+            {
+                return false;
+            }
+
+            return HasFullDocumentAccess || Manifest.PublishedVersion > 0;
         }
 
         // Converts storage-backed rich-text table-of-contents entries into UI outline nodes.

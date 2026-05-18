@@ -18,6 +18,21 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
         // Удаляет локальную учетную запись текущего Authentik-пользователя и ее технические свойства.
         Task<bool> DeleteCurrentUserAsync(CancellationToken cancellationToken = default);
 
+        // Возвращает локальных пользователей для административного CRUD UI.
+        Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default);
+
+        // Создает пользователя приложения в Authentik и материализует его локальную DTO.
+        Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default);
+
+        // Обновляет локального пользователя приложения для административного CRUD UI.
+        Task<UserAdministrationRecord> UpdateAdministrationUserAsync(
+            Guid userId,
+            UserAdministrationSaveRequest request,
+            CancellationToken cancellationToken = default);
+
+        // Удаляет локального пользователя приложения и его технические свойства.
+        Task<bool> DeleteAdministrationUserAsync(Guid userId, CancellationToken cancellationToken = default);
+
         Task<IReadOnlyList<RichTextDocumentBookmark>> GetRichDocBookmarksAsync(
             Guid documentId,
             CancellationToken cancellationToken = default);

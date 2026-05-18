@@ -21,7 +21,8 @@ internal sealed class RichTextDocumentEntityDataStorageConverter : EntityDataSto
             EditorFormat = data.EditorFormat ?? "BlockJsonWithInlineHtml",
             ChunkPolicy = data.ChunkPolicy ?? "RichTextMvpV1",
             EmbeddedFileStorage = data.EmbeddedFileStorage ?? "LocalDocumentFiles",
-            SupportsImages = data.SupportsImages
+            SupportsImages = data.SupportsImages,
+            PublishedVersion = data.PublishedVersion
         });
     }
 
@@ -36,7 +37,8 @@ internal sealed class RichTextDocumentEntityDataStorageConverter : EntityDataSto
             EditorFormat = body.EditorFormat ?? "BlockJsonWithInlineHtml",
             ChunkPolicy = body.ChunkPolicy ?? "RichTextMvpV1",
             EmbeddedFileStorage = body.EmbeddedFileStorage ?? "LocalDocumentFiles",
-            SupportsImages = body.SupportsImages
+            SupportsImages = body.SupportsImages,
+            PublishedVersion = body.PublishedVersion
         };
     }
 
@@ -60,5 +62,8 @@ internal sealed class RichTextDocumentEntityDataStorageConverter : EntityDataSto
 
         [JsonPropertyName("supportsImages")]
         public bool SupportsImages { get; set; }
+
+        [JsonPropertyName("publishedVersion")]
+        public int PublishedVersion { get; set; }
     }
 }

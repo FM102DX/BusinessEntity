@@ -765,12 +765,14 @@ namespace BusinessEntity.Core.Services
                 {
                     Name = string.IsNullOrWhiteSpace(document.Name) ? entityData.Name : document.Name,
                     Tag = document.Tag,
+                    PublishedVersion = document.PublishedVersion,
                     Text = document.Text ?? string.Empty
                 },
                 entityData.Name);
 
             typedEntity = CopyEntityState(entityData, typedEntity);
             typedEntity.Data.Tag = document.Tag;
+            typedEntity.Data.PublishedVersion = document.PublishedVersion;
             typedEntity.Data.Text = document.Text ?? string.Empty;
 
             return typedEntity;
@@ -789,7 +791,8 @@ namespace BusinessEntity.Core.Services
                     EditorFormat = richTextDocument.EditorFormat,
                     ChunkPolicy = richTextDocument.ChunkPolicy,
                     EmbeddedFileStorage = richTextDocument.EmbeddedFileStorage,
-                    SupportsImages = richTextDocument.SupportsImages
+                    SupportsImages = richTextDocument.SupportsImages,
+                    PublishedVersion = richTextDocument.PublishedVersion
                 },
                 entityData.Name);
 
@@ -800,6 +803,7 @@ namespace BusinessEntity.Core.Services
             typedEntity.Data.ChunkPolicy = richTextDocument.ChunkPolicy;
             typedEntity.Data.EmbeddedFileStorage = richTextDocument.EmbeddedFileStorage;
             typedEntity.Data.SupportsImages = richTextDocument.SupportsImages;
+            typedEntity.Data.PublishedVersion = richTextDocument.PublishedVersion;
 
             return typedEntity;
         }
@@ -880,6 +884,9 @@ namespace BusinessEntity.Core.Services
             target.Id = source.Id;
             target.CreatedDate = source.CreatedDate;
             target.LastModifiedDate = source.LastModifiedDate;
+            target.CreatedByUserId = source.CreatedByUserId;
+            target.LastModifiedByUserId = source.LastModifiedByUserId;
+            target.IsPublic = source.IsPublic;
             target.Name = source.Name;
             target.BusinessEntityType = source.BusinessEntityType;
             target.EntityType = source.EntityType;
@@ -894,6 +901,9 @@ namespace BusinessEntity.Core.Services
             target.Id = source.Id;
             target.CreatedDate = source.CreatedDate;
             target.LastModifiedDate = source.LastModifiedDate;
+            target.CreatedByUserId = source.CreatedByUserId;
+            target.LastModifiedByUserId = source.LastModifiedByUserId;
+            target.IsPublic = source.IsPublic;
             target.Name = source.Name;
             target.BusinessEntityType = source.BusinessEntityType;
             target.EntityType = source.EntityType;

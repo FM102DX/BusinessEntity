@@ -15,12 +15,17 @@ namespace BusinessEntity.Components
         [Parameter] public int VersionsRefreshToken { get; set; }
         [Parameter] public int ViewedVersion { get; set; } = 1;
         [Parameter] public int LatestVersion { get; set; } = 1;
+        [Parameter] public int PublishedVersion { get; set; }
+        [Parameter] public bool CanBrowseVersions { get; set; } = true;
+        [Parameter] public bool CanEditVersionDescription { get; set; }
+        [Parameter] public string VersionDescription { get; set; } = string.Empty;
         [Parameter] public EventCallback<string> OnSearchNext { get; set; }
         [Parameter] public EventCallback<string> OnSearchPrevious { get; set; }
         [Parameter] public EventCallback OnCreateBookmark { get; set; }
         [Parameter] public EventCallback<RichTextDocumentBookmark> OnBookmarkSelected { get; set; }
         [Parameter] public EventCallback<Guid> OnBookmarkDeleted { get; set; }
         [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
+        [Parameter] public EventCallback<string> OnVersionDescriptionChanged { get; set; }
 
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
@@ -151,9 +156,15 @@ namespace BusinessEntity.Components
                 : Task.CompletedTask;
         }
 
+        private Task HandleVersionDescriptionInputAsync(ChangeEventArgs args)
+        {
+            VersionDescription = args.Value?.ToString() ?? string.Empty;
+            return OnVersionDescriptionChanged.InvokeAsync(VersionDescription);
+        }
+
         private async Task SelectVersionAsync(int version)
         {
-            if (version <= 0 || version == ViewedVersion)
+            if (!CanBrowseVersions || version <= 0 || version == ViewedVersion)
             {
                 return;
             }
@@ -175,7 +186,10 @@ namespace BusinessEntity.Components
 
             try
             {
-                Versions = await DataProviderConnector.GetDataVersionsAsync(BusinessEntityId);
+                var versions = await DataProviderConnector.GetDataVersionsAsync(BusinessEntityId);
+                Versions = CanBrowseVersions
+                    ? versions
+                    : versions.Where(version => (version.Version <= 0 ? 1 : version.Version) == ViewedVersion).ToList();
                 _versionsLoadedForEntityId = BusinessEntityId;
                 _versionsLoadedForRefreshToken = VersionsRefreshToken;
             }
@@ -335,9 +349,31 @@ namespace BusinessEntity.Components
         private string GetVersionRowClass(BusinessEntityDataVersionInfo version)
         {
             var normalizedVersion = version.Version <= 0 ? 1 : version.Version;
-            return normalizedVersion == ViewedVersion
-                ? "rich-text-document-versions__row rich-text-document-versions__row--selected"
-                : "rich-text-document-versions__row";
+            var classes = new List<string> { "rich-text-document-versions__row" };
+
+            if (normalizedVersion == ViewedVersion)
+            {
+                classes.Add("rich-text-document-versions__row--selected");
+            }
+
+            if (IsVersionPublished(normalizedVersion))
+            {
+                classes.Add("rich-text-document-versions__row--published");
+            }
+
+            return string.Join(" ", classes);
+        }
+
+        // Проверяет, является ли версия опубликованной версией документа.
+        private bool IsVersionPublished(int version)
+        {
+            return PublishedVersion > 0 && version == PublishedVersion;
+        }
+
+        // Проверяет, является ли версия рабочим драфтом поверх опубликованной версии.
+        private bool IsVersionDraft(int version)
+        {
+            return version == LatestVersion && !IsVersionPublished(version);
         }
 
         private enum RichTextDocumentWidgetTab

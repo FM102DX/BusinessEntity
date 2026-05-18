@@ -25,10 +25,17 @@ namespace BusinessEntity.Components
         [Parameter] public int VersionsRefreshToken { get; set; }
         [Parameter] public int ViewedVersion { get; set; } = 1;
         [Parameter] public int LatestVersion { get; set; } = 1;
+        [Parameter] public int PublishedVersion { get; set; }
         [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
+        [Parameter] public bool CanPublish { get; set; }
+        [Parameter] public bool CanChangePublicFlag { get; set; }
+        [Parameter] public bool IsPublic { get; set; }
+        [Parameter] public bool CanBrowseVersions { get; set; } = true;
         [Parameter] public EventCallback<string?> OnTitleChanged { get; set; }
         [Parameter] public EventCallback OnSaveRequested { get; set; }
+        [Parameter] public EventCallback OnPublishRequested { get; set; }
+        [Parameter] public EventCallback<bool> OnPublicChanged { get; set; }
         [Parameter] public EventCallback<RichTextDocumentViewportPosition?> OnReadModeRequested { get; set; }
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
         [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
@@ -49,6 +56,7 @@ namespace BusinessEntity.Components
         private Guid _displayLevelDocumentId;
         private Guid _displayLevelLoadedForEntityId;
         private Guid? ActiveBookmarkId { get; set; }
+        public string VersionDescription { get; private set; } = string.Empty;
 
         protected override async Task OnInitializedAsync()
         {
@@ -105,6 +113,12 @@ namespace BusinessEntity.Components
             return EditorViewport?.SaveAsync() ?? Task.FromResult(0);
         }
 
+        public void ClearVersionDescription()
+        {
+            VersionDescription = string.Empty;
+            StateHasChanged();
+        }
+
         private Task HandleTitleInputAsync(ChangeEventArgs args)
         {
             return OnTitleChanged.InvokeAsync(args.Value?.ToString());
@@ -113,6 +127,28 @@ namespace BusinessEntity.Components
         private Task HandleSaveAsync()
         {
             return OnSaveRequested.InvokeAsync();
+        }
+
+        private Task HandlePublishAsync()
+        {
+            return CanPublish ? OnPublishRequested.InvokeAsync() : Task.CompletedTask;
+        }
+
+        private Task HandlePublicChangedAsync(ChangeEventArgs args)
+        {
+            if (!CanChangePublicFlag)
+            {
+                return Task.CompletedTask;
+            }
+
+            var value = args.Value is bool boolValue && boolValue;
+            return OnPublicChanged.InvokeAsync(value);
+        }
+
+        private Task HandleVersionDescriptionChangedAsync(string value)
+        {
+            VersionDescription = value ?? string.Empty;
+            return Task.CompletedTask;
         }
 
         private async Task HandleReadModeAsync()

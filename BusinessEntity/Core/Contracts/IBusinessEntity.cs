@@ -13,6 +13,12 @@ namespace BusinessEntity.Core.Contracts
         DateTime CreatedDate { get; set; }
         // Дата последнего изменения сущности
         DateTime LastModifiedDate { get; set; }
+        // Локальный пользователь, создавший сущность
+        Guid? CreatedByUserId { get; set; }
+        // Локальный пользователь, последним изменивший сущность
+        Guid? LastModifiedByUserId { get; set; }
+        // Признак общей видимости документа для пользователей, не являющихся создателями.
+        bool IsPublic { get; set; }
         // Отображаемое имя сущности
         string Name { get; set; }
         // Совместимое имя типа для старого кода

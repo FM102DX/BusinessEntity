@@ -495,6 +495,7 @@ public sealed class SpaceRestoreService
             Id = targetId,
             CreatedDate = isSourceSpace ? now : source.CreatedDate,
             LastModifiedDate = isSourceSpace ? now : source.LastModifiedDate,
+            IsPublic = source.IsPublic,
             Name = string.IsNullOrWhiteSpace(name) ? source.Name : name,
             BusinessEntityType = source.BusinessEntityType == BusinessEntityTypeEnum.Undefined
                 ? entityType
@@ -604,6 +605,7 @@ public sealed class SpaceRestoreService
             Id = ReadGuid(root, "id", Guid.Empty),
             CreatedDate = ReadDateTime(root, "createdDate", DateTime.UtcNow),
             LastModifiedDate = ReadDateTime(root, "lastModifiedDate", DateTime.UtcNow),
+            IsPublic = ReadBool(root, "isPublic", fallback: false),
             Name = ReadString(root, "name"),
             EntityType = entityType,
             BusinessEntityType = businessEntityType

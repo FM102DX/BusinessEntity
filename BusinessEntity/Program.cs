@@ -11,6 +11,7 @@ using BusinessEntity.MiniApps.SampleDataMiniApp.Registration;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts;
 using BusinessEntity.MiniApps.TreeMiniApp.Registration;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Registration;
 using BusinessEntity.MiniApps.UserMiniApp.Storage;
 using BusinessEntity.Service;
@@ -23,6 +24,7 @@ using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Radzen;
+using System.Text.Json;
 
 namespace BusinessEntity
 {
@@ -163,15 +165,15 @@ namespace BusinessEntity
             builder.Services.AddSingleton(provider => userMiniAppOptionsBuilder.Options);
             builder.Services.AddSingleton<ThreadSafeDbContextFactory>();
 
-			using (var context = new KmsBusinessEntityDbContext(optionsBuilder.Options))
-			{
-				EnsureBusinessEntityStorageSchema(context);
-			}
-
             using (var userMiniAppContext = new UserMiniAppDbContext(userMiniAppOptionsBuilder.Options))
             {
                 UserMiniAppStorageSchema.EnsureSchema(userMiniAppContext);
             }
+
+			using (var context = new KmsBusinessEntityDbContext(optionsBuilder.Options))
+			{
+				EnsureBusinessEntityStorageSchema(context);
+			}
 
 			// Подключает Swagger для диагностики API.
 			builder.Services.AddSwaggerGen();
@@ -213,6 +215,10 @@ namespace BusinessEntity
                 {
                     var sampleDataMiniApp = scope.ServiceProvider.GetRequiredService<ISampleDataMiniApp>();
                     sampleDataMiniApp.EnsureInitializedAsync().GetAwaiter().GetResult();
+
+                    using var businessContext = new KmsBusinessEntityDbContext(optionsBuilder.Options);
+                    using var userMiniAppContext = new UserMiniAppDbContext(userMiniAppOptionsBuilder.Options);
+                    EnsureSeedOwnerMetadata(businessContext, userMiniAppContext);
                 }
                 catch (Exception ex)
                 {
@@ -243,6 +249,120 @@ namespace BusinessEntity
 			app.Run();
 		}
 
+        // Дает seed/legacy entity и payload-записям явного владельца, когда seed выполнялся без HTTP-пользователя.
+        private static void EnsureSeedOwnerMetadata(
+            KmsBusinessEntityDbContext businessContext,
+            UserMiniAppDbContext userContext)
+        {
+            var users = userContext.Users
+                .OrderBy(user => user.DateCreated)
+                .ThenBy(user => user.Id)
+                .ToList();
+
+            var seedOwner =
+                users.FirstOrDefault(IsSystemSeedUser)
+                ?? (users.Count == 1 ? users[0] : null)
+                ?? users.FirstOrDefault(IsAdminLikeUser)
+                ?? CreateSystemSeedUser(userContext);
+
+            businessContext.Database.ExecuteSqlInterpolated(
+                $@"
+                UPDATE ""BusinessEntities""
+                SET ""CreatedByUserId"" = {seedOwner.Id},
+                    ""LastModifiedByUserId"" = COALESCE(""LastModifiedByUserId"", {seedOwner.Id})
+                WHERE ""CreatedByUserId"" IS NULL;
+                ");
+
+            businessContext.Database.ExecuteSqlRaw(
+                @"
+                UPDATE ""BusinessEntityDataItems"" data_item
+                SET ""Data"" =
+                    jsonb_set(
+                        jsonb_set(
+                            data_item.""Data""::jsonb,
+                            '{{createdByUserId}}',
+                            to_jsonb(entity.""CreatedByUserId""::text),
+                            true),
+                        '{{lastModifiedByUserId}}',
+                        to_jsonb(COALESCE(entity.""LastModifiedByUserId"", entity.""CreatedByUserId"")::text),
+                        true)::text
+                FROM ""BusinessEntities"" entity
+                WHERE data_item.""BusinessEntityId"" = entity.""Id""
+                    AND entity.""CreatedByUserId"" IS NOT NULL
+                    AND NULLIF(btrim(data_item.""Data""), '') IS NOT NULL
+                    AND jsonb_typeof(data_item.""Data""::jsonb) = 'object'
+                    AND (
+                        NOT (data_item.""Data""::jsonb ? 'createdByUserId')
+                        OR NULLIF(data_item.""Data""::jsonb ->> 'createdByUserId', '') IS NULL
+                        OR NOT (data_item.""Data""::jsonb ? 'lastModifiedByUserId')
+                        OR NULLIF(data_item.""Data""::jsonb ->> 'lastModifiedByUserId', '') IS NULL
+                    );
+                ");
+        }
+
+        private static UserDto CreateSystemSeedUser(UserMiniAppDbContext userContext)
+        {
+            var now = DateTime.UtcNow;
+            var user = new UserDto
+            {
+                Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                ExternalId = "system-seed",
+                Payload = JsonSerializer.Serialize(new UserData
+                {
+                    AuthentikLogin = "system-seed",
+                    DisplayedName = "system-seed",
+                    ExtId = "system-seed"
+                }),
+                DateCreated = now,
+                DateLastModified = now
+            };
+
+            var existing = userContext.Users.FirstOrDefault(existingUser => existingUser.Id == user.Id || existingUser.ExternalId == user.ExternalId);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            userContext.Users.Add(user);
+            userContext.SaveChanges();
+            return user;
+        }
+
+        private static bool IsSystemSeedUser(UserDto user)
+        {
+            return string.Equals(user.ExternalId, "system-seed", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsAdminLikeUser(UserDto user)
+        {
+            if (string.Equals(user.ExternalId, "admin", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(user.ExternalId, "akadmin", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(user.Payload))
+            {
+                return false;
+            }
+
+            try
+            {
+                var data = JsonSerializer.Deserialize<UserData>(user.Payload);
+                return string.Equals(data?.DisplayedName, "admin", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(data?.DisplayedName, "akadmin", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(data?.AuthentikLogin, "admin", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(data?.AuthentikLogin, "akadmin", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(data?.ExtId, "admin", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(data?.ExtId, "akadmin", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return user.Payload.Contains("admin", StringComparison.OrdinalIgnoreCase) ||
+                       user.Payload.Contains("akadmin", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
         // Явно создает DTO-таблицы mini-app в shared Postgres-базе, даже если в базе уже есть таблицы других сервисов.
         private static void EnsureBusinessEntityStorageSchema(KmsBusinessEntityDbContext context)
         {
@@ -254,6 +374,9 @@ namespace BusinessEntity
                     ""Id"" uuid NOT NULL,
                     ""CreatedDate"" timestamp with time zone NOT NULL,
                     ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""CreatedByUserId"" uuid NULL,
+                    ""LastModifiedByUserId"" uuid NULL,
+                    ""IsPublic"" boolean NOT NULL DEFAULT FALSE,
                     ""Name"" text NOT NULL,
                     ""BusinessEntityType"" integer NOT NULL,
                     ""EntityType"" integer NOT NULL,
@@ -277,6 +400,7 @@ namespace BusinessEntity
                     ""LastModifiedDate"" timestamp with time zone NOT NULL,
                     ""BusinessEntityId"" uuid NOT NULL,
                     ""Version"" integer NOT NULL DEFAULT 1,
+                    ""VersionDescription"" text NOT NULL DEFAULT '',
                     ""Data"" text NOT NULL,
                     CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"", ""Version"")
                 );
@@ -333,8 +457,25 @@ namespace BusinessEntity
 
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectAId"" ON ""BusinessEntityRelations"" (""ObjectAId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectBId"" ON ""BusinessEntityRelations"" (""ObjectBId"");
+                ALTER TABLE ""BusinessEntities"" ADD COLUMN IF NOT EXISTS ""CreatedByUserId"" uuid NULL;
+                ALTER TABLE ""BusinessEntities"" ADD COLUMN IF NOT EXISTS ""LastModifiedByUserId"" uuid NULL;
+                ALTER TABLE ""BusinessEntities"" ADD COLUMN IF NOT EXISTS ""IsPublic"" boolean NOT NULL DEFAULT FALSE;
+                DO $$
+                DECLARE legacy_owner uuid;
+                BEGIN
+                    SELECT ""Id"" INTO legacy_owner FROM ""Users"" ORDER BY ""DateCreated"", ""Id"" LIMIT 1;
+                    IF legacy_owner IS NOT NULL AND (SELECT COUNT(*) FROM ""Users"") = 1 THEN
+                        UPDATE ""BusinessEntities""
+                        SET ""CreatedByUserId"" = legacy_owner,
+                            ""LastModifiedByUserId"" = COALESCE(""LastModifiedByUserId"", legacy_owner)
+                        WHERE ""CreatedByUserId"" IS NULL;
+                    END IF;
+                END $$;
                 ALTER TABLE ""BusinessEntityDataItems"" ADD COLUMN IF NOT EXISTS ""Version"" integer NOT NULL DEFAULT 1;
+                ALTER TABLE ""BusinessEntityDataItems"" ADD COLUMN IF NOT EXISTS ""VersionDescription"" text NOT NULL DEFAULT '';
                 ALTER TABLE ""BusinessEntityDataChunks"" ADD COLUMN IF NOT EXISTS ""Version"" integer NOT NULL DEFAULT 1;
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntities_CreatedByUserId"" ON ""BusinessEntities"" (""CreatedByUserId"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntities_LastModifiedByUserId"" ON ""BusinessEntities"" (""LastModifiedByUserId"");
                 ALTER TABLE IF EXISTS ""BusinessEntityDataItems"" DROP CONSTRAINT IF EXISTS ""PK_BusinessEntityDataItems"";
                 ALTER TABLE IF EXISTS ""BusinessEntityDataItems"" ADD CONSTRAINT ""PK_BusinessEntityDataItems"" PRIMARY KEY (""Id"", ""Version"");
                 ALTER TABLE IF EXISTS ""BusinessEntityDataChunks"" DROP CONSTRAINT IF EXISTS ""PK_BusinessEntityDataChunks"";

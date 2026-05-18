@@ -117,6 +117,22 @@
             }
             else if (ActiveTab == RichTextDocumentWidgetTab.Versions)
             {
+                @if (CanEditVersionDescription)
+                {
+                    <div class="rich-text-document-versions__description">
+                        <label class="rich-text-document-versions__description-label" for="rich-doc-version-description-@BusinessEntityId">
+                            Описание версии
+                        </label>
+                        <textarea id="rich-doc-version-description-@BusinessEntityId"
+                                  class="form-control form-control-sm rich-text-document-versions__description-input"
+                                  value="@VersionDescription"
+                                  @oninput="HandleVersionDescriptionInputAsync"
+                                  rows="2"
+                                  maxlength="500"
+                                  placeholder="Комментарий к сохраняемой версии"></textarea>
+                    </div>
+                }
+
                 @if (IsVersionsLoading)
                 {
                     <div class="rich-text-document-versions__empty">Загрузка версий...</div>
@@ -137,22 +153,35 @@
                                 <tr>
                                     <th>Версия</th>
                                     <th>Дата</th>
+                                    <th>Описание</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var version in Versions)
                                 {
                                     var normalizedVersion = version.Version <= 0 ? 1 : version.Version;
+                                    var isDraftVersion = IsVersionDraft(normalizedVersion);
+                                    var isPublishedVersion = IsVersionPublished(normalizedVersion);
                                     <tr class="@GetVersionRowClass(version)"
                                         @onclick="@(() => SelectVersionAsync(normalizedVersion))">
                                         <td>
                                             @normalizedVersion
-                                            @if (normalizedVersion == LatestVersion)
+                                            @if (isDraftVersion || isPublishedVersion)
                                             {
-                                                <span class="rich-text-document-versions__latest">текущая</span>
+                                                <span class="rich-text-document-versions__markers">
+                                                    @if (isDraftVersion)
+                                                    {
+                                                        <span class="rich-text-document-versions__marker rich-text-document-versions__marker--draft">драфт</span>
+                                                    }
+                                                    @if (isPublishedVersion)
+                                                    {
+                                                        <span class="rich-text-document-versions__marker rich-text-document-versions__marker--published">опубликовано</span>
+                                                    }
+                                                </span>
                                             }
                                         </td>
                                         <td>@FormatVersionDate(version.CreatedDate)</td>
+                                        <td>@version.VersionDescription</td>
                                     </tr>
                                 }
                             </tbody>

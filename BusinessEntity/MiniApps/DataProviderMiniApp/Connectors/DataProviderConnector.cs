@@ -6,6 +6,7 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Internal.Conversion;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using ReactiveUI;
 
 namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
@@ -18,6 +19,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
     {
         private readonly IMessageBus _messageBus;
         private readonly EntityDataStorageCodec _entityDataStorageCodec;
+        private readonly IUserConnector? _userConnector;
 
         /// <summary>
         /// Инициализирует connector и гарантирует материализацию mini-app перед первым запросом.
@@ -26,10 +28,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
         public DataProviderConnector(
             IMessageBus messageBus,
             IDataProviderMiniApp dataProviderMiniApp,
-            EntityDataStorageCodec entityDataStorageCodec)
+            EntityDataStorageCodec entityDataStorageCodec,
+            IUserConnector? userConnector = null)
         {
             _messageBus = messageBus;
             _entityDataStorageCodec = entityDataStorageCodec;
+            _userConnector = userConnector;
             dataProviderMiniApp.EnsureInitialized();
         }
 
@@ -80,6 +84,30 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
 
             var data = _entityDataStorageCodec.DeserializeEnvelope<TData>(response.Data);
             data.Version = response.Version <= 0 ? 1 : response.Version;
+            await ApplyEntityMetadataAsync(id, data, cancellationToken);
+            return data;
+        }
+
+        // Получает payload конкретной версии сущности и десериализует его в нужный тип.
+        public async Task<TData?> GetDataVersionAsync<TData>(Guid id, int version, CancellationToken cancellationToken = default)
+            where TData : class, IBusinessEntityData
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<GetBusinessEntityDataVersionRequest, GetBusinessEntityDataVersionResponse>(
+                new GetBusinessEntityDataVersionRequest(requestId, id, version),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            if (string.IsNullOrWhiteSpace(response.Data))
+            {
+                return default;
+            }
+
+            var data = _entityDataStorageCodec.DeserializeEnvelope<TData>(response.Data);
+            data.Version = response.Version <= 0 ? 1 : response.Version;
+            await ApplyEntityMetadataAsync(id, data, cancellationToken);
             return data;
         }
 
@@ -97,14 +125,43 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             return response.Records;
         }
 
+        // Обновляет человекочитаемое описание конкретной версии payload.
+        public async Task UpdateDataVersionDescriptionAsync(
+            Guid id,
+            int version,
+            string? versionDescription,
+            CancellationToken cancellationToken = default)
+        {
+            var requestId = Guid.NewGuid();
+            var response = await SendAndReceiveAsync<UpdateBusinessEntityDataVersionDescriptionRequest, UpdateBusinessEntityDataVersionDescriptionResponse>(
+                new UpdateBusinessEntityDataVersionDescriptionRequest(requestId, id, version, versionDescription),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            if (!response.Success)
+            {
+                throw new InvalidOperationException($"DataProvider failed to update version description for business entityData '{id}' version '{version}'.");
+            }
+        }
+
         // Сериализует payload в raw JSON и отправляет команду на сохранение envelope.
         public async Task UpdateDataAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
             where TData : class, IBusinessEntityData
         {
+            var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+            if (currentUserId.HasValue && data is BusinessEntityData businessEntityData)
+            {
+                var entity = await GetByIdAsync(id, cancellationToken);
+                businessEntityData.CreatedByUserId ??= entity?.CreatedByUserId ?? currentUserId;
+                businessEntityData.LastModifiedByUserId = currentUserId;
+            }
+
             var requestId = Guid.NewGuid();
             var payload = _entityDataStorageCodec.SerializePayload(data);
             var response = await SendAndReceiveAsync<UpdateBusinessEntityDataRequest, UpdateBusinessEntityDataResponse>(
-                new UpdateBusinessEntityDataRequest(requestId, id, payload, data.HasVersions),
+                new UpdateBusinessEntityDataRequest(requestId, id, payload, data.HasVersions, currentUserId),
                 static result => result.RequestId,
                 requestId,
                 cancellationToken);
@@ -116,9 +173,43 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             }
         }
 
+        // Сохраняет payload в текущую storage-запись без создания новой версии.
+        public async Task UpdateDataInPlaceAsync<TData>(Guid id, TData data, CancellationToken cancellationToken = default)
+            where TData : class, IBusinessEntityData
+        {
+            var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+            if (currentUserId.HasValue && data is BusinessEntityData businessEntityData)
+            {
+                var entity = await GetByIdAsync(id, cancellationToken);
+                businessEntityData.CreatedByUserId ??= entity?.CreatedByUserId ?? currentUserId;
+                businessEntityData.LastModifiedByUserId = currentUserId;
+            }
+
+            var requestId = Guid.NewGuid();
+            var payload = _entityDataStorageCodec.SerializePayload(data);
+            var response = await SendAndReceiveAsync<UpdateBusinessEntityDataRequest, UpdateBusinessEntityDataResponse>(
+                new UpdateBusinessEntityDataRequest(requestId, id, payload, HasVersions: false, LastModifiedByUserId: currentUserId),
+                static result => result.RequestId,
+                requestId,
+                cancellationToken);
+
+            EnsureNoError(response.ErrorMessage);
+            if (!response.Success)
+            {
+                throw new InvalidOperationException($"DataProvider failed to update data in-place for business entityData '{id}'.");
+            }
+        }
+
         // Отправляет команду на создание бизнес-сущности.
         public async Task<BusinessEntity.Core.Classes.BusinessEntity> AddAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
+            var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+            if (currentUserId.HasValue)
+            {
+                entityData.CreatedByUserId ??= currentUserId;
+                entityData.LastModifiedByUserId = currentUserId;
+            }
+
             var requestId = Guid.NewGuid();
             var response = await SendAndReceiveAsync<AddBusinessEntityRequest, AddBusinessEntityResponse>(
                 new AddBusinessEntityRequest(requestId, entityData),
@@ -133,6 +224,12 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
         // Отправляет команду на обновление бизнес-сущности.
         public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
+            var currentUserId = await ResolveCurrentUserIdAsync(cancellationToken);
+            if (currentUserId.HasValue)
+            {
+                entityData.LastModifiedByUserId = currentUserId;
+            }
+
             var requestId = Guid.NewGuid();
             var response = await SendAndReceiveAsync<UpdateBusinessEntityRequest, UpdateBusinessEntityResponse>(
                 new UpdateBusinessEntityRequest(requestId, entityData),
@@ -146,6 +243,46 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Connectors
             {
                 throw new InvalidOperationException($"DataProvider failed to update business entityData '{entityData.Id}'.");
             }
+        }
+
+        private async Task<Guid?> ResolveCurrentUserIdAsync(CancellationToken cancellationToken)
+        {
+            if (_userConnector == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var user = await _userConnector.EnsureCurrentUserAsync(cancellationToken);
+                return user?.Id;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task ApplyEntityMetadataAsync<TData>(
+            Guid id,
+            TData data,
+            CancellationToken cancellationToken)
+            where TData : class, IBusinessEntityData
+        {
+            if (data is not BusinessEntityData businessEntityData ||
+                (businessEntityData.CreatedByUserId.HasValue && businessEntityData.LastModifiedByUserId.HasValue))
+            {
+                return;
+            }
+
+            var entity = await GetByIdAsync(id, cancellationToken);
+            if (entity == null)
+            {
+                return;
+            }
+
+            businessEntityData.CreatedByUserId ??= entity.CreatedByUserId;
+            businessEntityData.LastModifiedByUserId ??= entity.LastModifiedByUserId;
         }
 
         // Отправляет команду на удаление бизнес-сущности.

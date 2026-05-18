@@ -106,9 +106,39 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                     BusinessEntityId = d.BusinessEntityId,
                     Version = NormalizeVersion(d.Version),
                     CreatedDate = d.CreatedDate,
-                    LastModifiedDate = d.LastModifiedDate
+                    LastModifiedDate = d.LastModifiedDate,
+                    VersionDescription = d.VersionDescription ?? string.Empty
                 })
                 .ToList();
+        }
+
+        // Обновляет пользовательское описание конкретной версии payload.
+        public async Task UpdateDataVersionDescriptionAsync(
+            Guid id,
+            int version,
+            string? versionDescription,
+            CancellationToken cancellationToken = default)
+        {
+            var normalizedVersion = NormalizeVersion(version);
+            var description = (versionDescription ?? string.Empty).Trim();
+            var dataItems = await _businessEntityDataRepository.GetAllAsync(
+                d => d.BusinessEntityId == id,
+                ct: cancellationToken);
+            var targetItems = dataItems
+                .Where(d => NormalizeVersion(d.Version) == normalizedVersion)
+                .ToList();
+
+            if (targetItems.Count == 0)
+            {
+                throw new KeyNotFoundException($"BusinessEntityData with id '{id}' and version '{normalizedVersion}' was not found.");
+            }
+
+            foreach (var item in targetItems)
+            {
+                item.VersionDescription = description;
+                item.LastModifiedDate = DateTime.UtcNow;
+                await _businessEntityDataRepository.UpdateAsync(item, cancellationToken);
+            }
         }
 
         // Сериализует типизированный payload в raw JSON и сохраняет его как versioned envelope.
@@ -132,17 +162,43 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             return FindDataDtoAsync(id, cancellationToken);
         }
 
+        // Возвращает storage-запись payload конкретной версии.
+        public async Task<BusinessEntityDataDto?> GetDataPayloadRecordAsync(
+            Guid id,
+            int version,
+            CancellationToken cancellationToken = default)
+        {
+            var normalizedVersion = NormalizeVersion(version);
+            var dataItems = await _businessEntityDataRepository.GetAllAsync(
+                d => d.BusinessEntityId == id,
+                ct: cancellationToken);
+
+            return dataItems
+                .Where(d => NormalizeVersion(d.Version) == normalizedVersion)
+                .OrderByDescending(d => d.LastModifiedDate)
+                .FirstOrDefault();
+        }
+
         // Создаёт или обновляет envelope payload для сущности.
         public async Task UpdateDataPayloadAsync(
             Guid id,
             string payloadJson,
             bool hasVersions = false,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Guid? lastModifiedByUserId = null)
         {
             var entity = await _businessEntityRepository.GetByIdAsync(id, cancellationToken);
             if (entity == null)
             {
                 throw new KeyNotFoundException($"BusinessEntityData with id '{id}' was not found.");
+            }
+
+            if (lastModifiedByUserId.HasValue)
+            {
+                entity.CreatedByUserId ??= lastModifiedByUserId;
+                entity.LastModifiedByUserId = lastModifiedByUserId;
+                entity.LastModifiedDate = DateTime.UtcNow;
+                await _businessEntityRepository.UpdateAsync(entity, cancellationToken);
             }
 
             var envelopeJson = DataPayloadEnvelopeSerializer.CreateEnvelopeJson(entity, payloadJson);
@@ -203,6 +259,13 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         public async Task UpdateAsync(BusinessEntity.Core.Classes.BusinessEntity entityData, CancellationToken cancellationToken = default)
         {
             var dto = DataProviderMapper.ToDto(entityData);
+            var existingDto = await _businessEntityRepository.GetByIdAsync(dto.Id, cancellationToken);
+            if (existingDto != null)
+            {
+                dto.CreatedByUserId ??= existingDto.CreatedByUserId;
+                dto.LastModifiedByUserId ??= existingDto.LastModifiedByUserId;
+            }
+
             _webLogger?.Information($"[мини-апп:data-provider] [dto:map] [business-entity-dto] Обновляем DTO сущности entityId={entityData.Id} dtoId={dto.Id} type={dto.EntityType} name='{dto.Name}'");
             await _businessEntityRepository.UpdateAsync(dto, cancellationToken);
             _webLogger?.Information($"[мини-апп:data-provider] [dto:write] [business-entity-dto] DTO сущности обновлен в хранилище entityId={dto.Id} type={dto.EntityType} name='{dto.Name}'");

@@ -16,7 +16,8 @@ internal sealed class DocumentEntityDataStorageConverter : EntityDataStorageConv
         return SerializeBody(new DocumentPayloadBody
         {
             Text = data.Text ?? string.Empty,
-            Tag = data.Tag
+            Tag = data.Tag,
+            PublishedVersion = data.PublishedVersion
         });
     }
 
@@ -27,7 +28,8 @@ internal sealed class DocumentEntityDataStorageConverter : EntityDataStorageConv
         return new Document
         {
             Text = body.Text ?? string.Empty,
-            Tag = body.Tag ?? string.Empty
+            Tag = body.Tag ?? string.Empty,
+            PublishedVersion = body.PublishedVersion
         };
     }
 
@@ -39,5 +41,8 @@ internal sealed class DocumentEntityDataStorageConverter : EntityDataStorageConv
 
         [JsonPropertyName("tag")]
         public string? Tag { get; set; }
+
+        [JsonPropertyName("publishedVersion")]
+        public int PublishedVersion { get; set; }
     }
 }

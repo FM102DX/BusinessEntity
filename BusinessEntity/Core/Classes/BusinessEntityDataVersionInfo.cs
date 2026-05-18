@@ -10,4 +10,5 @@ public sealed class BusinessEntityDataVersionInfo
     public int Version { get; set; } = 1;
     public DateTime CreatedDate { get; set; }
     public DateTime LastModifiedDate { get; set; }
+    public string VersionDescription { get; set; } = string.Empty;
 }

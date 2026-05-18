@@ -16,11 +16,19 @@ internal static class DataPayloadEnvelopeSerializer
         ArgumentNullException.ThrowIfNull(entity);
 
         var kind = GetStorageKind(entity.EntityType);
-        return CreateEnvelopeJson(kind, payloadJson);
+        return CreateEnvelopeJson(
+            kind,
+            payloadJson,
+            entity.CreatedByUserId,
+            entity.LastModifiedByUserId);
     }
 
     // Заворачивает raw payload JSON в технический storage-envelope по явному kind.
-    public static string CreateEnvelopeJson(string kind, string payloadJson)
+    public static string CreateEnvelopeJson(
+        string kind,
+        string payloadJson,
+        Guid? createdByUserId = null,
+        Guid? lastModifiedByUserId = null)
     {
         if (string.IsNullOrWhiteSpace(kind))
         {
@@ -32,6 +40,8 @@ internal static class DataPayloadEnvelopeSerializer
         {
             SchemaVersion = CurrentSchemaVersion,
             Kind = kind,
+            CreatedByUserId = createdByUserId,
+            LastModifiedByUserId = lastModifiedByUserId,
             Payload = payload
         };
 
@@ -61,7 +71,9 @@ internal static class DataPayloadEnvelopeSerializer
 
         return new ParsedEnvelope(
             envelope.Kind,
-            envelope.Payload.GetRawText());
+            envelope.Payload.GetRawText(),
+            envelope.CreatedByUserId,
+            envelope.LastModifiedByUserId);
     }
 
     // Возвращает стабильный storage-kind, независимый от CLR type name.
@@ -86,7 +98,11 @@ internal static class DataPayloadEnvelopeSerializer
     }
 
     // Структурированное представление уже провалидированного storage-envelope.
-    internal sealed record ParsedEnvelope(string Kind, string PayloadJson);
+    internal sealed record ParsedEnvelope(
+        string Kind,
+        string PayloadJson,
+        Guid? CreatedByUserId,
+        Guid? LastModifiedByUserId);
 
     // Raw-envelope storage contract с фиксированными именами JSON-ключей.
     private sealed class DataPayloadEnvelopeRaw
@@ -96,6 +112,12 @@ internal static class DataPayloadEnvelopeSerializer
 
         [JsonPropertyName("kind")]
         public string Kind { get; set; } = string.Empty;
+
+        [JsonPropertyName("createdByUserId")]
+        public Guid? CreatedByUserId { get; set; }
+
+        [JsonPropertyName("lastModifiedByUserId")]
+        public Guid? LastModifiedByUserId { get; set; }
 
         [JsonPropertyName("payload")]
         public JsonElement Payload { get; set; }

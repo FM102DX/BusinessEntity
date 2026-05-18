@@ -1,5 +1,6 @@
 using BusinessEntity.Core.RichText;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Internal;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Facade
@@ -41,6 +42,33 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
         public Task<bool> DeleteCurrentUserAsync(CancellationToken cancellationToken = default)
         {
             return _userMiniAppService.DeleteCurrentUserAsync(cancellationToken);
+        }
+
+        // Делегирует чтение локальных пользователей во внутренний сервис mini-app.
+        public Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetAdministrationUsersAsync(cancellationToken);
+        }
+
+        // Делегирует создание пользователя Authentik во внутренний сервис mini-app.
+        public Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.CreateAdministrationUserAsync(cancellationToken);
+        }
+
+        // Делегирует обновление локального пользователя во внутренний сервис mini-app.
+        public Task<UserAdministrationRecord> UpdateAdministrationUserAsync(
+            Guid userId,
+            UserAdministrationSaveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.UpdateAdministrationUserAsync(userId, request, cancellationToken);
+        }
+
+        // Делегирует удаление локального пользователя во внутренний сервис mini-app.
+        public Task<bool> DeleteAdministrationUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.DeleteAdministrationUserAsync(userId, cancellationToken);
         }
 
         public Task<IReadOnlyList<RichTextDocumentBookmark>> GetRichDocBookmarksAsync(

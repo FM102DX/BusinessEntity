@@ -1,0 +1,152 @@
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos
+@namespace BusinessEntity.MiniApps.UserMiniApp.Components
+
+<div class="users-admin">
+    <div class="users-admin__sidebar">
+        <div class="users-admin__sidebar-actions">
+            <button type="button"
+                    class="btn btn-sm btn-primary"
+                    @onclick="CreateUserAsync"
+                    disabled="@IsBusy">
+                Создать
+            </button>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    @onclick="LoadUsersAsync"
+                    disabled="@IsBusy">
+                Обновить
+            </button>
+        </div>
+
+        @if (IsLoading)
+        {
+            <div class="users-admin__empty">Загрузка...</div>
+        }
+        else if (Users.Count == 0)
+        {
+            <div class="users-admin__empty">Пользователей нет</div>
+        }
+        else
+        {
+            <div class="users-admin__list" role="listbox" aria-label="Пользователи">
+                @foreach (var user in Users)
+                {
+                    <button type="button"
+                            class="@GetUserButtonClass(user)"
+                            title="@user.ExternalId"
+                            @onclick="@(() => SelectUser(user))">
+                        <span class="users-admin__user-name">@GetUserListName(user)</span>
+                        @if (!string.Equals(user.DisplayedName, user.AuthentikLogin, StringComparison.Ordinal))
+                        {
+                            <span class="users-admin__user-subtitle">@user.AuthentikLogin</span>
+                        }
+                        <span class="users-admin__user-code">@user.ExternalId</span>
+                        @if (!user.IsActive)
+                        {
+                            <span class="users-admin__user-state">неактивен</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="users-admin__details">
+        <div class="users-admin__tabs" role="tablist" aria-label="Разделы пользователя">
+            <button type="button"
+                    class="@GetTabButtonClass(UserAdministrationTab.General)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == UserAdministrationTab.General)"
+                    @onclick="@(() => SetActiveTab(UserAdministrationTab.General))">
+                Общая
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(UserAdministrationTab.AccessRights)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == UserAdministrationTab.AccessRights)"
+                    @onclick="@(() => SetActiveTab(UserAdministrationTab.AccessRights))">
+                Права доступа
+            </button>
+        </div>
+
+        <div class="users-admin__panel" role="tabpanel">
+            @if (ActiveTab == UserAdministrationTab.General)
+            {
+                <EditForm Model="@EditModel" OnValidSubmit="SaveUserAsync">
+                    <div class="users-admin__form">
+                        <label class="users-admin__field">
+                            <span>Код в аутентик</span>
+                            <InputText class="form-control"
+                                       @bind-Value="EditModel.ExternalId"
+                                       disabled="true" />
+                        </label>
+
+                        <label class="users-admin__field">
+                            <span>Логин в аутентик</span>
+                            <InputText class="form-control"
+                                       @bind-Value="EditModel.AuthentikLogin"
+                                       disabled="@IsBusy" />
+                        </label>
+
+                        <label class="users-admin__field">
+                            <span>Отображаемое имя</span>
+                            <InputText class="form-control"
+                                       @bind-Value="EditModel.DisplayedName"
+                                       disabled="@IsBusy" />
+                        </label>
+                    </div>
+
+                    <div class="users-admin__form-actions">
+                        <button type="submit"
+                                class="btn btn-primary"
+                                disabled="@(IsBusy || !SelectedUserId.HasValue)">
+                            Сохранить
+                        </button>
+
+                        @if (SelectedUserId.HasValue)
+                        {
+                            @if (DeleteConfirmationUserId == SelectedUserId)
+                            {
+                                <button type="button"
+                                        class="btn btn-danger"
+                                        @onclick="DeleteSelectedUserAsync"
+                                        disabled="@IsBusy">
+                                    Подтвердить удаление
+                                </button>
+                                <button type="button"
+                                        class="btn btn-outline-secondary"
+                                        @onclick="CancelDeleteConfirmation"
+                                        disabled="@IsBusy">
+                                    Отмена
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-danger"
+                                        @onclick="RequestDeleteConfirmation"
+                                        disabled="@IsBusy">
+                                    Удалить
+                                </button>
+                            }
+                        }
+                    </div>
+                </EditForm>
+            }
+            else
+            {
+                <div class="users-admin__access-placeholder"></div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(StatusMessage))
+            {
+                <div class="users-admin__status">@StatusMessage</div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+            {
+                <div class="users-admin__error">@ErrorMessage</div>
+            }
+        </div>
+    </div>
+</div>
