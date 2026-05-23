@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using BusinessEntity.Services;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
+using ReactiveUI;
 
 namespace BusinessEntity.Controllers
 {
@@ -16,15 +19,18 @@ namespace BusinessEntity.Controllers
         private readonly ILogger<AuthController> _logger;
         private readonly AuthentikSessionManager _authService;
         private readonly IUserConnector _userConnector;
+        private readonly IMessageBus _messageBus;
 
         public AuthController(
             ILogger<AuthController> logger,
             AuthentikSessionManager authService,
-            IUserConnector userConnector)
+            IUserConnector userConnector,
+            IMessageBus messageBus)
         {
             _logger = logger;
             _authService = authService;
             _userConnector = userConnector;
+            _messageBus = messageBus;
         }
 
         /// <summary>
@@ -46,6 +52,51 @@ namespace BusinessEntity.Controllers
             var loginUrl = _authService.GetLoginUrl(returnUrl);
             _logger.LogInformation("[AuthController.Login] Redirecting to Authentik login URL: {LoginUrl}", loginUrl);
             return Redirect(loginUrl);
+        }
+
+        /// <summary>
+        /// Принимает локальную форму логин/пароль и выполняет server-side login flow в Authentik без browser redirect.
+        /// </summary>
+        [HttpPost("password-login")]
+        public async Task<IActionResult> PasswordLogin(
+            [FromForm] string? username,
+            [FromForm] string? password,
+            [FromForm] string? returnUrl = null)
+        {
+            var safeReturnUrl = NormalizeReturnUrl(returnUrl);
+
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                await _userConnector.EnsureCurrentUserAsync(HttpContext.RequestAborted);
+                return LocalRedirect(safeReturnUrl);
+            }
+
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                return LocalRedirect(BuildLoginErrorReturnUrl(safeReturnUrl));
+            }
+
+            try
+            {
+                var redirectUrl = await _authService.CompletePasswordLoginAsync(
+                    username.Trim(),
+                    password,
+                    safeReturnUrl,
+                    HttpContext.RequestAborted);
+                var localUser = await _userConnector.EnsureCurrentUserAsync(HttpContext.RequestAborted);
+                _logger.LogInformation(
+                    "[AuthController.PasswordLogin] Local user ensured. localUserId={LocalUserId} name={LocalUserName}",
+                    localUser?.Id,
+                    localUser?.ExternalId);
+                PublishClearUserMessages(localUser?.Id);
+                PublishLoginSuccessMessage(localUser?.Id, username.Trim());
+                return LocalRedirect(redirectUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[AuthController.PasswordLogin] Password login failed for username: {Username}", username);
+                return LocalRedirect(BuildLoginErrorReturnUrl(safeReturnUrl));
+            }
         }
 
         /// <summary>
@@ -74,6 +125,8 @@ namespace BusinessEntity.Controllers
                     "[AuthController.Callback] Local user ensured. localUserId={LocalUserId} name={LocalUserName}",
                     localUser?.Id,
                     localUser?.ExternalId);
+                PublishClearUserMessages(localUser?.Id);
+                PublishLoginSuccessMessage(localUser?.Id, User.Identity?.Name);
                 return LocalRedirect(returnUrl);
             }
             catch (Exception ex)
@@ -93,6 +146,57 @@ namespace BusinessEntity.Controllers
             _logger.LogInformation("[AuthController.Logout] Initiating sign-out. User: {User}", User.Identity?.Name);
             var redirectUrl = await _authService.SignOutAsync(HttpContext.RequestAborted);
             return Redirect(string.IsNullOrWhiteSpace(redirectUrl) ? (returnUrl ?? "/auth/logged-out") : redirectUrl);
+        }
+
+        private static string BuildLoginErrorReturnUrl(string returnUrl)
+        {
+            return QueryHelpers.AddQueryString(returnUrl, "loginError", "1");
+        }
+
+        // Публикует команду очистки пользовательских сообщений при новом входе.
+        private void PublishClearUserMessages(Guid? userId)
+        {
+            if (userId is not { } normalizedUserId || normalizedUserId == Guid.Empty)
+            {
+                return;
+            }
+
+            _messageBus.SendMessage(new ClearUserMessages(normalizedUserId));
+        }
+
+        // Публикует пользовательское сообщение о завершенном входе в систему.
+        private void PublishLoginSuccessMessage(Guid? userId, string? userName)
+        {
+            if (userId is not { } normalizedUserId || normalizedUserId == Guid.Empty)
+            {
+                return;
+            }
+
+            var normalizedUserName = userName?.Trim();
+            var messageText = string.IsNullOrWhiteSpace(normalizedUserName)
+                ? "Вход выполнен успешно."
+                : $"Вход выполнен успешно. Пользователь {normalizedUserName} авторизован.";
+
+            _messageBus.SendMessage(new PostUserMessage(
+                normalizedUserId,
+                messageText,
+                UserMessageLevel.Success,
+                "Логин успешен"));
+        }
+
+        private static string NormalizeReturnUrl(string? returnUrl)
+        {
+            if (string.IsNullOrWhiteSpace(returnUrl))
+            {
+                return "/";
+            }
+
+            if (!returnUrl.StartsWith("/", StringComparison.Ordinal) || returnUrl.StartsWith("//", StringComparison.Ordinal))
+            {
+                return "/";
+            }
+
+            return returnUrl.StartsWith("/auth", StringComparison.OrdinalIgnoreCase) ? "/" : returnUrl;
         }
     }
 }

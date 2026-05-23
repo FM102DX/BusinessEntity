@@ -3,6 +3,7 @@
 @using BusinessEntity.Models
 @using System.Timers
 @using System.Globalization
+@using BusinessEntity.MiniApps.UserMessagesMiniApp.Components
 
 @inject ITreeSelectionService TreeSelection
 @inject RichTextDocumentMessagePanelService RichTextMessages
@@ -84,6 +85,8 @@
                     break;
             }
         }
+
+        <UserMessagesPanel />
     </div>
 </div>
 

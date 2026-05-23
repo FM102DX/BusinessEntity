@@ -14,6 +14,8 @@ using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Registration;
 using BusinessEntity.MiniApps.UserMiniApp.Storage;
+using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMessagesMiniApp.Registration;
 using BusinessEntity.Service;
 using BusinessEntity.Service.WebLogging;
 using BusinessEntity.Services;
@@ -128,6 +130,7 @@ namespace BusinessEntity
             builder.Services.AddSampleDataMiniApp();
             builder.Services.AddTreeMiniApp();
             builder.Services.AddUserMiniApp();
+            builder.Services.AddUserMessagesMiniApp();
 
             // Регистрирует прикладные сервисы и message bus.
             builder.Services.Configure<RichTextDocumentSettings>(
@@ -206,6 +209,13 @@ namespace BusinessEntity
             {
                 var treeMiniApp = scope.ServiceProvider.GetRequiredService<ITreeMiniApp>();
                 treeMiniApp.EnsureInitialized();
+            }
+
+            // Явно поднимает UserMessagesMiniApp при старте приложения.
+            using (var scope = app.Services.CreateScope())
+            {
+                var userMessagesMiniApp = scope.ServiceProvider.GetRequiredService<IUserMessagesMiniApp>();
+                userMessagesMiniApp.EnsureInitialized();
             }
 
             // Инициализирует тестовые данные при старте приложения.

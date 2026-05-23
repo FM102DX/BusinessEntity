@@ -1,0 +1,48 @@
+@using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
+@inject IUserMessagesMiniApp UserMessages
+@inject IUserConnector UserConnector
+@implements IDisposable
+
+<div class="widget user-messages-panel">
+    <div class="widget-title">Сообщения пользователя</div>
+    <div class="widget-body user-messages-panel__body">
+        @if (Messages.Count == 0)
+        {
+            <div class="user-messages-panel__empty">Сообщений пока нет.</div>
+        }
+        else
+        {
+            @foreach (var message in Messages)
+            {
+                <UserMessageItem Message="message" />
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private Guid CurrentUserId { get; set; }
+    private IReadOnlyList<UserMessageRecord> Messages => UserMessages.GetMessages(CurrentUserId);
+
+    // Материализует текущего пользователя и подписывает компонент на изменения его стека сообщений.
+    protected override async Task OnInitializedAsync()
+    {
+        UserMessages.EnsureInitialized();
+        var currentUser = await UserConnector.EnsureCurrentUserAsync();
+        CurrentUserId = currentUser?.Id ?? Guid.Empty;
+        UserMessages.MessagesChanged += OnMessagesChanged;
+    }
+
+    // Обновляет UI, когда mini-app получает новое пользовательское сообщение.
+    private void OnMessagesChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    // Отписывает компонент от state mini-app при уничтожении circuit-компонента.
+    public void Dispose()
+    {
+        UserMessages.MessagesChanged -= OnMessagesChanged;
+    }
+}

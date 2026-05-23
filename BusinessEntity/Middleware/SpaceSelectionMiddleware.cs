@@ -14,6 +14,7 @@ namespace BusinessEntity.Middleware
         private static readonly string[] _bypassPaths = new[]
         {
             "/space-selection",
+            "/profile",
             "/diagnostics",
             "/auth",
             "/_blazor",

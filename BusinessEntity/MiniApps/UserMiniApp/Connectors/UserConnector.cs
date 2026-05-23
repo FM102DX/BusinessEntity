@@ -1,55 +1,25 @@
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
-using BusinessEntity.MiniApps.UserMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Core.RichText;
-using ReactiveUI;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
 {
-    // Предоставляет другим модулям короткий доступ к пользователю через bus-roundtrip.
+    // Предоставляет другим модулям короткий доступ к данным user mini-app.
     public sealed class UserConnector : IUserConnector
     {
-        private readonly IMessageBus _messageBus;
         private readonly IUserMiniApp _userMiniApp;
 
-        // Инициализирует connector и гарантирует материализацию mini-app перед первым запросом.
-        public UserConnector(IMessageBus messageBus, IUserMiniApp userMiniApp)
+        // Инициализирует connector прямой ссылкой на публичный контракт user mini-app.
+        public UserConnector(IUserMiniApp userMiniApp)
         {
-            _messageBus = messageBus;
             _userMiniApp = userMiniApp;
-            userMiniApp.EnsureInitialized();
         }
 
-        // Отправляет GetUserRequest в bus и ждёт типизированный ответ от user mini-app.
-        public async Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
+        // Возвращает текущего пользователя без bus-roundtrip, чтобы не плодить межscope подписки.
+        public Task<BusinessEntityUser?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
         {
-            var requestId = Guid.NewGuid();
-            var completion = new TaskCompletionSource<BusinessEntityUser?>(TaskCreationOptions.RunContinuationsAsynchronously);
-            IDisposable? subscription = null;
-
-            // Слушаем только ответ для нашего requestId, чтобы не пересекаться с параллельными запросами.
-            subscription = _messageBus
-                .Listen<GetUserResponse>()
-                .Subscribe(response =>
-                {
-                    if (response.RequestId != requestId)
-                    {
-                        return;
-                    }
-
-                    subscription?.Dispose();
-                    completion.TrySetResult(response.User);
-                });
-
-            using var cancellationRegistration = cancellationToken.Register(() =>
-            {
-                subscription?.Dispose();
-                completion.TrySetCanceled(cancellationToken);
-            });
-
-            _messageBus.SendMessage(new GetUserRequest(requestId));
-            return await completion.Task;
+            return _userMiniApp.GetCurrentUserAsync(cancellationToken);
         }
 
         public Task<UserDto?> EnsureCurrentUserAsync(CancellationToken cancellationToken = default)
@@ -67,6 +37,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
         public Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default)
         {
             return _userMiniApp.GetAdministrationUsersAsync(cancellationToken);
+        }
+
+        // Читает пользователей Authentik по явной команде администратора.
+        public Task<IReadOnlyList<UserAdministrationRecord>> ReadAdministrationUsersFromAuthentikAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.ReadAdministrationUsersFromAuthentikAsync(cancellationToken);
         }
 
         // Создает пользователя приложения в Authentik через публичный контракт user mini-app.
@@ -90,18 +67,131 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
             return _userMiniApp.DeleteAdministrationUserAsync(userId, cancellationToken);
         }
 
+        // Возвращает роли через публичный контракт user mini-app.
+        public Task<IReadOnlyList<UserRoleRecord>> GetRolesAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetRolesAsync(cancellationToken);
+        }
+
+        // Создает роль через публичный контракт user mini-app.
+        public Task<UserRoleRecord> CreateRoleAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.CreateRoleAsync(cancellationToken);
+        }
+
+        // Обновляет роль через публичный контракт user mini-app.
+        public Task<UserRoleRecord> UpdateRoleAsync(
+            Guid roleId,
+            UserRoleSaveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.UpdateRoleAsync(roleId, request, cancellationToken);
+        }
+
+        // Удаляет роль через публичный контракт user mini-app.
+        public Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.DeleteRoleAsync(roleId, cancellationToken);
+        }
+
+        // Возвращает группы пользователей через публичный контракт user mini-app.
+        public Task<IReadOnlyList<UserGroupRecord>> GetUserGroupsAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetUserGroupsAsync(cancellationToken);
+        }
+
+        // Создает группу пользователей через публичный контракт user mini-app.
+        public Task<UserGroupRecord> CreateUserGroupAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.CreateUserGroupAsync(cancellationToken);
+        }
+
+        // Обновляет группу пользователей через публичный контракт user mini-app.
+        public Task<UserGroupRecord> UpdateUserGroupAsync(
+            Guid groupId,
+            UserGroupSaveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.UpdateUserGroupAsync(groupId, request, cancellationToken);
+        }
+
+        // Удаляет группу пользователей через публичный контракт user mini-app.
+        public Task<bool> DeleteUserGroupAsync(Guid groupId, CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.DeleteUserGroupAsync(groupId, cancellationToken);
+        }
+
+        // Возвращает назначение пользователей в группу через публичный контракт user mini-app.
+        public Task<IReadOnlyList<UserGroupMembershipRecord>> GetUserGroupMembershipsAsync(
+            Guid groupId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetUserGroupMembershipsAsync(groupId, cancellationToken);
+        }
+
+        // Сохраняет назначение пользователей в группу через публичный контракт user mini-app.
+        public Task<IReadOnlyList<UserGroupMembershipRecord>> UpdateUserGroupMembershipsAsync(
+            Guid groupId,
+            UserGroupMembershipSaveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.UpdateUserGroupMembershipsAsync(groupId, request, cancellationToken);
+        }
+
+        // Возвращает пространства для вкладки назначения ролей через публичный контракт user mini-app.
+        public Task<IReadOnlyList<UserSpaceRecord>> GetRoleAssignmentSpacesAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetRoleAssignmentSpacesAsync(cancellationToken);
+        }
+
+        // Возвращает назначения ролей для выбранного пространства через публичный контракт user mini-app.
+        public Task<IReadOnlyList<UserRoleAssignmentRecord>> GetRoleAssignmentsAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetRoleAssignmentsAsync(spaceId, cancellationToken);
+        }
+
+        // Создает назначение роли через публичный контракт user mini-app.
+        public Task<UserRoleAssignmentRecord> CreateRoleAssignmentAsync(
+            Guid spaceId,
+            UserRoleAssignmentSaveRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.CreateRoleAssignmentAsync(spaceId, request, cancellationToken);
+        }
+
+        // Удаляет назначение роли через публичный контракт user mini-app.
+        public Task<bool> DeleteRoleAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.DeleteRoleAssignmentAsync(assignmentId, cancellationToken);
+        }
+
+        // Возвращает профиль текущего пользователя через публичный контракт user mini-app.
+        public Task<UserProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetProfileAsync(cancellationToken);
+        }
+
+        // Обновляет профиль текущего пользователя через публичный контракт user mini-app.
+        public Task<UserProfileDto> UpdateProfileAsync(
+            UserProfileUpdateRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.UpdateProfileAsync(request, cancellationToken);
+        }
+
         // Возвращает только список групп поверх общего объекта пользователя.
         public async Task<IReadOnlyList<string>> GetGroupsAsync(CancellationToken cancellationToken = default)
         {
-            var user = await GetCurrentUserAsync(cancellationToken);
-            return user?.Groups ?? Array.Empty<string>();
+            return await _userMiniApp.GetCurrentUserGroupNamesAsync(cancellationToken);
         }
 
         // Проверяет membership в группе поверх общего объекта пользователя.
         public async Task<bool> IsInGroupAsync(string groupName, CancellationToken cancellationToken = default)
         {
-            var user = await GetCurrentUserAsync(cancellationToken);
-            return user?.HasGroup(groupName) == true;
+            var groups = await _userMiniApp.GetCurrentUserGroupNamesAsync(cancellationToken);
+            return groups.Any(group => string.Equals(group, groupName, StringComparison.OrdinalIgnoreCase));
         }
 
         public Task<IReadOnlyList<RichTextDocumentBookmark>> GetRichDocBookmarksAsync(

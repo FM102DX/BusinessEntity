@@ -20,6 +20,10 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.AddScoped<AuthentikManagementClient>();
             services.AddScoped<IUserMiniAppRepository<UserDto>, UserDtoEfRepository>();
             services.AddScoped<IUserMiniAppRepository<UserPropertyDto>, UserPropertyDtoEfRepository>();
+            services.AddScoped<IUserMiniAppRepository<UserRoleDto>, UserRoleDtoEfRepository>();
+            services.AddScoped<IUserMiniAppRepository<UserGroupDto>, UserGroupDtoEfRepository>();
+            services.AddScoped<IUserMiniAppRepository<UserGroupMemberDto>, UserGroupMemberDtoEfRepository>();
+            services.AddScoped<IUserMiniAppRepository<UserRoleAssignmentDto>, UserRoleAssignmentDtoEfRepository>();
             services.AddScoped<UserMiniAppService>();
             services.AddScoped<UserMiniAppMessageHandler>();
             services.AddScoped<IUserMiniApp, Facade.UserMiniApp>();

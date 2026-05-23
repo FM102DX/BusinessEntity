@@ -26,7 +26,7 @@
 
 В текущей модели приложение:
 
-- перенаправляет пользователя на login в `Authentik`
+- показывает локальную форму login/password или, как fallback, перенаправляет пользователя на login в `Authentik`
 - получает от `Authentik` tokens и claims
 - создает локальную cookie-сессию
 - нормализует claims в объект `BusinessEntityUser`
@@ -363,7 +363,11 @@ IUserConnector
 - источник группы `BusinessEntityAdmins` - `Authentik`
 - локальная таблица `Users` не должна переопределять эти признаки
 
-Если появится новая модель ролей приложения, она должна быть описана отдельной политикой до реализации.
+Новая модель ролей приложения для доступа к контенту описана отдельно:
+
+- `Context/Policy/Users/content-access-rights-policy.md`
+
+Эта модель не меняет источник identity: `Authentik` остается владельцем логина, пароля и внешнего пользователя, а `UserMiniApp` становится владельцем application authorization для контента.
 
 ---
 
@@ -448,6 +452,21 @@ Admin UI пользователей является тонкой интегра
 Это нужно, чтобы локальный `UserDto` был доступен сразу после login, а app-specific сценарии не создавали пользователя лениво в неожиданных местах.
 
 Если пользователь уже authenticated и снова открывает login endpoint, допустимо также вызвать `EnsureCurrentUserAsync` перед redirect.
+
+### 13.1. Локальная форма логина
+
+На login gate допускается локальная форма логин/пароль, чтобы пользователь входил без видимого перехода на страницу `Authentik`.
+
+Правила:
+
+- форма передает credentials только в `AuthController`;
+- приложение не сохраняет пароль и не пишет его в логи;
+- `AuthController` использует credentials только для server-side authentication через Authentik flow API;
+- после успешной проверки Authentik приложение читает текущего Authentik-пользователя и создает локальную cookie-сессию с нормализованными claims;
+- после создания cookie-сессии обязательно вызывается `EnsureCurrentUserAsync`;
+- при ошибке Authentik локальная сессия не создается, пользователь возвращается на login gate с нейтральным сообщением об ошибке;
+- password-flow сессия не хранит `access_token`, `refresh_token`, `id_token` и живет до срока действия локальной cookie;
+- `/auth/login` сохраняется как fallback на browser redirect-flow Authentik.
 
 ---
 
@@ -548,7 +567,7 @@ Re-seed не должен удалять пользователя из `Authenti
 - дублировать разбор claims в компонентах
 - хранить user-specific данные в document payload, если они персональные
 - хранить shared document данные в user properties
-- использовать локальный `UserDto` для проверки прав вместо Authentik groups
+- использовать локальный `UserDto` сам по себе для проверки прав без расчета effective permissions через `UserMiniApp`
 - добавлять локальный user CRUD без обновления этой политики
 
 ---

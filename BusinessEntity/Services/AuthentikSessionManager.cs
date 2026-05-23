@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
@@ -22,18 +23,27 @@ namespace BusinessEntity.Services
         private const string RefreshTokenName = "refresh_token";
         private const string IdTokenName = "id_token";
         private const string AccessTokenExpiresAtName = "access_token_expires_at";
+        private const string SessionModeProperty = "authentik_session_mode";
+        private const string PasswordFlowSessionMode = "password_flow";
+        private const string IdentificationStageComponent = "ak-stage-identification";
+        private const string PasswordStageComponent = "ak-stage-password";
+        private const string FlowErrorComponent = "ak-stage-flow-error";
+        private const string FlowRedirectComponent = "xak-flow-redirect";
         private static readonly TimeSpan StateLifetime = TimeSpan.FromMinutes(15);
 
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<AuthentikSessionManager> _logger;
         private readonly IDataProtector _stateProtector;
+        private readonly string _serverBaseUrl;
         private readonly string _browserBaseUrl;
+        private readonly string _hostHeader;
         private readonly string _providerSlug;
         private readonly string _clientId;
         private readonly string _clientSecret;
         private readonly string _redirectUri;
         private readonly string _scope;
+        private readonly string _authenticationFlowSlug;
         private readonly TimeSpan _sessionLifetime;
         private readonly TimeSpan _refreshLeadTime;
 
@@ -51,17 +61,24 @@ namespace BusinessEntity.Services
 
             var section = configuration.GetSection("AuthentikAuth");
 
+            _serverBaseUrl = (
+                Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL")
+                ?? section["BaseUrl"]
+                ?? "http://localhost:9000").TrimEnd('/');
+
             _browserBaseUrl = (
                 Environment.GetEnvironmentVariable("AUTHENTIK_BASE_URL_FOR_BROWSER")
                 ?? section["BaseUrlForBrowser"]
                 ?? section["BaseUrl"]
                 ?? "http://localhost:9000").TrimEnd('/');
+            _hostHeader = new Uri(_browserBaseUrl).Authority;
 
             _providerSlug = section["ProviderSlug"] ?? "be-oidc";
             _clientId = section["ClientId"] ?? throw new InvalidOperationException("AuthentikAuth:ClientId is required.");
             _clientSecret = section["ClientSecret"] ?? throw new InvalidOperationException("AuthentikAuth:ClientSecret is required.");
             _redirectUri = section["RedirectUri"] ?? throw new InvalidOperationException("AuthentikAuth:RedirectUri is required.");
             _scope = section["Scope"] ?? "openid profile email";
+            _authenticationFlowSlug = section["AuthenticationFlowSlug"] ?? "default-authentication-flow";
             _sessionLifetime = TimeSpan.FromHours(ReadDouble(section["SessionLifetimeHours"], 8));
             _refreshLeadTime = TimeSpan.FromMinutes(ReadDouble(section["RefreshLeadTimeMinutes"], 5));
         }
@@ -134,6 +151,56 @@ namespace BusinessEntity.Services
             return ReadReturnUrl(state);
         }
 
+        public async Task<string> CompletePasswordLoginAsync(
+            string username,
+            string password,
+            string? returnUrl,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                throw new ArgumentException("Username is required.", nameof(username));
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                throw new ArgumentException("Password is required.", nameof(password));
+            }
+
+            var authentikUser = await AuthenticateWithPasswordFlowAsync(username, password, cancellationToken);
+            var principal = CreatePrincipal(authentikUser);
+            var properties = CreatePasswordFlowAuthenticationProperties(DateTimeOffset.UtcNow);
+
+            var context = _httpContextAccessor.HttpContext ?? throw new InvalidOperationException("HTTP context is not available.");
+            await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
+            context.User = principal;
+
+            return NormalizeReturnUrl(returnUrl);
+        }
+
+        // Проверяет логин и пароль через Authentik flow без изменения текущей локальной сессии.
+        public async Task<bool> ValidatePasswordAsync(
+            string username,
+            string password,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                return false;
+            }
+
+            try
+            {
+                await AuthenticateWithPasswordFlowAsync(username, password, cancellationToken);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Authentik password validation failed for {Username}.", username);
+                return false;
+            }
+        }
+
         public async Task<string> SignOutAsync(CancellationToken cancellationToken = default)
         {
             var context = _httpContextAccessor.HttpContext ?? throw new InvalidOperationException("HTTP context is not available.");
@@ -172,6 +239,11 @@ namespace BusinessEntity.Services
 
             if (accessTokenExpiresAt == null)
             {
+                if (IsPasswordFlowSession(context.Properties))
+                {
+                    return;
+                }
+
                 _logger.LogWarning("Authentication cookie does not contain access token expiry; signing user out.");
                 await RejectSessionAsync(context);
                 return;
@@ -239,6 +311,57 @@ namespace BusinessEntity.Services
             return await SendTokenRequestAsync(request, cancellationToken);
         }
 
+        private async Task<AuthentikFlowUser> AuthenticateWithPasswordFlowAsync(
+            string username,
+            string password,
+            CancellationToken cancellationToken)
+        {
+            using var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = true,
+                MaxAutomaticRedirections = 5,
+                CookieContainer = new CookieContainer(),
+                UseCookies = true
+            };
+            using var client = CreateFlowClient(handler);
+
+            var flowUri = $"/api/v3/flows/executor/{Uri.EscapeDataString(_authenticationFlowSlug)}/";
+
+            using (var initialRequest = new HttpRequestMessage(HttpMethod.Get, flowUri))
+            {
+                using var initialResponse = await client.SendAsync(initialRequest, cancellationToken);
+                using var initialDocument = await ReadFlowResponseAsync(initialResponse, "получить форму логина Authentik", cancellationToken);
+            }
+
+            using var identificationChallenge = await PostFlowChallengeAsync(
+                client,
+                handler.CookieContainer,
+                flowUri,
+                new
+                {
+                    component = IdentificationStageComponent,
+                    uid_field = username
+                },
+                "передать логин в Authentik",
+                cancellationToken);
+            EnsureExpectedFlowComponent(identificationChallenge, PasswordStageComponent, "Authentik did not accept the username.");
+
+            using var passwordChallenge = await PostFlowChallengeAsync(
+                client,
+                handler.CookieContainer,
+                flowUri,
+                new
+                {
+                    component = PasswordStageComponent,
+                    password
+                },
+                "передать пароль в Authentik",
+                cancellationToken);
+            EnsureExpectedFlowComponent(passwordChallenge, FlowRedirectComponent, "Authentik rejected the supplied credentials.");
+
+            return await ReadCurrentFlowUserAsync(client, cancellationToken);
+        }
+
         private async Task<TokenSet> RefreshTokensAsync(string refreshToken, CancellationToken cancellationToken)
         {
             using var request = CreateTokenRequest(
@@ -280,6 +403,96 @@ namespace BusinessEntity.Services
             return request;
         }
 
+        private HttpClient CreateFlowClient(HttpClientHandler handler)
+        {
+            var client = new HttpClient(handler)
+            {
+                BaseAddress = new Uri(_serverBaseUrl.TrimEnd('/') + "/"),
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+            client.DefaultRequestHeaders.Host = _hostHeader;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            return client;
+        }
+
+        private async Task<JsonDocument> PostFlowChallengeAsync(
+            HttpClient client,
+            CookieContainer cookieContainer,
+            string flowUri,
+            object payload,
+            string operation,
+            CancellationToken cancellationToken)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, flowUri);
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(payload),
+                Encoding.UTF8,
+                "application/json");
+
+            var csrfToken = ReadCsrfToken(cookieContainer, client.BaseAddress);
+            if (!string.IsNullOrWhiteSpace(csrfToken))
+            {
+                request.Headers.Add("X-CSRFToken", csrfToken);
+            }
+
+            using var response = await client.SendAsync(request, cancellationToken);
+            return await ReadFlowResponseAsync(response, operation, cancellationToken);
+        }
+
+        private async Task<JsonDocument> ReadFlowResponseAsync(
+            HttpResponseMessage response,
+            string operation,
+            CancellationToken cancellationToken)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException(
+                    $"Не удалось {operation}. Authentik вернул {(int)response.StatusCode}: {body}");
+            }
+
+            return JsonDocument.Parse(body);
+        }
+
+        private async Task<AuthentikFlowUser> ReadCurrentFlowUserAsync(
+            HttpClient client,
+            CancellationToken cancellationToken)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v3/core/users/me/");
+            using var response = await client.SendAsync(request, cancellationToken);
+            using var document = await ReadFlowResponseAsync(response, "получить текущего пользователя Authentik", cancellationToken);
+
+            var user = document.RootElement.TryGetProperty("user", out var userElement)
+                ? userElement
+                : throw new InvalidOperationException("Authentik did not return current user data.");
+
+            var groups = new List<string>();
+            if (user.TryGetProperty("groups", out var groupsElement) && groupsElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var group in groupsElement.EnumerateArray())
+                {
+                    var groupName = ReadJsonString(group, "name");
+                    if (!string.IsNullOrWhiteSpace(groupName))
+                    {
+                        groups.Add(groupName);
+                    }
+                }
+            }
+
+            return new AuthentikFlowUser(
+                ReadJsonInt(user, "pk"),
+                ReadJsonString(user, "username"),
+                ReadJsonString(user, "name"),
+                ReadJsonString(user, "uid"),
+                ReadJsonString(user, "email"),
+                ReadJsonString(user, "type"),
+                groups
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(group => group, StringComparer.OrdinalIgnoreCase)
+                    .ToList());
+        }
+
         private ClaimsPrincipal CreatePrincipal(string idToken)
         {
             var jwt = new JwtSecurityTokenHandler().ReadJwtToken(idToken);
@@ -311,6 +524,44 @@ namespace BusinessEntity.Services
                 }
 
                 claims.Add(claim);
+            }
+
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            return new ClaimsPrincipal(identity);
+        }
+
+        private ClaimsPrincipal CreatePrincipal(AuthentikFlowUser user)
+        {
+            if (string.IsNullOrWhiteSpace(user.Uid))
+            {
+                throw new InvalidOperationException("Authentik user does not contain uid.");
+            }
+
+            var userName = string.IsNullOrWhiteSpace(user.Username) ? user.Uid : user.Username;
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, user.Uid),
+                new("sub", user.Uid),
+                new(ClaimTypes.Name, userName),
+                new("preferred_username", userName),
+                new("authentik_user_pk", user.Pk.ToString(CultureInfo.InvariantCulture)),
+                new("authentik_user_type", user.Type)
+            };
+
+            if (!string.IsNullOrWhiteSpace(user.Name))
+            {
+                claims.Add(new Claim("name", user.Name));
+            }
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                claims.Add(new Claim(ClaimTypes.Email, user.Email));
+                claims.Add(new Claim("email", user.Email));
+            }
+
+            if (user.Groups.Count > 0)
+            {
+                claims.Add(new Claim("groups", JsonSerializer.Serialize(user.Groups)));
             }
 
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -351,6 +602,20 @@ namespace BusinessEntity.Services
             };
 
             properties.StoreTokens(storedTokens);
+            return properties;
+        }
+
+        private AuthenticationProperties CreatePasswordFlowAuthenticationProperties(DateTimeOffset now)
+        {
+            var properties = new AuthenticationProperties
+            {
+                IsPersistent = true,
+                AllowRefresh = false,
+                IssuedUtc = now,
+                ExpiresUtc = now.Add(_sessionLifetime)
+            };
+
+            properties.Items[SessionModeProperty] = PasswordFlowSessionMode;
             return properties;
         }
 
@@ -413,6 +678,66 @@ namespace BusinessEntity.Services
             return returnUrl;
         }
 
+        private static void EnsureExpectedFlowComponent(
+            JsonDocument document,
+            string expectedComponent,
+            string errorMessage)
+        {
+            var component = document.RootElement.TryGetProperty("component", out var componentElement)
+                ? componentElement.GetString()
+                : null;
+
+            if (string.Equals(component, expectedComponent, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (string.Equals(component, FlowErrorComponent, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(errorMessage);
+            }
+
+            throw new InvalidOperationException(errorMessage);
+        }
+
+        private static string? ReadCsrfToken(CookieContainer cookieContainer, Uri? baseAddress)
+        {
+            if (baseAddress == null)
+            {
+                return null;
+            }
+
+            foreach (Cookie cookie in cookieContainer.GetCookies(baseAddress))
+            {
+                if (cookie.Name.Contains("csrf", StringComparison.OrdinalIgnoreCase))
+                {
+                    return cookie.Value;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsPasswordFlowSession(AuthenticationProperties properties)
+        {
+            return properties.Items.TryGetValue(SessionModeProperty, out var sessionMode)
+                   && string.Equals(sessionMode, PasswordFlowSessionMode, StringComparison.Ordinal);
+        }
+
+        private static string ReadJsonString(JsonElement element, string propertyName)
+        {
+            return element.TryGetProperty(propertyName, out var property) && property.ValueKind != JsonValueKind.Null
+                ? property.GetString() ?? string.Empty
+                : string.Empty;
+        }
+
+        private static int ReadJsonInt(JsonElement element, string propertyName)
+        {
+            return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Number
+                ? property.GetInt32()
+                : 0;
+        }
+
         private static DateTimeOffset? ParseTokenExpiration(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -441,5 +766,14 @@ namespace BusinessEntity.Services
         private sealed record AuthState(string ReturnUrl, DateTimeOffset IssuedUtc);
 
         private sealed record TokenSet(string AccessToken, string? IdToken, string? RefreshToken, int ExpiresIn);
+
+        private sealed record AuthentikFlowUser(
+            int Pk,
+            string Username,
+            string Name,
+            string Uid,
+            string Email,
+            string Type,
+            IReadOnlyList<string> Groups);
     }
 }

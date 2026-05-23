@@ -95,6 +95,7 @@ namespace BusinessEntity
                 || path.StartsWith("/js")
                 || path.StartsWith("/static")
                 || path.StartsWith("/api")
+                || path.StartsWith("/profile")
                 || path.StartsWith("/space-selection");
         }
 

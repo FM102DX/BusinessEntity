@@ -1,0 +1,13 @@
+.user-messages-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.user-messages-panel__empty {
+  color: #6f7f95;
+  font-size: 13px;
+  line-height: 1.35;
+}

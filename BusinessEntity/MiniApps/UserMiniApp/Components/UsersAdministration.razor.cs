@@ -1,6 +1,8 @@
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
 using Microsoft.AspNetCore.Components;
+using ReactiveUI;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Components
 {
@@ -8,30 +10,239 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
     public partial class UsersAdministration : ComponentBase
     {
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
+        [Inject] public IMessageBus MessageBus { get; set; } = default!;
 
         private IReadOnlyList<UserAdministrationRecord> Users { get; set; } = Array.Empty<UserAdministrationRecord>();
+        private IReadOnlyList<UserRoleRecord> Roles { get; set; } = Array.Empty<UserRoleRecord>();
+        private IReadOnlyList<UserGroupRecord> Groups { get; set; } = Array.Empty<UserGroupRecord>();
+        private IReadOnlyList<UserGroupMembershipRecord> GroupMemberships { get; set; } = Array.Empty<UserGroupMembershipRecord>();
+        private IReadOnlyList<UserSpaceRecord> AccessSpaces { get; set; } = Array.Empty<UserSpaceRecord>();
+        private IReadOnlyList<UserRoleAssignmentRecord> RoleAssignments { get; set; } = Array.Empty<UserRoleAssignmentRecord>();
         private UserAdministrationSaveRequest EditModel { get; set; } = new();
+        private UserRoleSaveRequest RoleEditModel { get; set; } = new();
+        private UserGroupSaveRequest GroupEditModel { get; set; } = new();
         private Guid? SelectedUserId { get; set; }
+        private Guid? SelectedRoleId { get; set; }
+        private Guid? SelectedGroupId { get; set; }
+        private Guid? MembershipGroupId { get; set; }
+        private Guid? AccessSpaceId { get; set; }
+        private Guid? AccessGroupId { get; set; }
+        private Guid? AccessRoleId { get; set; }
         private Guid? DeleteConfirmationUserId { get; set; }
+        private Guid? DeleteConfirmationRoleId { get; set; }
+        private Guid? DeleteConfirmationGroupId { get; set; }
         private bool IsLoading { get; set; }
+        private bool IsRolesLoading { get; set; }
+        private bool IsGroupsLoading { get; set; }
+        private bool IsGroupMembershipsLoading { get; set; }
+        private bool IsAccessRightsLoading { get; set; }
+        private bool IsReadingAuthentik { get; set; }
+        private bool IsRolesLoaded { get; set; }
+        private bool IsGroupsLoaded { get; set; }
+        private bool IsGroupMembershipsLoaded { get; set; }
+        private bool IsAccessRightsLoaded { get; set; }
         private bool IsCreating { get; set; }
+        private bool IsRoleCreating { get; set; }
+        private bool IsGroupCreating { get; set; }
         private bool IsSaving { get; set; }
+        private bool IsRoleSaving { get; set; }
+        private bool IsGroupSaving { get; set; }
+        private bool IsGroupMembershipSaving { get; set; }
+        private bool IsRoleAssignmentSaving { get; set; }
         private bool IsDeleting { get; set; }
-        private string? StatusMessage { get; set; }
-        private string? ErrorMessage { get; set; }
+        private bool IsRoleDeleting { get; set; }
+        private bool IsGroupDeleting { get; set; }
+        private bool IsRoleAssignmentDeleting { get; set; }
+        private bool IsPasswordVisible { get; set; }
+        private Guid CurrentMessageUserId { get; set; }
+        private string? StatusMessage
+        {
+            get => null;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return;
+                }
+
+                if (IsWarningStatus(value))
+                {
+                    PostWarningMessage(value);
+                    return;
+                }
+
+                PostSuccessMessage(value);
+            }
+        }
+        private string? ErrorMessage
+        {
+            get => null;
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    PostErrorMessage(value);
+                }
+            }
+        }
         private UserAdministrationTab ActiveTab { get; set; } = UserAdministrationTab.General;
-        private bool IsBusy => IsLoading || IsCreating || IsSaving || IsDeleting;
+        private bool IsBusy =>
+            IsLoading ||
+            IsRolesLoading ||
+            IsGroupsLoading ||
+            IsGroupMembershipsLoading ||
+            IsAccessRightsLoading ||
+            IsReadingAuthentik ||
+            IsCreating ||
+            IsRoleCreating ||
+            IsGroupCreating ||
+            IsSaving ||
+            IsRoleSaving ||
+            IsGroupSaving ||
+            IsGroupMembershipSaving ||
+            IsRoleAssignmentSaving ||
+            IsDeleting ||
+            IsRoleDeleting ||
+            IsGroupDeleting ||
+            IsRoleAssignmentDeleting;
+        private UserRoleRecord? SelectedRole => SelectedRoleId.HasValue
+            ? Roles.FirstOrDefault(role => role.Id == SelectedRoleId.Value)
+            : null;
+        private UserGroupRecord? SelectedGroup => SelectedGroupId.HasValue
+            ? Groups.FirstOrDefault(group => group.Id == SelectedGroupId.Value)
+            : null;
+        private string PasswordInputType => IsPasswordVisible ? "text" : "password";
+        private string PasswordToggleTitle => IsPasswordVisible ? "Скрыть пароль" : "Показать пароль";
 
         // Загружает пользователей при первом открытии компонента.
         protected override async Task OnInitializedAsync()
         {
+            await ResolveCurrentMessageUserAsync();
             await LoadUsersAsync();
+        }
+
+        // Запоминает текущего локального пользователя, чтобы сообщения администрирования попадали в его правую панель.
+        private async Task ResolveCurrentMessageUserAsync()
+        {
+            try
+            {
+                var currentUser = await UserConnector.EnsureCurrentUserAsync();
+                CurrentMessageUserId = currentUser?.Id ?? Guid.Empty;
+            }
+            catch
+            {
+                CurrentMessageUserId = Guid.Empty;
+            }
+        }
+
+        // Публикует пользовательское сообщение из административного UI в правую колонку.
+        private void PostUserAdministrationMessage(string message, UserMessageLevel level, string title)
+        {
+            if (CurrentMessageUserId == Guid.Empty || string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            MessageBus.SendMessage(new PostUserMessage(
+                CurrentMessageUserId,
+                message,
+                level,
+                title));
+        }
+
+        // Публикует успешное сообщение административного UI в правую колонку.
+        private void PostSuccessMessage(string message)
+        {
+            PostUserAdministrationMessage(message, UserMessageLevel.Success, "Пользователи");
+        }
+
+        // Публикует предупреждение административного UI в правую колонку.
+        private void PostWarningMessage(string message)
+        {
+            PostUserAdministrationMessage(message, UserMessageLevel.Warning, "Пользователи");
+        }
+
+        // Публикует ошибку административного UI в правую колонку.
+        private void PostErrorMessage(string message)
+        {
+            PostUserAdministrationMessage(message, UserMessageLevel.Error, "Пользователи");
+        }
+
+        // Определяет статусные сообщения, которым в правой панели нужен предупреждающий акцент.
+        private static bool IsWarningStatus(string message)
+        {
+            return message.StartsWith("Подтвердите", StringComparison.OrdinalIgnoreCase) ||
+                   message.Contains("не найден", StringComparison.OrdinalIgnoreCase);
         }
 
         // Загружает список пользователей без принудительного выбора конкретной записи.
         private Task LoadUsersAsync()
         {
             return LoadUsersCoreAsync(null);
+        }
+
+        // Явно читает пользователей из Authentik и обновляет локальную таблицу Users.
+        private async Task ReadUsersFromAuthentikAsync()
+        {
+            IsReadingAuthentik = true;
+            ErrorMessage = null;
+            StatusMessage = null;
+
+            try
+            {
+                Users = await UserConnector.ReadAdministrationUsersFromAuthentikAsync();
+                var selectedUser = SelectedUserId.HasValue
+                    ? Users.FirstOrDefault(user => user.Id == SelectedUserId.Value)
+                    : Users.FirstOrDefault();
+
+                if (selectedUser == null)
+                {
+                    ClearSelection();
+                }
+                else
+                {
+                    SelectUser(selectedUser);
+                }
+
+                if (ActiveTab == UserAdministrationTab.GroupMembers && MembershipGroupId.HasValue)
+                {
+                    await LoadGroupMembershipsAsync();
+                }
+
+                StatusMessage = "Пользователи прочитаны из Authentik.";
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsReadingAuthentik = false;
+            }
+        }
+
+        // Загружает список ролей без принудительного выбора конкретной записи.
+        private Task LoadRolesAsync()
+        {
+            return LoadRolesCoreAsync(null);
+        }
+
+        // Загружает список групп без принудительного выбора конкретной записи.
+        private Task LoadGroupsAsync()
+        {
+            return LoadGroupsCoreAsync(null);
+        }
+
+        // Загружает состав выбранной группы без смены выбранной группы.
+        private Task LoadGroupMembershipsAsync()
+        {
+            return LoadGroupMembershipsCoreAsync(MembershipGroupId);
+        }
+
+        // Загружает данные вкладки назначений ролей без смены выбранного пространства.
+        private Task LoadAccessRightsAsync()
+        {
+            return LoadAccessRightsCoreAsync(AccessSpaceId);
         }
 
         // Загружает список локальных пользователей и выбирает нужную запись.
@@ -67,6 +278,174 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
         }
 
+        // Добавляет или заменяет пользователя в уже загруженном списке без повторного чтения Authentik.
+        private void UpsertUserInList(UserAdministrationRecord user)
+        {
+            Users = SortUsers(
+                Users
+                    .Where(existingUser => existingUser.Id != user.Id)
+                    .Append(user));
+        }
+
+        // Удаляет пользователя из локального списка и выбирает следующую доступную запись.
+        private void RemoveUserFromList(Guid userId)
+        {
+            Users = SortUsers(Users.Where(user => user.Id != userId));
+            var nextUser = Users.FirstOrDefault();
+            if (nextUser == null)
+            {
+                ClearSelection();
+                return;
+            }
+
+            SelectUser(nextUser);
+        }
+
+        // Сортирует локальный список пользователей так же, как серверный административный DTO.
+        private static IReadOnlyList<UserAdministrationRecord> SortUsers(
+            IEnumerable<UserAdministrationRecord> users)
+        {
+            return users
+                .OrderBy(user => string.IsNullOrWhiteSpace(user.DisplayedName) ? user.AuthentikLogin : user.DisplayedName)
+                .ThenBy(user => user.AuthentikLogin)
+                .ThenBy(user => user.ExternalId)
+                .ToList();
+        }
+
+        // Загружает роли UserMiniApp и выбирает нужную запись.
+        private async Task LoadRolesCoreAsync(Guid? roleIdToSelect)
+        {
+            IsRolesLoading = true;
+            ErrorMessage = null;
+
+            try
+            {
+                Roles = await UserConnector.GetRolesAsync();
+                IsRolesLoaded = true;
+                var selectedId = roleIdToSelect ?? SelectedRoleId;
+                var selectedRole = selectedId.HasValue
+                    ? Roles.FirstOrDefault(role => role.Id == selectedId.Value)
+                    : Roles.FirstOrDefault();
+
+                if (selectedRole == null)
+                {
+                    ClearRoleSelection();
+                }
+                else
+                {
+                    SelectRole(selectedRole);
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsRolesLoading = false;
+            }
+        }
+
+        // Загружает группы UserMiniApp и выбирает нужную запись.
+        private async Task LoadGroupsCoreAsync(Guid? groupIdToSelect)
+        {
+            IsGroupsLoading = true;
+            ErrorMessage = null;
+
+            try
+            {
+                Groups = await UserConnector.GetUserGroupsAsync();
+                IsGroupsLoaded = true;
+                var selectedId = groupIdToSelect ?? SelectedGroupId;
+                var selectedGroup = selectedId.HasValue
+                    ? Groups.FirstOrDefault(group => group.Id == selectedId.Value)
+                    : Groups.FirstOrDefault();
+
+                if (selectedGroup == null)
+                {
+                    ClearGroupSelection();
+                }
+                else
+                {
+                    SelectGroup(selectedGroup);
+                }
+
+                if (!MembershipGroupId.HasValue || Groups.All(group => group.Id != MembershipGroupId.Value))
+                {
+                    MembershipGroupId = Groups.FirstOrDefault()?.Id;
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsGroupsLoading = false;
+            }
+        }
+
+        // Загружает таблицу назначений пользователей для выбранной группы.
+        private async Task LoadGroupMembershipsCoreAsync(Guid? groupId)
+        {
+            if (!groupId.HasValue)
+            {
+                GroupMemberships = Array.Empty<UserGroupMembershipRecord>();
+                IsGroupMembershipsLoaded = false;
+                return;
+            }
+
+            IsGroupMembershipsLoading = true;
+            ErrorMessage = null;
+
+            try
+            {
+                MembershipGroupId = groupId;
+                GroupMemberships = await UserConnector.GetUserGroupMembershipsAsync(groupId.Value);
+                IsGroupMembershipsLoaded = true;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsGroupMembershipsLoading = false;
+            }
+        }
+
+        // Загружает пространства и таблицу назначений ролей для выбранного пространства.
+        private async Task LoadAccessRightsCoreAsync(Guid? preferredSpaceId)
+        {
+            IsAccessRightsLoading = true;
+            ErrorMessage = null;
+
+            try
+            {
+                AccessSpaces = await UserConnector.GetRoleAssignmentSpacesAsync();
+                var nextSpaceId = preferredSpaceId.HasValue &&
+                                  AccessSpaces.Any(space => space.Id == preferredSpaceId.Value)
+                    ? preferredSpaceId
+                    : AccessSpaces.FirstOrDefault(space => space.IsCurrent)?.Id ??
+                      AccessSpaces.FirstOrDefault()?.Id;
+
+                AccessSpaceId = nextSpaceId;
+                RoleAssignments = AccessSpaceId.HasValue
+                    ? await UserConnector.GetRoleAssignmentsAsync(AccessSpaceId.Value)
+                    : Array.Empty<UserRoleAssignmentRecord>();
+                EnsureAccessAssignmentSelections();
+                IsAccessRightsLoaded = true;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsAccessRightsLoading = false;
+            }
+        }
+
         // Создает нового Authentik-пользователя приложения и выбирает его в списке.
         private async Task CreateUserAsync()
         {
@@ -77,7 +456,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             try
             {
                 var createdUser = await UserConnector.CreateAdministrationUserAsync();
-                await LoadUsersCoreAsync(createdUser.Id);
+                UpsertUserInList(createdUser);
+                SelectUser(createdUser);
+                if (ActiveTab == UserAdministrationTab.GroupMembers && MembershipGroupId.HasValue)
+                {
+                    await LoadGroupMembershipsAsync();
+                }
+
                 StatusMessage = $"Пользователь {createdUser.AuthentikLogin} создан в Authentik.";
             }
             catch (Exception ex)
@@ -90,11 +475,62 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
         }
 
+        // Создает новую роль и выбирает ее в редакторе ролей.
+        private async Task CreateRoleAsync()
+        {
+            IsRoleCreating = true;
+            StatusMessage = null;
+            ErrorMessage = null;
+
+            try
+            {
+                var createdRole = await UserConnector.CreateRoleAsync();
+                await LoadRolesCoreAsync(createdRole.Id);
+                EnsureAccessAssignmentSelections();
+                StatusMessage = $"Роль {createdRole.Name} создана.";
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsRoleCreating = false;
+            }
+        }
+
+        // Создает новую группу и выбирает ее в редакторе групп.
+        private async Task CreateGroupAsync()
+        {
+            IsGroupCreating = true;
+            StatusMessage = null;
+            ErrorMessage = null;
+
+            try
+            {
+                var createdGroup = await UserConnector.CreateUserGroupAsync();
+                await LoadGroupsCoreAsync(createdGroup.Id);
+                MembershipGroupId = createdGroup.Id;
+                AccessGroupId = createdGroup.Id;
+                await LoadGroupMembershipsCoreAsync(createdGroup.Id);
+                StatusMessage = $"Группа {createdGroup.Name} создана.";
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsGroupCreating = false;
+            }
+        }
+
         // Выбирает пользователя из списка и переносит его данные в форму справа.
         private void SelectUser(UserAdministrationRecord user)
         {
             SelectedUserId = user.Id;
             DeleteConfirmationUserId = null;
+            IsPasswordVisible = false;
             StatusMessage = null;
             ErrorMessage = null;
             EditModel = new UserAdministrationSaveRequest
@@ -102,6 +538,39 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 ExternalId = user.ExternalId,
                 AuthentikLogin = user.AuthentikLogin,
                 DisplayedName = user.DisplayedName
+            };
+        }
+
+        // Выбирает роль из таблицы и переносит ее данные в форму редактора ролей.
+        private void SelectRole(UserRoleRecord role)
+        {
+            SelectedRoleId = role.Id;
+            DeleteConfirmationRoleId = null;
+            StatusMessage = null;
+            ErrorMessage = null;
+            RoleEditModel = new UserRoleSaveRequest
+            {
+                Name = role.Name,
+                ViewPublished = role.ViewPublished,
+                ViewDraft = role.ViewDraft,
+                EditDraft = role.EditDraft,
+                PublishDraft = role.PublishDraft,
+                AdminItems = role.AdminItems,
+                AdminSpace = role.AdminSpace,
+                GlobalAdmin = role.GlobalAdmin
+            };
+        }
+
+        // Выбирает группу из таблицы и переносит ее данные в форму редактора групп.
+        private void SelectGroup(UserGroupRecord group)
+        {
+            SelectedGroupId = group.Id;
+            DeleteConfirmationGroupId = null;
+            StatusMessage = null;
+            ErrorMessage = null;
+            GroupEditModel = new UserGroupSaveRequest
+            {
+                Name = group.Name
             };
         }
 
@@ -119,10 +588,19 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
+                var isPasswordChanged = !string.IsNullOrWhiteSpace(EditModel.Password);
                 var savedUser = await UserConnector.UpdateAdministrationUserAsync(SelectedUserId.Value, EditModel);
 
-                await LoadUsersCoreAsync(savedUser.Id);
-                StatusMessage = "Пользователь сохранен.";
+                UpsertUserInList(savedUser);
+                SelectUser(savedUser);
+                if (ActiveTab == UserAdministrationTab.GroupMembers && MembershipGroupId.HasValue)
+                {
+                    await LoadGroupMembershipsAsync();
+                }
+
+                StatusMessage = isPasswordChanged
+                    ? "Пользователь сохранен. Пароль изменен."
+                    : "Пользователь сохранен.";
             }
             catch (Exception ex)
             {
@@ -131,6 +609,172 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             finally
             {
                 IsSaving = false;
+            }
+        }
+
+        // Сохраняет имя и права выбранной роли.
+        private async Task SaveRoleAsync()
+        {
+            if (!SelectedRoleId.HasValue)
+            {
+                return;
+            }
+
+            IsRoleSaving = true;
+            ErrorMessage = null;
+            StatusMessage = null;
+
+            try
+            {
+                var savedRole = await UserConnector.UpdateRoleAsync(SelectedRoleId.Value, RoleEditModel);
+                await LoadRolesCoreAsync(savedRole.Id);
+                if (IsAccessRightsLoaded)
+                {
+                    await LoadAccessRightsAsync();
+                }
+
+                StatusMessage = "Роль сохранена.";
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsRoleSaving = false;
+            }
+        }
+
+        // Сохраняет имя выбранной группы пользователей.
+        private async Task SaveGroupAsync()
+        {
+            if (!SelectedGroupId.HasValue)
+            {
+                return;
+            }
+
+            IsGroupSaving = true;
+            ErrorMessage = null;
+            StatusMessage = null;
+
+            try
+            {
+                var savedGroup = await UserConnector.UpdateUserGroupAsync(SelectedGroupId.Value, GroupEditModel);
+                await LoadGroupsCoreAsync(savedGroup.Id);
+                if (IsAccessRightsLoaded)
+                {
+                    await LoadAccessRightsAsync();
+                }
+
+                StatusMessage = "Группа сохранена.";
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsGroupSaving = false;
+            }
+        }
+
+        // Сохраняет полный состав выбранной группы пользователей.
+        private async Task SaveGroupMembershipsAsync()
+        {
+            if (!MembershipGroupId.HasValue)
+            {
+                return;
+            }
+
+            IsGroupMembershipSaving = true;
+            ErrorMessage = null;
+            StatusMessage = null;
+
+            try
+            {
+                var request = new UserGroupMembershipSaveRequest
+                {
+                    UserIds = GroupMemberships
+                        .Where(membership => membership.IsMember)
+                        .Select(membership => membership.UserId)
+                        .ToList()
+                };
+
+                GroupMemberships = await UserConnector.UpdateUserGroupMembershipsAsync(MembershipGroupId.Value, request);
+                await LoadGroupsCoreAsync(SelectedGroupId);
+                StatusMessage = "Состав группы сохранен.";
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsGroupMembershipSaving = false;
+            }
+        }
+
+        // Создает назначение выбранной группы на выбранную роль в выбранном пространстве.
+        private async Task AddGroupRoleAssignmentAsync()
+        {
+            if (!AccessSpaceId.HasValue || !AccessGroupId.HasValue || !AccessRoleId.HasValue)
+            {
+                ErrorMessage = "Выберите пространство, группу и роль.";
+                return;
+            }
+
+            IsRoleAssignmentSaving = true;
+            ErrorMessage = null;
+            StatusMessage = null;
+
+            try
+            {
+                await UserConnector.CreateRoleAssignmentAsync(
+                    AccessSpaceId.Value,
+                    new UserRoleAssignmentSaveRequest
+                    {
+                        Subject = AccessSpaceId.Value == Guid.Empty
+                            ? UserRoleAssignmentSubjects.AllSpaces
+                            : UserRoleAssignmentSubjects.Space,
+                        SubjectId = AccessGroupId.Value,
+                        AssignmentType = UserRoleAssignmentTypes.GroupToRole,
+                        RoleId = AccessRoleId.Value
+                    });
+                RoleAssignments = await UserConnector.GetRoleAssignmentsAsync(AccessSpaceId.Value);
+                StatusMessage = "Назначение роли сохранено.";
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsRoleAssignmentSaving = false;
+            }
+        }
+
+        // Удаляет назначение роли из таблицы прав выбранного пространства.
+        private async Task DeleteRoleAssignmentAsync(Guid assignmentId)
+        {
+            IsRoleAssignmentDeleting = true;
+            ErrorMessage = null;
+            StatusMessage = null;
+
+            try
+            {
+                var deleted = await UserConnector.DeleteRoleAssignmentAsync(assignmentId);
+                RoleAssignments = AccessSpaceId.HasValue
+                    ? await UserConnector.GetRoleAssignmentsAsync(AccessSpaceId.Value)
+                    : Array.Empty<UserRoleAssignmentRecord>();
+                StatusMessage = deleted ? "Назначение роли удалено." : "Назначение роли не найдено.";
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsRoleAssignmentDeleting = false;
             }
         }
 
@@ -149,6 +793,36 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             StatusMessage = null;
         }
 
+        // Включает второй шаг подтверждения удаления выбранной роли.
+        private void RequestRoleDeleteConfirmation()
+        {
+            DeleteConfirmationRoleId = SelectedRoleId;
+            StatusMessage = "Подтвердите удаление роли.";
+            ErrorMessage = null;
+        }
+
+        // Отменяет подтверждение удаления выбранной роли.
+        private void CancelRoleDeleteConfirmation()
+        {
+            DeleteConfirmationRoleId = null;
+            StatusMessage = null;
+        }
+
+        // Включает второй шаг подтверждения удаления выбранной группы.
+        private void RequestGroupDeleteConfirmation()
+        {
+            DeleteConfirmationGroupId = SelectedGroupId;
+            StatusMessage = "Подтвердите удаление группы.";
+            ErrorMessage = null;
+        }
+
+        // Отменяет подтверждение удаления выбранной группы.
+        private void CancelGroupDeleteConfirmation()
+        {
+            DeleteConfirmationGroupId = null;
+            StatusMessage = null;
+        }
+
         // Удаляет выбранного локального пользователя и его технические свойства.
         private async Task DeleteSelectedUserAsync()
         {
@@ -163,11 +837,22 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
 
             try
             {
-                var deleted = await UserConnector.DeleteAdministrationUserAsync(SelectedUserId.Value);
+                var deletedUserId = SelectedUserId.Value;
+                var deleted = await UserConnector.DeleteAdministrationUserAsync(deletedUserId);
                 var statusMessage = deleted ? "Пользователь удален." : "Пользователь не найден.";
                 SelectedUserId = null;
                 DeleteConfirmationUserId = null;
-                await LoadUsersAsync();
+                RemoveUserFromList(deletedUserId);
+                if (IsGroupsLoaded)
+                {
+                    await LoadGroupsAsync();
+                }
+
+                if (ActiveTab == UserAdministrationTab.GroupMembers && MembershipGroupId.HasValue)
+                {
+                    await LoadGroupMembershipsAsync();
+                }
+
                 StatusMessage = statusMessage;
             }
             catch (Exception ex)
@@ -180,10 +865,225 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
         }
 
-        // Переключает вкладку формы выбранного пользователя.
-        private void SetActiveTab(UserAdministrationTab tab)
+        // Удаляет выбранную роль из UserMiniApp storage.
+        private async Task DeleteSelectedRoleAsync()
+        {
+            if (!SelectedRoleId.HasValue)
+            {
+                return;
+            }
+
+            IsRoleDeleting = true;
+            ErrorMessage = null;
+            StatusMessage = null;
+
+            try
+            {
+                var deleted = await UserConnector.DeleteRoleAsync(SelectedRoleId.Value);
+                var statusMessage = deleted ? "Роль удалена." : "Роль не найдена.";
+                SelectedRoleId = null;
+                DeleteConfirmationRoleId = null;
+                await LoadRolesAsync();
+                if (IsAccessRightsLoaded)
+                {
+                    await LoadAccessRightsAsync();
+                }
+
+                StatusMessage = statusMessage;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsRoleDeleting = false;
+            }
+        }
+
+        // Удаляет выбранную группу, если в ней нет назначенных пользователей.
+        private async Task DeleteSelectedGroupAsync()
+        {
+            if (!SelectedGroupId.HasValue)
+            {
+                return;
+            }
+
+            IsGroupDeleting = true;
+            ErrorMessage = null;
+            StatusMessage = null;
+
+            try
+            {
+                var groupId = SelectedGroupId.Value;
+                var deleted = await UserConnector.DeleteUserGroupAsync(groupId);
+                var statusMessage = deleted ? "Группа удалена." : "Группа не найдена.";
+                SelectedGroupId = null;
+                DeleteConfirmationGroupId = null;
+                if (MembershipGroupId == groupId)
+                {
+                    MembershipGroupId = null;
+                    GroupMemberships = Array.Empty<UserGroupMembershipRecord>();
+                }
+
+                await LoadGroupsAsync();
+                await LoadGroupMembershipsAsync();
+                if (IsAccessRightsLoaded)
+                {
+                    await LoadAccessRightsAsync();
+                }
+
+                StatusMessage = statusMessage;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsGroupDeleting = false;
+            }
+        }
+
+        // Переключает вкладку и лениво загружает данные выбранного раздела.
+        private async Task SetActiveTabAsync(UserAdministrationTab tab)
         {
             ActiveTab = tab;
+            ErrorMessage = null;
+            StatusMessage = null;
+            StateHasChanged();
+
+            if (tab == UserAdministrationTab.Roles && !IsRolesLoaded)
+            {
+                await LoadRolesAsync();
+                return;
+            }
+
+            if (tab == UserAdministrationTab.AccessRights)
+            {
+                if (!IsRolesLoaded)
+                {
+                    await LoadRolesAsync();
+                }
+
+                if (!IsGroupsLoaded)
+                {
+                    await LoadGroupsAsync();
+                }
+
+                if (!IsAccessRightsLoaded)
+                {
+                    await LoadAccessRightsAsync();
+                }
+                else
+                {
+                    EnsureAccessAssignmentSelections();
+                }
+
+                return;
+            }
+
+            if (tab == UserAdministrationTab.Groups && !IsGroupsLoaded)
+            {
+                await LoadGroupsAsync();
+                return;
+            }
+
+            if (tab == UserAdministrationTab.GroupMembers)
+            {
+                if (!IsGroupsLoaded)
+                {
+                    await LoadGroupsAsync();
+                }
+
+                if (!IsGroupMembershipsLoaded && MembershipGroupId.HasValue)
+                {
+                    await LoadGroupMembershipsAsync();
+                }
+            }
+        }
+
+        // Переключает выбранную группу во вкладке назначения пользователей.
+        private async Task ChangeMembershipGroupAsync(ChangeEventArgs args)
+        {
+            var value = args.Value?.ToString();
+            if (!Guid.TryParse(value, out var groupId))
+            {
+                MembershipGroupId = null;
+                GroupMemberships = Array.Empty<UserGroupMembershipRecord>();
+                return;
+            }
+
+            await LoadGroupMembershipsCoreAsync(groupId);
+        }
+
+        // Переключает пространство на вкладке назначения ролей.
+        private async Task ChangeAccessSpaceAsync(ChangeEventArgs args)
+        {
+            var value = args.Value?.ToString();
+            if (!Guid.TryParse(value, out var spaceId))
+            {
+                AccessSpaceId = null;
+                RoleAssignments = Array.Empty<UserRoleAssignmentRecord>();
+                return;
+            }
+
+            await LoadAccessRightsCoreAsync(spaceId);
+        }
+
+        // Переключает группу для нового назначения роли.
+        private void ChangeAccessGroup(ChangeEventArgs args)
+        {
+            var value = args.Value?.ToString();
+            AccessGroupId = Guid.TryParse(value, out var groupId)
+                ? groupId
+                : null;
+        }
+
+        // Переключает роль для нового назначения.
+        private void ChangeAccessRole(ChangeEventArgs args)
+        {
+            var value = args.Value?.ToString();
+            AccessRoleId = Guid.TryParse(value, out var roleId)
+                ? roleId
+                : null;
+        }
+
+        // Изменяет локальное состояние чекбокса участника группы до сохранения.
+        private void SetGroupMembership(Guid userId, bool isMember)
+        {
+            var membership = GroupMemberships.FirstOrDefault(item => item.UserId == userId);
+            if (membership == null)
+            {
+                return;
+            }
+
+            membership.IsMember = isMember;
+        }
+
+        // Отмечает всех локально загруженных пользователей как участников выбранной группы.
+        private void SelectAllGroupMemberships()
+        {
+            foreach (var membership in GroupMemberships)
+            {
+                membership.IsMember = true;
+            }
+
+            GroupMemberships = GroupMemberships.ToList();
+        }
+
+        // Выбирает доступные группу и роль для формы добавления назначения.
+        private void EnsureAccessAssignmentSelections()
+        {
+            if (!AccessGroupId.HasValue || Groups.All(group => group.Id != AccessGroupId.Value))
+            {
+                AccessGroupId = Groups.FirstOrDefault()?.Id;
+            }
+
+            if (!AccessRoleId.HasValue || Roles.All(role => role.Id != AccessRoleId.Value))
+            {
+                AccessRoleId = Roles.FirstOrDefault()?.Id;
+            }
         }
 
         // Возвращает CSS-класс кнопки пользователя в левом списке.
@@ -202,6 +1102,22 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                 : "users-admin__tab";
         }
 
+        // Возвращает CSS-класс строки роли в таблице ролей.
+        private string GetRoleRowClass(UserRoleRecord role)
+        {
+            return SelectedRoleId == role.Id
+                ? "users-admin__role-row users-admin__role-row--selected"
+                : "users-admin__role-row";
+        }
+
+        // Возвращает CSS-класс строки группы в таблице групп.
+        private string GetGroupRowClass(UserGroupRecord group)
+        {
+            return SelectedGroupId == group.Id
+                ? "users-admin__group-row users-admin__group-row--selected"
+                : "users-admin__group-row";
+        }
+
         // Возвращает отображаемое имя для строки пользователя в списке.
         private static string GetUserListName(UserAdministrationRecord user)
         {
@@ -216,14 +1132,46 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             SelectedUserId = null;
             DeleteConfirmationUserId = null;
             ActiveTab = UserAdministrationTab.General;
+            IsPasswordVisible = false;
             EditModel = new UserAdministrationSaveRequest();
+        }
+
+        // Очищает выбор роли и форму редактора ролей.
+        private void ClearRoleSelection()
+        {
+            SelectedRoleId = null;
+            DeleteConfirmationRoleId = null;
+            RoleEditModel = new UserRoleSaveRequest();
+        }
+
+        // Очищает выбор группы и форму редактора групп.
+        private void ClearGroupSelection()
+        {
+            SelectedGroupId = null;
+            DeleteConfirmationGroupId = null;
+            GroupEditModel = new UserGroupSaveRequest();
+        }
+
+        // Переключает режим отображения поля нового пароля.
+        private void TogglePasswordVisibility()
+        {
+            IsPasswordVisible = !IsPasswordVisible;
+        }
+
+        // Возвращает текстовый маркер выбранного права роли.
+        private static string RenderPermissionMark(bool value)
+        {
+            return value ? "x" : string.Empty;
         }
 
         // Вкладки формы локального пользователя.
         private enum UserAdministrationTab
         {
             General,
-            AccessRights
+            AccessRights,
+            Roles,
+            Groups,
+            GroupMembers
         }
     }
 }

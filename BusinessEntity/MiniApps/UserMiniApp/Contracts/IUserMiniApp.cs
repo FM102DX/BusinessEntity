@@ -21,6 +21,10 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
         // Возвращает локальных пользователей для административного CRUD UI.
         Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default);
 
+        // Читает пользователей приложения из Authentik и материализует их в локальную таблицу Users.
+        Task<IReadOnlyList<UserAdministrationRecord>> ReadAdministrationUsersFromAuthentikAsync(
+            CancellationToken cancellationToken = default);
+
         // Создает пользователя приложения в Authentik и материализует его локальную DTO.
         Task<UserAdministrationRecord> CreateAdministrationUserAsync(CancellationToken cancellationToken = default);
 
@@ -32,6 +36,78 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
 
         // Удаляет локального пользователя приложения и его технические свойства.
         Task<bool> DeleteAdministrationUserAsync(Guid userId, CancellationToken cancellationToken = default);
+
+        // Гарантирует системные роли UserMiniApp.
+        Task EnsureSystemRolesAsync(CancellationToken cancellationToken = default);
+
+        // Возвращает роли UserMiniApp для административного редактора.
+        Task<IReadOnlyList<UserRoleRecord>> GetRolesAsync(CancellationToken cancellationToken = default);
+
+        // Создает новую роль UserMiniApp.
+        Task<UserRoleRecord> CreateRoleAsync(CancellationToken cancellationToken = default);
+
+        // Обновляет роль UserMiniApp.
+        Task<UserRoleRecord> UpdateRoleAsync(
+            Guid roleId,
+            UserRoleSaveRequest request,
+            CancellationToken cancellationToken = default);
+
+        // Удаляет роль UserMiniApp.
+        Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken cancellationToken = default);
+
+        // Возвращает группы пользователей UserMiniApp для административного редактора.
+        Task<IReadOnlyList<UserGroupRecord>> GetUserGroupsAsync(CancellationToken cancellationToken = default);
+
+        // Создает новую группу пользователей UserMiniApp.
+        Task<UserGroupRecord> CreateUserGroupAsync(CancellationToken cancellationToken = default);
+
+        // Обновляет группу пользователей UserMiniApp.
+        Task<UserGroupRecord> UpdateUserGroupAsync(
+            Guid groupId,
+            UserGroupSaveRequest request,
+            CancellationToken cancellationToken = default);
+
+        // Удаляет группу пользователей UserMiniApp.
+        Task<bool> DeleteUserGroupAsync(Guid groupId, CancellationToken cancellationToken = default);
+
+        // Возвращает назначение пользователей в выбранную группу.
+        Task<IReadOnlyList<UserGroupMembershipRecord>> GetUserGroupMembershipsAsync(
+            Guid groupId,
+            CancellationToken cancellationToken = default);
+
+        // Сохраняет полный список пользователей выбранной группы.
+        Task<IReadOnlyList<UserGroupMembershipRecord>> UpdateUserGroupMembershipsAsync(
+            Guid groupId,
+            UserGroupMembershipSaveRequest request,
+            CancellationToken cancellationToken = default);
+
+        // Возвращает пространства для вкладки назначения ролей.
+        Task<IReadOnlyList<UserSpaceRecord>> GetRoleAssignmentSpacesAsync(CancellationToken cancellationToken = default);
+
+        // Возвращает назначения ролей для выбранного пространства.
+        Task<IReadOnlyList<UserRoleAssignmentRecord>> GetRoleAssignmentsAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default);
+
+        // Создает назначение роли для группы или пользователя в выбранном пространстве.
+        Task<UserRoleAssignmentRecord> CreateRoleAssignmentAsync(
+            Guid spaceId,
+            UserRoleAssignmentSaveRequest request,
+            CancellationToken cancellationToken = default);
+
+        // Удаляет назначение роли.
+        Task<bool> DeleteRoleAssignmentAsync(Guid assignmentId, CancellationToken cancellationToken = default);
+
+        // Возвращает имена локальных групп текущего пользователя.
+        Task<IReadOnlyList<string>> GetCurrentUserGroupNamesAsync(CancellationToken cancellationToken = default);
+
+        // Возвращает профиль текущего пользователя для страницы "Профиль".
+        Task<UserProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default);
+
+        // Обновляет отображаемое имя и, при необходимости, пароль текущего пользователя.
+        Task<UserProfileDto> UpdateProfileAsync(
+            UserProfileUpdateRequest request,
+            CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<RichTextDocumentBookmark>> GetRichDocBookmarksAsync(
             Guid documentId,

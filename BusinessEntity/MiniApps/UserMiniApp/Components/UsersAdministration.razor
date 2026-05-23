@@ -16,6 +16,12 @@
                     disabled="@IsBusy">
                 Обновить
             </button>
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    @onclick="ReadUsersFromAuthentikAsync"
+                    disabled="@IsBusy">
+                Прочитать
+            </button>
         </div>
 
         @if (IsLoading)
@@ -57,15 +63,36 @@
                     class="@GetTabButtonClass(UserAdministrationTab.General)"
                     role="tab"
                     aria-selected="@(ActiveTab == UserAdministrationTab.General)"
-                    @onclick="@(() => SetActiveTab(UserAdministrationTab.General))">
+                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.General))">
                 Общая
             </button>
             <button type="button"
                     class="@GetTabButtonClass(UserAdministrationTab.AccessRights)"
                     role="tab"
                     aria-selected="@(ActiveTab == UserAdministrationTab.AccessRights)"
-                    @onclick="@(() => SetActiveTab(UserAdministrationTab.AccessRights))">
+                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.AccessRights))">
                 Права доступа
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(UserAdministrationTab.Roles)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == UserAdministrationTab.Roles)"
+                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.Roles))">
+                Роли
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(UserAdministrationTab.Groups)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == UserAdministrationTab.Groups)"
+                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.Groups))">
+                Группы
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(UserAdministrationTab.GroupMembers)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == UserAdministrationTab.GroupMembers)"
+                    @onclick="@(() => SetActiveTabAsync(UserAdministrationTab.GroupMembers))">
+                Состав групп
             </button>
         </div>
 
@@ -93,6 +120,26 @@
                             <InputText class="form-control"
                                        @bind-Value="EditModel.DisplayedName"
                                        disabled="@IsBusy" />
+                        </label>
+
+                        <label class="users-admin__field">
+                            <span>Новый пароль</span>
+                            <div class="users-admin__password-control">
+                                <InputText class="form-control users-admin__password-input"
+                                           type="@PasswordInputType"
+                                           autocomplete="new-password"
+                                           @bind-Value="EditModel.Password"
+                                           disabled="@IsBusy" />
+                                <button type="button"
+                                        class="btn btn-outline-secondary users-admin__password-toggle"
+                                        title="@PasswordToggleTitle"
+                                        aria-label="@PasswordToggleTitle"
+                                        aria-pressed="@IsPasswordVisible"
+                                        @onclick="TogglePasswordVisibility"
+                                        disabled="@IsBusy">
+                                    <span class="oi oi-eye" aria-hidden="true"></span>
+                                </button>
+                            </div>
                         </label>
                     </div>
 
@@ -133,20 +180,458 @@
                     </div>
                 </EditForm>
             }
-            else
+            else if (ActiveTab == UserAdministrationTab.AccessRights)
             {
-                <div class="users-admin__access-placeholder"></div>
+                <div class="users-admin__access">
+                    <label class="users-admin__access-space">
+                        <span>Пространство</span>
+                        <select class="form-control"
+                                value="@AccessSpaceId?.ToString()"
+                                @onchange="ChangeAccessSpaceAsync"
+                                disabled="@(IsBusy || AccessSpaces.Count == 0)">
+                            @foreach (var space in AccessSpaces)
+                            {
+                                <option value="@space.Id">@space.Name</option>
+                            }
+                        </select>
+                    </label>
+
+                    <div class="users-admin__access-actions">
+                        <label class="users-admin__access-picker">
+                            <span>Группа</span>
+                            <select class="form-control"
+                                    value="@AccessGroupId?.ToString()"
+                                    @onchange="ChangeAccessGroup"
+                                    disabled="@(IsBusy || Groups.Count == 0)">
+                                @foreach (var group in Groups)
+                                {
+                                    <option value="@group.Id">@group.Name</option>
+                                }
+                            </select>
+                        </label>
+
+                        <label class="users-admin__access-picker">
+                            <span>Роль</span>
+                            <select class="form-control"
+                                    value="@AccessRoleId?.ToString()"
+                                    @onchange="ChangeAccessRole"
+                                    disabled="@(IsBusy || Roles.Count == 0)">
+                                @foreach (var role in Roles)
+                                {
+                                    <option value="@role.Id">@role.Name</option>
+                                }
+                            </select>
+                        </label>
+
+                        <button type="button"
+                                class="btn btn-sm btn-primary"
+                                @onclick="AddGroupRoleAssignmentAsync"
+                                disabled="@(IsBusy || !AccessSpaceId.HasValue || !AccessGroupId.HasValue || !AccessRoleId.HasValue)">
+                            Добавить
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                @onclick="LoadAccessRightsAsync"
+                                disabled="@IsBusy">
+                            Обновить
+                        </button>
+                    </div>
+
+                    @if (IsAccessRightsLoading)
+                    {
+                        <div class="users-admin__empty">Загрузка назначений...</div>
+                    }
+                    else if (AccessSpaces.Count == 0)
+                    {
+                        <div class="users-admin__empty">Пространства не найдены.</div>
+                    }
+                    else if (Groups.Count == 0)
+                    {
+                        <div class="users-admin__empty">Сначала создайте группу.</div>
+                    }
+                    else if (Roles.Count == 0)
+                    {
+                        <div class="users-admin__empty">Сначала создайте роль.</div>
+                    }
+                    else if (RoleAssignments.Count == 0)
+                    {
+                        <div class="users-admin__empty">Назначений нет.</div>
+                    }
+                    else
+                    {
+                        <table class="users-admin__access-table">
+                            <thead>
+                                <tr>
+                                    <th>Сабджект</th>
+                                    <th>Назначение</th>
+                                    <th>Группа / пользователь</th>
+                                    <th>Роль</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var assignment in RoleAssignments)
+                                {
+                                    <tr>
+                                        <td>@assignment.Subject</td>
+                                        <td>@assignment.AssignmentType</td>
+                                        <td>@assignment.SubjectName</td>
+                                        <td>@assignment.RoleName</td>
+                                        <td>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    @onclick="@(() => DeleteRoleAssignmentAsync(assignment.Id))"
+                                                    disabled="@IsBusy">
+                                                Удалить
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+            else if (ActiveTab == UserAdministrationTab.Roles)
+            {
+                <div class="users-admin__roles">
+                    <div class="users-admin__roles-actions">
+                        <button type="button"
+                                class="btn btn-sm btn-primary"
+                                @onclick="CreateRoleAsync"
+                                disabled="@IsBusy">
+                            Создать роль
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                @onclick="LoadRolesAsync"
+                                disabled="@IsBusy">
+                            Обновить
+                        </button>
+                    </div>
+
+                    @if (IsRolesLoading)
+                    {
+                        <div class="users-admin__empty">Загрузка ролей...</div>
+                    }
+                    else if (Roles.Count == 0)
+                    {
+                        <div class="users-admin__empty">Ролей нет</div>
+                    }
+                    else
+                    {
+                        <table class="users-admin__roles-table">
+                            <thead>
+                                <tr>
+                                    <th>Имя роли</th>
+                                    <th>ViewPublished</th>
+                                    <th>ViewDraft</th>
+                                    <th>EditDraft</th>
+                                    <th>PublishDraft</th>
+                                    <th>AdminItems</th>
+                                    <th>AdminSpace</th>
+                                    <th>GlobalAdmin</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var role in Roles)
+                                {
+                                    <tr class="@GetRoleRowClass(role)"
+                                        @onclick="@(() => SelectRole(role))">
+                                        <td>
+                                            <button type="button"
+                                                    class="users-admin__role-select"
+                                                    @onclick="@(() => SelectRole(role))">
+                                                @role.Name
+                                                @if (role.IsSystem)
+                                                {
+                                                    <span class="users-admin__role-system">системная</span>
+                                                }
+                                            </button>
+                                        </td>
+                                        <td>@RenderPermissionMark(role.ViewPublished)</td>
+                                        <td>@RenderPermissionMark(role.ViewDraft)</td>
+                                        <td>@RenderPermissionMark(role.EditDraft)</td>
+                                        <td>@RenderPermissionMark(role.PublishDraft)</td>
+                                        <td>@RenderPermissionMark(role.AdminItems)</td>
+                                        <td>@RenderPermissionMark(role.AdminSpace)</td>
+                                        <td>@RenderPermissionMark(role.GlobalAdmin)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+
+                    <EditForm Model="@RoleEditModel" OnValidSubmit="SaveRoleAsync">
+                        <div class="users-admin__role-editor">
+                            <label class="users-admin__field">
+                                <span>Имя роли</span>
+                                <InputText class="form-control"
+                                           @bind-Value="RoleEditModel.Name"
+                                           disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
+                            </label>
+
+                            <div class="users-admin__role-permissions" aria-label="Права роли">
+                                <label>
+                                    <InputCheckbox @bind-Value="RoleEditModel.ViewPublished"
+                                                   disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
+                                    <span>ViewPublished</span>
+                                </label>
+                                <label>
+                                    <InputCheckbox @bind-Value="RoleEditModel.ViewDraft"
+                                                   disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
+                                    <span>ViewDraft</span>
+                                </label>
+                                <label>
+                                    <InputCheckbox @bind-Value="RoleEditModel.EditDraft"
+                                                   disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
+                                    <span>EditDraft</span>
+                                </label>
+                                <label>
+                                    <InputCheckbox @bind-Value="RoleEditModel.PublishDraft"
+                                                   disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
+                                    <span>PublishDraft</span>
+                                </label>
+                                <label>
+                                    <InputCheckbox @bind-Value="RoleEditModel.AdminItems"
+                                                   disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
+                                    <span>AdminItems</span>
+                                </label>
+                                <label>
+                                    <InputCheckbox @bind-Value="RoleEditModel.AdminSpace"
+                                                   disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
+                                    <span>AdminSpace</span>
+                                </label>
+                                <label>
+                                    <InputCheckbox @bind-Value="RoleEditModel.GlobalAdmin"
+                                                   disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)" />
+                                    <span>GlobalAdmin</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="users-admin__form-actions users-admin__role-form-actions">
+                            <button type="submit"
+                                    class="btn btn-primary"
+                                    disabled="@(IsBusy || !SelectedRoleId.HasValue || SelectedRole?.IsSystem == true)">
+                                Сохранить роль
+                            </button>
+
+                            @if (SelectedRoleId.HasValue && SelectedRole?.IsSystem != true)
+                            {
+                                @if (DeleteConfirmationRoleId == SelectedRoleId)
+                                {
+                                    <button type="button"
+                                            class="btn btn-danger"
+                                            @onclick="DeleteSelectedRoleAsync"
+                                            disabled="@IsBusy">
+                                        Подтвердить удаление
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-outline-secondary"
+                                            @onclick="CancelRoleDeleteConfirmation"
+                                            disabled="@IsBusy">
+                                        Отмена
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            class="btn btn-outline-danger"
+                                            @onclick="RequestRoleDeleteConfirmation"
+                                            disabled="@IsBusy">
+                                        Удалить роль
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </EditForm>
+                </div>
+            }
+            else if (ActiveTab == UserAdministrationTab.Groups)
+            {
+                <div class="users-admin__groups">
+                    <div class="users-admin__groups-actions">
+                        <button type="button"
+                                class="btn btn-sm btn-primary"
+                                @onclick="CreateGroupAsync"
+                                disabled="@IsBusy">
+                            Создать группу
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                @onclick="LoadGroupsAsync"
+                                disabled="@IsBusy">
+                            Обновить
+                        </button>
+
+                        <EditForm class="users-admin__group-inline-editor"
+                                  style="display: flex; align-items: center; gap: 0.5rem; min-width: 0; flex: 1 1 auto; flex-wrap: nowrap;"
+                                  Model="@GroupEditModel"
+                                  OnValidSubmit="SaveGroupAsync">
+                            <label class="users-admin__group-inline-field">
+                                <span>Имя группы</span>
+                                <InputText class="form-control form-control-sm"
+                                           @bind-Value="GroupEditModel.Name"
+                                           disabled="@(IsBusy || !SelectedGroupId.HasValue)" />
+                            </label>
+
+                            <button type="submit"
+                                    class="btn btn-sm btn-primary"
+                                    disabled="@(IsBusy || !SelectedGroupId.HasValue)">
+                                Сохранить группу
+                            </button>
+
+                            @if (SelectedGroupId.HasValue)
+                            {
+                                @if (DeleteConfirmationGroupId == SelectedGroupId)
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-danger"
+                                            @onclick="DeleteSelectedGroupAsync"
+                                            disabled="@IsBusy">
+                                        Подтвердить удаление
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary"
+                                            @onclick="CancelGroupDeleteConfirmation"
+                                            disabled="@IsBusy">
+                                        Отмена
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger"
+                                            @onclick="RequestGroupDeleteConfirmation"
+                                            disabled="@IsBusy">
+                                        Удалить группу
+                                    </button>
+                                }
+                            }
+                        </EditForm>
+                    </div>
+
+                    @if (IsGroupsLoading)
+                    {
+                        <div class="users-admin__empty">Загрузка групп...</div>
+                    }
+                    else if (Groups.Count == 0)
+                    {
+                        <div class="users-admin__empty">Групп нет</div>
+                    }
+                    else
+                    {
+                        <table class="users-admin__groups-table">
+                            <thead>
+                                <tr>
+                                    <th>Имя группы</th>
+                                    <th>Пользователей</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var group in Groups)
+                                {
+                                    <tr class="@GetGroupRowClass(group)"
+                                        @onclick="@(() => SelectGroup(group))">
+                                        <td>
+                                            <button type="button"
+                                                    class="users-admin__group-select"
+                                                    @onclick="@(() => SelectGroup(group))">
+                                                @group.Name
+                                            </button>
+                                        </td>
+                                        <td>@group.UserCount</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+            else if (ActiveTab == UserAdministrationTab.GroupMembers)
+            {
+                <div class="users-admin__group-members">
+                    <label class="users-admin__membership-selector">
+                        <span>Группа</span>
+                        <select class="form-control"
+                                value="@MembershipGroupId?.ToString()"
+                                @onchange="ChangeMembershipGroupAsync"
+                                disabled="@(IsBusy || Groups.Count == 0)">
+                            @foreach (var group in Groups)
+                            {
+                                <option value="@group.Id">@group.Name (@group.UserCount)</option>
+                            }
+                        </select>
+                    </label>
+
+                    <div class="users-admin__group-members-actions">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                @onclick="LoadGroupMembershipsAsync"
+                                disabled="@(IsBusy || !MembershipGroupId.HasValue)">
+                            Обновить
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-primary"
+                                @onclick="SaveGroupMembershipsAsync"
+                                disabled="@(IsBusy || !MembershipGroupId.HasValue)">
+                            Сохранить состав
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-primary"
+                                @onclick="SelectAllGroupMemberships"
+                                disabled="@(IsBusy || !MembershipGroupId.HasValue || GroupMemberships.Count == 0)">
+                            Выделить все
+                        </button>
+                    </div>
+
+                    @if (Groups.Count == 0)
+                    {
+                        <div class="users-admin__empty">Сначала создайте группу.</div>
+                    }
+                    else if (IsGroupMembershipsLoading)
+                    {
+                        <div class="users-admin__empty">Загрузка состава группы...</div>
+                    }
+                    else if (GroupMemberships.Count == 0)
+                    {
+                        <div class="users-admin__empty">Пользователей нет</div>
+                    }
+                    else
+                    {
+                        <table class="users-admin__membership-table">
+                            <thead>
+                                <tr>
+                                    <th>В группе</th>
+                                    <th>Пользователь</th>
+                                    <th>Логин в аутентик</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var membership in GroupMemberships)
+                                {
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox"
+                                                   checked="@membership.IsMember"
+                                                   @onchange="@((ChangeEventArgs args) => SetGroupMembership(membership.UserId, Convert.ToBoolean(args.Value)))"
+                                                   disabled="@IsBusy" />
+                                        </td>
+                                        <td>
+                                            <span class="users-admin__membership-name">@membership.DisplayedName</span>
+                                            <span class="users-admin__membership-code">@membership.ExternalId</span>
+                                        </td>
+                                        <td>@membership.AuthentikLogin</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
             }
 
-            @if (!string.IsNullOrWhiteSpace(StatusMessage))
-            {
-                <div class="users-admin__status">@StatusMessage</div>
-            }
-
-            @if (!string.IsNullOrWhiteSpace(ErrorMessage))
-            {
-                <div class="users-admin__error">@ErrorMessage</div>
-            }
         </div>
     </div>
 </div>

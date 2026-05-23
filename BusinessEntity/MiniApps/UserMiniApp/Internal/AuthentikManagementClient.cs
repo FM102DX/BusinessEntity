@@ -62,9 +62,13 @@ internal sealed class AuthentikManagementClient
     }
 
     // Создает Authentik-пользователя приложения с системным username user-[5 букв].
-    public async Task<AuthentikUserRecord> CreateApplicationUserAsync(CancellationToken cancellationToken)
+    public async Task<AuthentikUserRecord> CreateApplicationUserAsync(
+        IEnumerable<string> reservedUsernames,
+        CancellationToken cancellationToken)
     {
-        var username = await GenerateUniqueUsernameAsync(cancellationToken);
+        var reservedNames = reservedUsernames
+            .Where(username => !string.IsNullOrWhiteSpace(username))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var groups = new List<string>();
 
         var applicationGroupPk = await TryGetApplicationGroupPkAsync(cancellationToken);
@@ -73,25 +77,42 @@ internal sealed class AuthentikManagementClient
             groups.Add(applicationGroupPk);
         }
 
-        var payload = new
+        for (var attempt = 0; attempt < 100; attempt++)
         {
-            username,
-            name = username,
-            is_active = true,
-            groups,
-            email = string.Empty,
-            path = "users",
-            type = "internal",
-            attributes = new { }
-        };
+            var username = _managedUsernamePrefix + GenerateCode(_generatedUsernameCodeLength);
+            if (reservedNames.Contains(username))
+            {
+                continue;
+            }
 
-        using var request = CreateJsonRequest(HttpMethod.Post, "/api/v3/core/users/", payload);
-        using var response = await SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        EnsureSuccess(response, body, "создать пользователя в Authentik");
+            var payload = new
+            {
+                username,
+                name = username,
+                is_active = true,
+                groups,
+                email = string.Empty,
+                path = "users",
+                type = "internal",
+                attributes = new { }
+            };
 
-        using var document = JsonDocument.Parse(body);
-        return ReadUser(document.RootElement);
+            using var request = CreateJsonRequest(HttpMethod.Post, "/api/v3/core/users/", payload);
+            using var response = await SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode && IsUsernameConflict(response, body))
+            {
+                reservedNames.Add(username);
+                continue;
+            }
+
+            EnsureSuccess(response, body, "создать пользователя в Authentik");
+
+            using var document = JsonDocument.Parse(body);
+            return ReadUser(document.RootElement);
+        }
+
+        throw new InvalidOperationException("Не удалось подобрать свободный логин Authentik для нового пользователя.");
     }
 
     // Меняет username пользователя в Authentik и возвращает обновленную запись.
@@ -115,6 +136,32 @@ internal sealed class AuthentikManagementClient
         return ReadUser(document.RootElement);
     }
 
+    // Устанавливает новый пароль внутреннего Authentik-пользователя.
+    public async Task SetPasswordAsync(
+        int authentikUserPk,
+        string password,
+        CancellationToken cancellationToken)
+    {
+        if (authentikUserPk <= 0)
+        {
+            throw new InvalidOperationException("У пользователя нет идентификатора Authentik.");
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new ArgumentException("Пароль не может быть пустым.", nameof(password));
+        }
+
+        var payload = new { password };
+        using var request = CreateJsonRequest(
+            HttpMethod.Post,
+            $"/api/v3/core/users/{authentikUserPk}/set_password/",
+            payload);
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        EnsureSuccess(response, body, "изменить пароль пользователя в Authentik");
+    }
+
     // Удаляет пользователя из Authentik.
     public async Task DeleteUserAsync(int authentikUserPk, CancellationToken cancellationToken)
     {
@@ -127,26 +174,6 @@ internal sealed class AuthentikManagementClient
         using var response = await SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         EnsureSuccess(response, body, "удалить пользователя из Authentik");
-    }
-
-    private async Task<string> GenerateUniqueUsernameAsync(CancellationToken cancellationToken)
-    {
-        var existingNames = (await ReadPagedUsersAsync(
-                $"/api/v3/core/users/?page_size={PageSize}&type=internal",
-                cancellationToken))
-            .Select(user => user.Username)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        for (var attempt = 0; attempt < 100; attempt++)
-        {
-            var username = _managedUsernamePrefix + GenerateCode(_generatedUsernameCodeLength);
-            if (!existingNames.Contains(username))
-            {
-                return username;
-            }
-        }
-
-        throw new InvalidOperationException("Не удалось подобрать свободный логин Authentik для нового пользователя.");
     }
 
     private async Task<string?> TryGetApplicationGroupPkAsync(CancellationToken cancellationToken)
@@ -213,6 +240,13 @@ internal sealed class AuthentikManagementClient
         }
 
         return users;
+    }
+
+    // Определяет ошибку уникальности username, чтобы подобрать другой случайный код без перечитывания пользователей.
+    private static bool IsUsernameConflict(HttpResponseMessage response, string body)
+    {
+        return (int)response.StatusCode == 400 &&
+               body.Contains("username", StringComparison.OrdinalIgnoreCase);
     }
 
     private HttpRequestMessage CreateJsonRequest(HttpMethod method, string requestUri, object payload)
