@@ -87,11 +87,7 @@
                     }
                     else
                     {
-                        <div class="alert alert-warning">
-                            <h4>Требуется авторизация</h4>
-                            <p>Для доступа к системе KMS Business EntityData необходимо войти в систему через Authentik.</p>
-                            <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentik</button>
-                        </div>
+                        <AuthentikLoginGate />
                     }
                 </div>
             </div>
