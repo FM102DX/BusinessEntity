@@ -1,7 +1,9 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.Contracts;
+using BusinessEntity.Contracts;
 using BusinessEntity.Models;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using BusinessEntity.Core.BaseClasses.Relations;
@@ -11,6 +13,7 @@ namespace BusinessEntity.Pages
     {
         [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
+        [Inject] public IUserContextService UserContext { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
         [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
@@ -24,6 +27,11 @@ namespace BusinessEntity.Pages
         private IEnumerable<string> EntityTypeEnums { get; set; } = new List<string>();
         private IEnumerable<string> RelationTypeEnums { get; set; } = new List<string>();
         private List<BusinessEntity.Core.Classes.BusinessEntity> BusinessEntities { get; set; } = new List<BusinessEntity.Core.Classes.BusinessEntity>();
+        private IReadOnlyList<UserSpaceRecord> AnonymousAccessibleSpaces { get; set; } = Array.Empty<UserSpaceRecord>();
+        private bool IsAnonymousSpacesLoading { get; set; }
+        private UserSpaceRecord? CurrentAnonymousSpace => UserContext.CurrentSpaceId.HasValue
+            ? AnonymousAccessibleSpaces.FirstOrDefault(space => space.Id == UserContext.CurrentSpaceId.Value)
+            : null;
         
         // Состояние выбранных узлов дерева через сервис
         private bool IsMultiSelectActive => TreeSelectionService.IsMultiSelectActive;
@@ -57,6 +65,7 @@ namespace BusinessEntity.Pages
                 }
                 else
                 {
+                    await LoadAnonymousEntryAsync();
                     Logger.LogInformation("Anonymous user accessed main page");
                 }
 
@@ -94,6 +103,31 @@ namespace BusinessEntity.Pages
             {
                 Logger.LogError(ex, "Error redirecting to login");
             }
+        }
+
+        // Загружает anonymous-доступные пространства и автоматически выбирает единственное пространство.
+        private async Task LoadAnonymousEntryAsync()
+        {
+            IsAnonymousSpacesLoading = true;
+            try
+            {
+                AnonymousAccessibleSpaces = await UserConnector.GetAnonymousAccessibleSpacesAsync();
+                if (AnonymousAccessibleSpaces.Count == 1 &&
+                    (!UserContext.CurrentSpaceId.HasValue || UserContext.CurrentSpaceId.Value != AnonymousAccessibleSpaces[0].Id))
+                {
+                    SelectAnonymousSpace(AnonymousAccessibleSpaces[0].Id);
+                }
+            }
+            finally
+            {
+                IsAnonymousSpacesLoading = false;
+            }
+        }
+
+        // Переводит anonymous-посетителя в выбранное публичное пространство через серверный endpoint.
+        private void SelectAnonymousSpace(Guid spaceId)
+        {
+            Navigation.NavigateTo($"/api/space/select-anonymous/{spaceId}", forceLoad: true);
         }
 
         // Вспомогательные методы для работы с выбранными узлами

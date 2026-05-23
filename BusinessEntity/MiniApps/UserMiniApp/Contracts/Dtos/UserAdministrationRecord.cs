@@ -10,6 +10,7 @@ public sealed class UserAdministrationRecord
     public string AuthentikLogin { get; set; } = string.Empty;
     public string DisplayedName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public bool IsSystem { get; set; }
     public DateTime DateCreated { get; set; }
     public DateTime DateLastModified { get; set; }
 }

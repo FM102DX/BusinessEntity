@@ -4,6 +4,7 @@ using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Services;
 using BusinessEntity.WebLogger.Services;
 
@@ -40,10 +41,19 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
 
             var currentUser = await _userConnector.EnsureCurrentUserAsync(cancellationToken);
             var currentBusinessUser = await _userConnector.GetCurrentUserAsync(cancellationToken);
+            var permissions = await _userConnector.GetCurrentUserPermissionsForSpaceAsync(space.Id, cancellationToken);
+            if (!IsAccessAdmin(currentBusinessUser) &&
+                !permissions.CanViewPublished &&
+                !permissions.CanViewDraft)
+            {
+                return null;
+            }
+
             var children = await BuildChildrenAsync(
                 space.Id,
                 currentUser?.Id,
                 IsAccessAdmin(currentBusinessUser),
+                permissions,
                 cancellationToken);
             return new TreeSpaceSnapshot(space, children);
         }
@@ -51,6 +61,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         // Создает дочернюю сущность под выбранным родителем.
         public async Task<BusinessEntity.Core.Classes.BusinessEntity> CreateEntityAsync(Guid parentId, BusinessEntityTypeEnum entityType, CancellationToken cancellationToken = default)
         {
+            await EnsureAuthenticatedMutationAsync(cancellationToken);
             var parent = await _businessEntityHelper.GetBusinessEntityById(parentId)
                 ?? throw new InvalidOperationException($"Parent entity '{parentId}' was not found.");
 
@@ -66,12 +77,14 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         // Переименовывает сущность дерева.
         public async Task<BusinessEntity.Core.Classes.BusinessEntity?> RenameEntityAsync(Guid entityId, string newName, CancellationToken cancellationToken = default)
         {
+            await EnsureAuthenticatedMutationAsync(cancellationToken);
             return await _businessEntityHelper.RenameEntity(entityId, newName, cancellationToken);
         }
 
         // Удаляет набор сущностей дерева.
         public async Task DeleteEntitiesAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken = default)
         {
+            await EnsureAuthenticatedMutationAsync(cancellationToken);
             foreach (var entityId in entityIds.Distinct())
             {
                 await _businessEntityHelper.RemoveBusinessEntity(entityId);
@@ -81,6 +94,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         // Перемещает набор сущностей к новому родителю.
         public async Task MoveEntitiesAsync(IReadOnlyList<Guid> entityIds, Guid targetParentId, CancellationToken cancellationToken = default)
         {
+            await EnsureAuthenticatedMutationAsync(cancellationToken);
             var targetParent = await _businessEntityHelper.GetBusinessEntityById(targetParentId)
                 ?? throw new InvalidOperationException($"Target parent '{targetParentId}' was not found.");
 
@@ -98,6 +112,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             Guid parentId,
             Guid? currentUserId,
             bool isAccessAdmin,
+            UserEffectivePermissions permissions,
             CancellationToken cancellationToken)
         {
             var children = await _businessEntityHelper.GetContainedEntitiesAsync(parentId, cancellationToken);
@@ -105,8 +120,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
 
             foreach (var child in children)
             {
-                var descendants = await BuildChildrenAsync(child.Id, currentUserId, isAccessAdmin, cancellationToken);
-                if (await CanDisplayTreeEntityAsync(child, currentUserId, isAccessAdmin, cancellationToken) || descendants.Count > 0)
+                var descendants = await BuildChildrenAsync(child.Id, currentUserId, isAccessAdmin, permissions, cancellationToken);
+                if (await CanDisplayTreeEntityAsync(child, currentUserId, isAccessAdmin, permissions, cancellationToken) || descendants.Count > 0)
                 {
                     snapshots.Add(new TreeNodeSnapshot(child, descendants));
                 }
@@ -120,20 +135,48 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             BusinessEntity.Core.Classes.BusinessEntity entity,
             Guid? currentUserId,
             bool isAccessAdmin,
+            UserEffectivePermissions permissions,
             CancellationToken cancellationToken)
         {
+            if (!permissions.CanViewPublished && !permissions.CanViewDraft && !isAccessAdmin)
+            {
+                return false;
+            }
+
             if (!IsDocumentEntity(entity.EntityType))
+            {
+                return isAccessAdmin || permissions.CanViewDraft || permissions.CanViewPublished;
+            }
+
+            if (isAccessAdmin || IsOwner(entity, currentUserId) || permissions.CanViewDraft)
             {
                 return true;
             }
 
-            if (isAccessAdmin || IsOwner(entity, currentUserId) || entity.IsPublic)
+            if (!permissions.CanViewPublished)
+            {
+                return false;
+            }
+
+            if (entity.IsPublic)
             {
                 return true;
             }
 
             var publishedVersion = await GetPublishedVersionAsync(entity, cancellationToken);
             return publishedVersion > 0;
+        }
+
+        // Запрещает anonymous-режиму выполнять изменения дерева.
+        private async Task EnsureAuthenticatedMutationAsync(CancellationToken cancellationToken)
+        {
+            var currentUser = await _userConnector.GetCurrentUserAsync(cancellationToken);
+            if (currentUser?.IsAuthenticated == true)
+            {
+                return;
+            }
+
+            throw new UnauthorizedAccessException("Для изменения дерева требуется вход.");
         }
 
         private async Task<int> GetPublishedVersionAsync(

@@ -101,6 +101,24 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
         // Возвращает имена локальных групп текущего пользователя.
         Task<IReadOnlyList<string>> GetCurrentUserGroupNamesAsync(CancellationToken cancellationToken = default);
 
+        // Возвращает effective permissions текущего или anonymous пользователя в пространстве.
+        Task<UserEffectivePermissions> GetCurrentUserPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default);
+
+        // Возвращает effective permissions текущего или anonymous пользователя для пространства сущности.
+        Task<UserEffectivePermissions> GetCurrentUserPermissionsForEntityAsync(
+            Guid entityId,
+            CancellationToken cancellationToken = default);
+
+        // Возвращает effective permissions системного anonymous-пользователя в пространстве.
+        Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default);
+
+        // Возвращает пространства, где anonymous имеет права и есть доступные объекты.
+        Task<IReadOnlyList<UserSpaceRecord>> GetAnonymousAccessibleSpacesAsync(CancellationToken cancellationToken = default);
+
         // Возвращает профиль текущего пользователя для страницы "Профиль".
         Task<UserProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default);
 

@@ -24,7 +24,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
         public void EnsureInitialized()
         {
             _messageHandler.EnsureSubscribed();
-            _userMiniAppService.EnsureSystemRolesAsync().GetAwaiter().GetResult();
+            _userMiniAppService.EnsureSystemDefaultsAsync().GetAwaiter().GetResult();
         }
 
         // Делегирует получение текущего пользователя во внутренний сервис mini-app.
@@ -237,6 +237,36 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
             CancellationToken cancellationToken = default)
         {
             return _userMiniAppService.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
+        }
+
+        // Делегирует расчет прав текущего или anonymous пользователя в пространстве.
+        public Task<UserEffectivePermissions> GetCurrentUserPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetCurrentUserPermissionsForSpaceAsync(spaceId, cancellationToken);
+        }
+
+        // Делегирует расчет прав текущего или anonymous пользователя для пространства сущности.
+        public Task<UserEffectivePermissions> GetCurrentUserPermissionsForEntityAsync(
+            Guid entityId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetCurrentUserPermissionsForEntityAsync(entityId, cancellationToken);
+        }
+
+        // Делегирует расчет прав системного anonymous-пользователя в пространстве.
+        public Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetAnonymousPermissionsForSpaceAsync(spaceId, cancellationToken);
+        }
+
+        // Делегирует поиск anonymous-доступных пространств во внутренний сервис mini-app.
+        public Task<IReadOnlyList<UserSpaceRecord>> GetAnonymousAccessibleSpacesAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetAnonymousAccessibleSpacesAsync(cancellationToken);
         }
     }
 }

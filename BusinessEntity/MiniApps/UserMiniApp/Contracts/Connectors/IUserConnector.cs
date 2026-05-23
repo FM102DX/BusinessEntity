@@ -100,5 +100,23 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
             Guid documentId,
             int displayLevelCount,
             CancellationToken cancellationToken = default);
+
+        // Возвращает effective permissions текущего или anonymous пользователя в пространстве.
+        Task<UserEffectivePermissions> GetCurrentUserPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default);
+
+        // Возвращает effective permissions текущего или anonymous пользователя для пространства сущности.
+        Task<UserEffectivePermissions> GetCurrentUserPermissionsForEntityAsync(
+            Guid entityId,
+            CancellationToken cancellationToken = default);
+
+        // Возвращает effective permissions anonymous-пользователя в пространстве.
+        Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default);
+
+        // Возвращает пространства, где anonymous имеет права и есть доступные объекты.
+        Task<IReadOnlyList<UserSpaceRecord>> GetAnonymousAccessibleSpacesAsync(CancellationToken cancellationToken = default);
     }
 }

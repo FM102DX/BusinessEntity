@@ -30,6 +30,7 @@ namespace BusinessEntity.Pages
         private bool IsDocumentOwner { get; set; }
         private bool IsCurrentUserAdmin { get; set; }
         private bool HasFullDocumentAccess { get; set; }
+        private bool CanViewPublishedDocument { get; set; }
         private bool CanEditDocument => HasFullDocumentAccess;
         private bool CanChangePublicFlag => IsDocumentOwner;
 
@@ -57,7 +58,8 @@ namespace BusinessEntity.Pages
 
                 var latestDocument = await DataProviderConnector.GetDataAsync<global::BusinessEntity.Core.DomainEntities.Document>(Id);
                 await ResolveAccessAsync();
-                if (!HasFullDocumentAccess && (latestDocument?.PublishedVersion ?? 0) <= 0)
+                if (!HasFullDocumentAccess &&
+                    (!CanViewPublishedDocument || (latestDocument?.PublishedVersion ?? 0) <= 0))
                 {
                     Entity = null;
                     DataList = null;
@@ -114,6 +116,7 @@ namespace BusinessEntity.Pages
             IsDocumentOwner = false;
             IsCurrentUserAdmin = false;
             HasFullDocumentAccess = false;
+            CanViewPublishedDocument = false;
             if (Entity == null)
             {
                 return;
@@ -121,9 +124,11 @@ namespace BusinessEntity.Pages
 
             var user = await UserConnector.EnsureCurrentUserAsync();
             var businessUser = await UserConnector.GetCurrentUserAsync();
+            var permissions = await UserConnector.GetCurrentUserPermissionsForEntityAsync(Entity.Id);
             IsDocumentOwner = user != null && Entity.CreatedByUserId == user.Id;
             IsCurrentUserAdmin = IsAccessAdmin(businessUser);
-            HasFullDocumentAccess = IsCurrentUserAdmin || IsDocumentOwner || Entity.IsPublic;
+            HasFullDocumentAccess = IsCurrentUserAdmin || IsDocumentOwner || permissions.CanViewDraft;
+            CanViewPublishedDocument = HasFullDocumentAccess || permissions.CanViewPublished || Entity.IsPublic;
         }
 
         private static bool IsAccessAdmin(BusinessEntityUser? user)

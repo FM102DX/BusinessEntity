@@ -1,4 +1,5 @@
 using BusinessEntity.Contracts;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -15,17 +16,20 @@ namespace BusinessEntity.Controllers
     {
         private readonly SpaceHelper _spaceHelper;
         private readonly IUserContextService _userContextService;
+        private readonly IUserConnector _userConnector;
         private readonly ILogger<SpaceController> _logger;
         private readonly IWebLoggerService? _webLogger;
 
         public SpaceController(
             SpaceHelper spaceHelper,
             IUserContextService userContextService,
+            IUserConnector userConnector,
             ILogger<SpaceController> logger,
             IWebLoggerService? webLogger = null)
         {
             _spaceHelper = spaceHelper;
             _userContextService = userContextService;
+            _userConnector = userConnector;
             _logger = logger;
             _webLogger = webLogger;
         }
@@ -52,6 +56,39 @@ namespace BusinessEntity.Controllers
             _logger.LogInformation("Selected space {SpaceId} '{SpaceName}'.", space.Id, space.Name);
             await LogInfoAsync(
                 $"[space-selection] [controller:select-success] selectedSpaceId={space.Id} selectedSpaceName='{space.Name}' action=redirect-home");
+            return LocalRedirect("/");
+        }
+
+        /// <summary>
+        /// Выбирает пространство для anonymous-режима после проверки anonymous-политики.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet("select-anonymous/{spaceId:guid}")]
+        public async Task<IActionResult> SelectAnonymous(Guid spaceId)
+        {
+            await LogInfoAsync(
+                $"[space-selection] [controller:select-anonymous-enter] requestedSpaceId={spaceId} user='{User?.Identity?.Name ?? "anonymous"}'");
+
+            var space = await _spaceHelper.GetSpaceByIdAsync(spaceId);
+            if (space == null)
+            {
+                _logger.LogWarning("Failed to select anonymous space {SpaceId}: not found.", spaceId);
+                return Redirect("/");
+            }
+
+            var anonymousSpaces = await _userConnector.GetAnonymousAccessibleSpacesAsync(HttpContext.RequestAborted);
+            if (anonymousSpaces.All(anonymousSpace => anonymousSpace.Id != spaceId))
+            {
+                _logger.LogWarning("Failed to select anonymous space {SpaceId}: no anonymous access.", spaceId);
+                await LogInfoAsync(
+                    $"[space-selection] [controller:select-anonymous-denied] requestedSpaceId={spaceId}");
+                return Redirect("/");
+            }
+
+            _userContextService.SetSpace(space.Id, space.Name);
+            _logger.LogInformation("Selected anonymous space {SpaceId} '{SpaceName}'.", space.Id, space.Name);
+            await LogInfoAsync(
+                $"[space-selection] [controller:select-anonymous-success] selectedSpaceId={space.Id} selectedSpaceName='{space.Name}'");
             return LocalRedirect("/");
         }
 

@@ -2,6 +2,7 @@
 @using BusinessEntity.Contracts
 @using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts
 @using Microsoft.JSInterop
+@attribute [Authorize]
 @implements IDisposable
 @inject IMediaServerService MediaServerService
 @inject IMediaServerUploadJobTracker UploadJobTracker

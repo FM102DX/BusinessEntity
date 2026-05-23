@@ -17,6 +17,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         private const int MaxBookmarkTextLength = 500;
         private const int MaxBookmarkLabelLength = 80;
         private const string SystemAdminRoleName = "Админ";
+        private const string SystemAnonymousExternalId = "system-anonymous";
+        private const string SystemAnonymousDisplayName = "Анонимус";
+        private const string SystemAnonymousUserIdText = "00000000-0000-0000-0000-000000000002";
         private const string AllSpacesDisplayName = "[ВсеПространства]";
 
         private readonly UserMiniAppState _state;
@@ -31,6 +34,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         private readonly IUserMiniAppRepository<UserRoleAssignmentDto> _roleAssignmentRepository;
         private readonly IAsyncRepository<BusinessEntityDto> _businessEntityRepository;
         private readonly IUserContextService _userContextService;
+        private readonly UserSpaceContentAccessHelper _spaceContentAccessHelper;
 
         // Получает state mini-app и фабрику, которая умеет собирать пользователя из Authentik principal.
         public UserMiniAppService(
@@ -45,7 +49,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             IUserMiniAppRepository<UserGroupMemberDto> groupMemberRepository,
             IUserMiniAppRepository<UserRoleAssignmentDto> roleAssignmentRepository,
             IAsyncRepository<BusinessEntityDto> businessEntityRepository,
-            IUserContextService userContextService)
+            IUserContextService userContextService,
+            UserSpaceContentAccessHelper spaceContentAccessHelper)
         {
             _state = state;
             _userFactory = userFactory;
@@ -59,6 +64,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             _roleAssignmentRepository = roleAssignmentRepository;
             _businessEntityRepository = businessEntityRepository;
             _userContextService = userContextService;
+            _spaceContentAccessHelper = spaceContentAccessHelper;
         }
 
         // Возвращает пользователя из state или один раз строит его через factory.
@@ -72,6 +78,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             _state.CurrentUser = await _userFactory.CreateAsync(cancellationToken);
             _state.IsLoaded = true;
             return _state.CurrentUser;
+        }
+
+        // Гарантирует наличие всех системных записей UserMiniApp.
+        public async Task EnsureSystemDefaultsAsync(CancellationToken cancellationToken = default)
+        {
+            await EnsureSystemRolesAsync(cancellationToken);
+            await EnsureSystemUsersAsync(cancellationToken);
         }
 
         // Гарантирует наличие системной роли Админ с полным набором прав.
@@ -112,6 +125,12 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             adminRole.IsSystem = true;
             adminRole.DateLastModified = DateTime.UtcNow;
             await _roleRepository.UpdateAsync(adminRole, cancellationToken);
+        }
+
+        // Гарантирует наличие системного пользователя anonymous без Authentik-учетки.
+        public async Task EnsureSystemUsersAsync(CancellationToken cancellationToken = default)
+        {
+            await EnsureAnonymousUserAsync(cancellationToken);
         }
 
         public async Task<UserDto?> EnsureCurrentUserAsync(CancellationToken cancellationToken = default)
@@ -202,6 +221,56 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             return await _userRepository.AddAsync(created, cancellationToken);
         }
 
+        // Создает или чинит локальную запись anonymous-пользователя.
+        private async Task<UserDto> EnsureAnonymousUserAsync(CancellationToken cancellationToken)
+        {
+            var users = await _userRepository.GetAllAsync(null, cancellationToken);
+            var existing = users
+                .OrderBy(user => user.DateCreated)
+                .FirstOrDefault(IsAnonymousUser);
+            var now = DateTime.UtcNow;
+
+            if (existing != null)
+            {
+                var anonymousData = ReadUserData(existing);
+                var shouldUpdate =
+                    !string.Equals(existing.ExternalId, SystemAnonymousExternalId, StringComparison.Ordinal) ||
+                    !string.Equals(anonymousData.AuthentikLogin, SystemAnonymousExternalId, StringComparison.Ordinal) ||
+                    !string.Equals(anonymousData.DisplayedName, SystemAnonymousDisplayName, StringComparison.Ordinal) ||
+                    !string.Equals(anonymousData.ExtId, SystemAnonymousExternalId, StringComparison.Ordinal) ||
+                    anonymousData.AuthentikUserPk != 0 ||
+                    !string.IsNullOrWhiteSpace(anonymousData.AuthentikUserUuid);
+
+                if (!shouldUpdate)
+                {
+                    return existing;
+                }
+
+                existing.ExternalId = SystemAnonymousExternalId;
+                existing.Payload = SerializeUserData(BuildAnonymousUserData());
+                existing.DateLastModified = now;
+                await _userRepository.UpdateAsync(existing, cancellationToken);
+                return existing;
+            }
+
+            var anonymousId = Guid.Parse(SystemAnonymousUserIdText);
+            if (users.Any(user => user.Id == anonymousId))
+            {
+                anonymousId = Guid.NewGuid();
+            }
+
+            return await _userRepository.AddAsync(
+                new UserDto
+                {
+                    Id = anonymousId,
+                    ExternalId = SystemAnonymousExternalId,
+                    Payload = SerializeUserData(BuildAnonymousUserData()),
+                    DateCreated = now,
+                    DateLastModified = now
+                },
+                cancellationToken);
+        }
+
         // Удаляет локальную запись текущего Authentik-пользователя и все привязанные user properties.
         public async Task<bool> DeleteCurrentUserAsync(CancellationToken cancellationToken = default)
         {
@@ -267,6 +336,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         // Возвращает административный список пользователей только из локальной таблицы Users.
         public async Task<IReadOnlyList<UserAdministrationRecord>> GetAdministrationUsersAsync(CancellationToken cancellationToken = default)
         {
+            await EnsureSystemUsersAsync(cancellationToken);
             var localUsers = await _userRepository.GetAllAsync(null, cancellationToken);
             return SortAdministrationRecords(localUsers.Select(MapLocalAdministrationRecord));
         }
@@ -321,6 +391,11 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             if (user == null)
             {
                 throw new KeyNotFoundException("Пользователь не найден.");
+            }
+
+            if (IsSystemUser(user))
+            {
+                throw new InvalidOperationException("Системного пользователя нельзя редактировать.");
             }
 
             var authentikLogin = NormalizeRequiredText(request.AuthentikLogin, "Логин в аутентик");
@@ -380,6 +455,11 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             if (user == null)
             {
                 return false;
+            }
+
+            if (IsSystemUser(user))
+            {
+                throw new InvalidOperationException("Системного пользователя нельзя удалить.");
             }
 
             var userData = ReadUserData(user);
@@ -628,6 +708,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             CancellationToken cancellationToken = default)
         {
             await EnsureGroupExistsAsync(groupId, cancellationToken);
+            await EnsureSystemUsersAsync(cancellationToken);
             var users = await _userRepository.GetAllAsync(null, cancellationToken);
             var members = await _groupMemberRepository.GetAllAsync(
                 membership => membership.GroupId == groupId,
@@ -646,6 +727,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             CancellationToken cancellationToken = default)
         {
             await EnsureGroupExistsAsync(groupId, cancellationToken);
+            await EnsureSystemUsersAsync(cancellationToken);
             var selectedUserIds = request.UserIds
                 .Where(userId => userId != Guid.Empty)
                 .Distinct()
@@ -850,6 +932,70 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 .ToList();
         }
 
+        // Возвращает права текущего authenticated пользователя или anonymous fallback для публичного режима.
+        public async Task<UserEffectivePermissions> GetCurrentUserPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            if (spaceId == Guid.Empty)
+            {
+                return UserEffectivePermissions.Deny(Guid.Empty, spaceId, isAnonymous: false);
+            }
+
+            var currentUser = await GetCurrentUserAsync(cancellationToken);
+            if (currentUser?.IsAuthenticated == true)
+            {
+                var localUser = await EnsureCurrentUserAsync(cancellationToken);
+                if (localUser != null)
+                {
+                    return await _spaceContentAccessHelper.GetEffectivePermissionsForSpaceAsync(
+                        localUser.Id,
+                        spaceId,
+                        isAnonymous: false,
+                        cancellationToken);
+                }
+            }
+
+            return await GetAnonymousPermissionsForSpaceAsync(spaceId, cancellationToken);
+        }
+
+        // Возвращает права текущего или anonymous пользователя для пространства, содержащего сущность.
+        public async Task<UserEffectivePermissions> GetCurrentUserPermissionsForEntityAsync(
+            Guid entityId,
+            CancellationToken cancellationToken = default)
+        {
+            var spaceId = await _spaceContentAccessHelper.ResolveContainingSpaceIdAsync(entityId, cancellationToken);
+            if (!spaceId.HasValue)
+            {
+                return UserEffectivePermissions.Deny(Guid.Empty, Guid.Empty, isAnonymous: false);
+            }
+
+            return await GetCurrentUserPermissionsForSpaceAsync(spaceId.Value, cancellationToken);
+        }
+
+        // Возвращает права системного anonymous-пользователя для пространства.
+        public async Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            var anonymousUser = await EnsureAnonymousUserAsync(cancellationToken);
+            return await _spaceContentAccessHelper.GetEffectivePermissionsForSpaceAsync(
+                anonymousUser.Id,
+                spaceId,
+                isAnonymous: true,
+                cancellationToken);
+        }
+
+        // Возвращает пространства, где anonymous имеет права и доступные объекты.
+        public async Task<IReadOnlyList<UserSpaceRecord>> GetAnonymousAccessibleSpacesAsync(CancellationToken cancellationToken = default)
+        {
+            var anonymousUser = await EnsureAnonymousUserAsync(cancellationToken);
+            return await _spaceContentAccessHelper.GetSpacesWithAccessibleObjectsAsync(
+                anonymousUser.Id,
+                isAnonymous: true,
+                cancellationToken);
+        }
+
         // Возвращает текущий профиль пользователя из локальной DTO и сохраненных Authentik-идентификаторов.
         public async Task<UserProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default)
         {
@@ -1046,6 +1192,36 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
 
             userData.ExtId = string.IsNullOrWhiteSpace(userData.ExtId) ? user.ExternalId : userData.ExtId;
             return userData;
+        }
+
+        // Создает payload системного anonymous-пользователя без Authentik-идентификаторов.
+        private static UserData BuildAnonymousUserData()
+        {
+            return new UserData
+            {
+                AuthentikLogin = SystemAnonymousExternalId,
+                DisplayedName = SystemAnonymousDisplayName,
+                ExtId = SystemAnonymousExternalId
+            };
+        }
+
+        // Проверяет, является ли локальный пользователь системным anonymous.
+        private static bool IsAnonymousUser(UserDto user)
+        {
+            if (string.Equals(user.ExternalId, SystemAnonymousExternalId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var userData = ReadUserData(user);
+            return string.Equals(userData.ExtId, SystemAnonymousExternalId, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(userData.AuthentikLogin, SystemAnonymousExternalId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Проверяет, является ли локальный пользователь системной записью UserMiniApp.
+        private static bool IsSystemUser(UserDto user)
+        {
+            return IsAnonymousUser(user);
         }
 
         private static string SerializeUserData(UserData userData)
@@ -1261,6 +1437,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 AuthentikLogin = authentikUser.Username,
                 DisplayedName = string.IsNullOrWhiteSpace(displayedName) ? authentikUser.Username : displayedName,
                 IsActive = authentikUser.IsActive,
+                IsSystem = IsSystemUser(user),
                 DateCreated = user.DateCreated,
                 DateLastModified = user.DateLastModified
             };
@@ -1297,6 +1474,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 AuthentikLogin = authentikLogin,
                 DisplayedName = displayedName,
                 IsActive = true,
+                IsSystem = IsSystemUser(user),
                 DateCreated = user.DateCreated,
                 DateLastModified = user.DateLastModified
             };

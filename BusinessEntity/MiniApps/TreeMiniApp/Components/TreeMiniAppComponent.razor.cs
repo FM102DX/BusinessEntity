@@ -13,6 +13,7 @@ using BusinessEntity.MiniApps.TreeMiniApp.Internal;
 using Radzen;
 using Radzen.Blazor;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.JSInterop;
 using ReactiveUI;
 
@@ -31,6 +32,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
         [Parameter] public EventCallback<List<TreeNodeItemViewModelBase>> OnMultipleNodesSelected { get; set; }
+        [CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
         
         private IEnumerable<TreeNodeItemViewModelBase> TreeData { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsLoading { get; set; } = true;
@@ -44,6 +46,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private List<TreeNodeItemViewModelBase> SelectedNodes { get; set; } = new List<TreeNodeItemViewModelBase>();
         private bool IsMultiSelectMode { get; set; } = false;
         private bool IsCtrlGroupSelectionActive { get; set; } = false;
+        private bool IsAuthenticated { get; set; }
         
         // Состояние inline-редактирования
         private TreeNodeItemViewModelBase? EditingNode { get; set; } = null;
@@ -141,6 +144,19 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
             await base.OnAfterRenderAsync(firstRender);
+        }
+
+        // Обновляет признак authenticated-режима для read-only поведения anonymous-дерева.
+        protected override async Task OnParametersSetAsync()
+        {
+            if (AuthenticationStateTask == null)
+            {
+                IsAuthenticated = false;
+                return;
+            }
+
+            var authState = await AuthenticationStateTask;
+            IsAuthenticated = authState.User.Identity?.IsAuthenticated == true;
         }
 
         private async void OnSelectedSpaceChanged(Guid? spaceId)
@@ -357,7 +373,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 switch (entity.EntityType)
                 {
                     case BusinessEntityTypeEnum.Document:
-                        OpenEntityPage(entity.Id, entity.EntityType, editMode: true);
+                        OpenEntityPage(entity.Id, entity.EntityType, editMode: IsAuthenticated);
                         break;
                     case BusinessEntityTypeEnum.RichTextDocument:
                         OpenEntityPage(entity.Id, entity.EntityType, editMode: false);
@@ -624,6 +640,11 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         
        private void OnTreeContextMenu(TreeItemContextMenuEventArgs args)
         {
+            if (!IsAuthenticated)
+            {
+                return;
+            }
+
             // Получаем выбранный узел дерева
             var selectedNode = args.Value as TreeNodeItemViewModelBase;
             if (selectedNode == null)
@@ -677,6 +698,11 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
         private Task OnEntityOpenForEditRequestedAsync(TreeNodeItemViewModelBase node)
         {
+            if (!IsAuthenticated)
+            {
+                return Task.CompletedTask;
+            }
+
             if (node.Entity?.EntityType == BusinessEntityTypeEnum.Document)
             {
                 CancelPendingOpenEntityOpen();

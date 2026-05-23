@@ -44,11 +44,55 @@
             <div class="row justify-content-center">
                 <div class="col-md-8">
                     <h1>KMS Business EntityData</h1>
-                    <div class="alert alert-warning">
-                        <h4>Требуется авторизация</h4>
-                        <p>Для доступа к системе KMS Business EntityData необходимо войти в систему через Authentik.</p>
-                        <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentik</button>
-                    </div>
+                    @if (IsAnonymousSpacesLoading)
+                    {
+                        <div class="alert alert-info">
+                            <h4>Проверяем публичный доступ</h4>
+                            <p>Пожалуйста, подождите.</p>
+                        </div>
+                    }
+                    else if (AnonymousAccessibleSpaces.Count > 0)
+                    {
+                        <div class="alert alert-info">
+                            <h4>Доступно без входа</h4>
+                            @if (CurrentAnonymousSpace != null)
+                            {
+                                <p>Открыто пространство: <strong>@CurrentAnonymousSpace.Name</strong>.</p>
+                            }
+                            else
+                            {
+                                <p>Выберите пространство, доступное для просмотра без входа.</p>
+                            }
+
+                            @if (AnonymousAccessibleSpaces.Count > 1 || CurrentAnonymousSpace == null)
+                            {
+                                <div class="list-group mb-3">
+                                    @foreach (var space in AnonymousAccessibleSpaces)
+                                    {
+                                        <button type="button"
+                                                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                                @onclick="@(() => SelectAnonymousSpace(space.Id))">
+                                            <span>@space.Name</span>
+                                            @if (CurrentAnonymousSpace?.Id == space.Id)
+                                            {
+                                                <span class="badge bg-primary">текущее</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+
+                            <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentik</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <h4>Требуется авторизация</h4>
+                            <p>Для доступа к системе KMS Business EntityData необходимо войти в систему через Authentik.</p>
+                            <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentik</button>
+                        </div>
+                    }
                 </div>
             </div>
         </div>

@@ -19,7 +19,11 @@
             <div class="widget-body">@NowString</div>
         </div>
 
-        <MediaServerUploadWidget />
+        <AuthorizeView>
+            <Authorized>
+                <MediaServerUploadWidget />
+            </Authorized>
+        </AuthorizeView>
 
         @if (RichTextMessages.Messages.Count > 0)
         {
@@ -86,7 +90,11 @@
             }
         }
 
-        <UserMessagesPanel />
+        <AuthorizeView>
+            <Authorized>
+                <UserMessagesPanel />
+            </Authorized>
+        </AuthorizeView>
     </div>
 </div>
 

@@ -43,6 +43,7 @@ namespace BusinessEntity.Pages
         private bool IsDocumentOwner { get; set; }
         private bool IsCurrentUserAdmin { get; set; }
         private bool HasFullDocumentAccess { get; set; }
+        private bool CanViewPublishedDocument { get; set; }
         private bool CanEditViewedVersion => HasFullDocumentAccess && ViewedVersion >= LatestVersion;
         private bool CanPublishDocument => HasFullDocumentAccess;
         private bool CanChangePublicFlag => IsDocumentOwner;
@@ -520,6 +521,7 @@ namespace BusinessEntity.Pages
             IsDocumentOwner = false;
             IsCurrentUserAdmin = false;
             HasFullDocumentAccess = false;
+            CanViewPublishedDocument = false;
 
             if (Entity == null)
             {
@@ -528,9 +530,11 @@ namespace BusinessEntity.Pages
 
             var user = await UserConnector.EnsureCurrentUserAsync(cancellationToken);
             var businessUser = await UserConnector.GetCurrentUserAsync(cancellationToken);
+            var permissions = await UserConnector.GetCurrentUserPermissionsForEntityAsync(Entity.Id, cancellationToken);
             IsDocumentOwner = user != null && Entity.CreatedByUserId == user.Id;
             IsCurrentUserAdmin = IsAccessAdmin(businessUser);
-            HasFullDocumentAccess = IsCurrentUserAdmin || IsDocumentOwner || Entity.IsPublic;
+            HasFullDocumentAccess = IsCurrentUserAdmin || IsDocumentOwner || permissions.CanViewDraft;
+            CanViewPublishedDocument = HasFullDocumentAccess || permissions.CanViewPublished || Entity.IsPublic;
         }
 
         private static bool IsAccessAdmin(BusinessEntityUser? user)
@@ -547,7 +551,7 @@ namespace BusinessEntity.Pages
                 return false;
             }
 
-            return HasFullDocumentAccess || Manifest.PublishedVersion > 0;
+            return HasFullDocumentAccess || (CanViewPublishedDocument && Manifest.PublishedVersion > 0);
         }
 
         // Converts storage-backed rich-text table-of-contents entries into UI outline nodes.

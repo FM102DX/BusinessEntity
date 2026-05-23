@@ -51,6 +51,10 @@
                         {
                             <span class="users-admin__user-state">неактивен</span>
                         }
+                        @if (user.IsSystem)
+                        {
+                            <span class="users-admin__user-state">системный</span>
+                        }
                     </button>
                 }
             </div>
@@ -112,14 +116,14 @@
                             <span>Логин в аутентик</span>
                             <InputText class="form-control"
                                        @bind-Value="EditModel.AuthentikLogin"
-                                       disabled="@IsBusy" />
+                                       disabled="@(IsBusy || SelectedUser?.IsSystem == true)" />
                         </label>
 
                         <label class="users-admin__field">
                             <span>Отображаемое имя</span>
                             <InputText class="form-control"
                                        @bind-Value="EditModel.DisplayedName"
-                                       disabled="@IsBusy" />
+                                       disabled="@(IsBusy || SelectedUser?.IsSystem == true)" />
                         </label>
 
                         <label class="users-admin__field">
@@ -129,14 +133,14 @@
                                            type="@PasswordInputType"
                                            autocomplete="new-password"
                                            @bind-Value="EditModel.Password"
-                                           disabled="@IsBusy" />
+                                           disabled="@(IsBusy || SelectedUser?.IsSystem == true)" />
                                 <button type="button"
                                         class="btn btn-outline-secondary users-admin__password-toggle"
                                         title="@PasswordToggleTitle"
                                         aria-label="@PasswordToggleTitle"
                                         aria-pressed="@IsPasswordVisible"
                                         @onclick="TogglePasswordVisibility"
-                                        disabled="@IsBusy">
+                                        disabled="@(IsBusy || SelectedUser?.IsSystem == true)">
                                     <span class="oi oi-eye" aria-hidden="true"></span>
                                 </button>
                             </div>
@@ -146,11 +150,11 @@
                     <div class="users-admin__form-actions">
                         <button type="submit"
                                 class="btn btn-primary"
-                                disabled="@(IsBusy || !SelectedUserId.HasValue)">
+                                disabled="@(IsBusy || !SelectedUserId.HasValue || SelectedUser?.IsSystem == true)">
                             Сохранить
                         </button>
 
-                        @if (SelectedUserId.HasValue)
+                        @if (SelectedUserId.HasValue && SelectedUser?.IsSystem != true)
                         {
                             @if (DeleteConfirmationUserId == SelectedUserId)
                             {

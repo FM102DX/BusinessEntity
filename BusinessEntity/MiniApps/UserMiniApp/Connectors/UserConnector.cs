@@ -228,5 +228,35 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
         {
             return _userMiniApp.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
         }
+
+        // Возвращает effective permissions текущего или anonymous пользователя в пространстве.
+        public Task<UserEffectivePermissions> GetCurrentUserPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetCurrentUserPermissionsForSpaceAsync(spaceId, cancellationToken);
+        }
+
+        // Возвращает effective permissions текущего или anonymous пользователя для пространства сущности.
+        public Task<UserEffectivePermissions> GetCurrentUserPermissionsForEntityAsync(
+            Guid entityId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetCurrentUserPermissionsForEntityAsync(entityId, cancellationToken);
+        }
+
+        // Возвращает effective permissions anonymous-пользователя в пространстве.
+        public Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetAnonymousPermissionsForSpaceAsync(spaceId, cancellationToken);
+        }
+
+        // Возвращает пространства, где anonymous имеет права и есть доступные объекты.
+        public Task<IReadOnlyList<UserSpaceRecord>> GetAnonymousAccessibleSpacesAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetAnonymousAccessibleSpacesAsync(cancellationToken);
+        }
     }
 }

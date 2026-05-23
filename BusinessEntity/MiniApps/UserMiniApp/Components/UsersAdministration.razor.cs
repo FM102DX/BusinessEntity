@@ -108,6 +108,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         private UserRoleRecord? SelectedRole => SelectedRoleId.HasValue
             ? Roles.FirstOrDefault(role => role.Id == SelectedRoleId.Value)
             : null;
+        private UserAdministrationRecord? SelectedUser => SelectedUserId.HasValue
+            ? Users.FirstOrDefault(user => user.Id == SelectedUserId.Value)
+            : null;
         private UserGroupRecord? SelectedGroup => SelectedGroupId.HasValue
             ? Groups.FirstOrDefault(group => group.Id == SelectedGroupId.Value)
             : null;

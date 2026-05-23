@@ -5,26 +5,23 @@
 @using BusinessEntity.Components
 
 <CascadingAuthenticationState>
-    <AuthorizeView>
-        <Authorized>
-            <Router AppAssembly="@typeof(App).Assembly">
-                <Found Context="routeData">
-                    <RouteView RouteData="@routeData" DefaultLayout="@typeof(BusinessEntity.Shared.MainLayout)" />
-                    <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-                </Found>
-                <NotFound>
-                    <PageTitle>Not found</PageTitle>
-                    <LayoutView Layout="@typeof(BusinessEntity.Shared.MainLayout)">
-                        <p role="alert">Sorry, there's nothing at this address.</p>
-                    </LayoutView>
-                </NotFound>
-            </Router>
-        </Authorized>
-        <Authorizing>
-            <AuthentikLoginGate IsCheckingSession="true" />
-        </Authorizing>
-        <NotAuthorized>
-            <AuthentikLoginGate />
-        </NotAuthorized>
-    </AuthorizeView>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(BusinessEntity.Shared.MainLayout)">
+                <Authorizing>
+                    <AuthentikLoginGate IsCheckingSession="true" />
+                </Authorizing>
+                <NotAuthorized>
+                    <AuthentikLoginGate />
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(BusinessEntity.Shared.MainLayout)">
+                <p role="alert">Sorry, there's nothing at this address.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
 </CascadingAuthenticationState>
