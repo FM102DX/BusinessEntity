@@ -2,11 +2,14 @@
 @using BusinessEntity.Core.DomainEntities
 @using BusinessEntity.Core.Services
 @using BusinessEntity.Contracts
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
+@using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @implements IDisposable
 @inject IUserContextService UserContext
 @inject BusinessEntityHelper BusinessEntityHelper
+@inject IUserConnector UserConnector
 @inject NavigationManager Navigation
 
 <div class="app-header">
@@ -41,6 +44,10 @@
         }
         else
         {
+            @if (ShowAnonymousSpacesLink)
+            {
+                <a class="app-header__link-button" href="/space-selection">Пространства</a>
+            }
             <a class="app-header__login" href="@LoginFormUrl">Войти</a>
         }
     </div>
@@ -52,6 +59,8 @@
     private string UserName { get; set; } = string.Empty;
     private string UserInitials { get; set; } = string.Empty;
     private bool IsUserMenuOpen { get; set; }
+    private IReadOnlyList<UserSpaceRecord> AnonymousAccessibleSpaces { get; set; } = Array.Empty<UserSpaceRecord>();
+    private bool ShowAnonymousSpacesLink => !IsAuthenticated && AnonymousAccessibleSpaces.Count > 1;
     private string LoginFormUrl => $"/login?returnUrl={Uri.EscapeDataString(BuildCurrentReturnUrl())}";
     private CancellationTokenSource? _userMenuAutoCloseCts;
 
@@ -93,9 +102,11 @@
             UserName = string.Empty;
             UserInitials = string.Empty;
             IsUserMenuOpen = false;
+            AnonymousAccessibleSpaces = await UserConnector.GetAnonymousAccessibleSpacesAsync();
             return;
         }
 
+        AnonymousAccessibleSpaces = Array.Empty<UserSpaceRecord>();
         UserName =
             user.Identity?.Name
             ?? user.FindFirst("preferred_username")?.Value
