@@ -10,6 +10,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Registration
     {
         public static IServiceCollection AddTreeMiniApp(this IServiceCollection services)
         {
+            services.AddScoped<TreeVisibilityService>();
             services.AddScoped<TreeMiniAppService>();
             services.AddScoped<TreeMiniAppMessageHandler>();
             services.AddScoped<ITreeMiniApp, Facade.TreeMiniApp>();
