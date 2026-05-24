@@ -1,5 +1,7 @@
 using BusinessEntity.Contracts;
+using BusinessEntity.Core.Classes;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Services;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -89,7 +91,28 @@ namespace BusinessEntity.Controllers
             _logger.LogInformation("Selected anonymous space {SpaceId} '{SpaceName}'.", space.Id, space.Name);
             await LogInfoAsync(
                 $"[space-selection] [controller:select-anonymous-success] selectedSpaceId={space.Id} selectedSpaceName='{space.Name}'");
+
+            var documents = await _userConnector.GetAnonymousAccessibleDocumentsAsync(space.Id, HttpContext.RequestAborted);
+            var firstDocument = documents.FirstOrDefault();
+            if (firstDocument != null)
+            {
+                var documentRoute = GetDocumentRoute(firstDocument);
+                await LogInfoAsync(
+                    $"[space-selection] [controller:select-anonymous-open-document] selectedSpaceId={space.Id} documentId={firstDocument.Id} documentType={firstDocument.EntityType} route={documentRoute}");
+                return LocalRedirect(documentRoute);
+            }
+
             return LocalRedirect("/");
+        }
+
+        private static string GetDocumentRoute(UserAccessibleDocumentRecord document)
+        {
+            return document.EntityType switch
+            {
+                BusinessEntityTypeEnum.RichTextDocument => $"/rich-document/{document.Id}",
+                BusinessEntityTypeEnum.Document => $"/document/{document.Id}",
+                _ => "/"
+            };
         }
 
         private async Task LogInfoAsync(string message)

@@ -258,5 +258,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
         {
             return _userMiniApp.GetAnonymousAccessibleSpacesAsync(cancellationToken);
         }
+
+        // Возвращает anonymous-доступные документы в пространстве через user mini-app.
+        public Task<IReadOnlyList<UserAccessibleDocumentRecord>> GetAnonymousAccessibleDocumentsAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetAnonymousAccessibleDocumentsAsync(spaceId, cancellationToken);
+        }
     }
 }

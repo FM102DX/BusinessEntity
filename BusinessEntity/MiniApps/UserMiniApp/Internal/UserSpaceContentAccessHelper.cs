@@ -105,6 +105,94 @@ internal sealed class UserSpaceContentAccessHelper
         return await SpaceContainsReadableObjectAsync(spaceId, permissions, cancellationToken);
     }
 
+    // Возвращает документы пространства, которые пользователь может открыть по его effective permissions.
+    public async Task<IReadOnlyList<UserAccessibleDocumentRecord>> GetAccessibleDocumentsInSpaceAsync(
+        Guid userId,
+        Guid spaceId,
+        bool isAnonymous,
+        CancellationToken cancellationToken = default)
+    {
+        var permissions = await GetEffectivePermissionsForSpaceAsync(userId, spaceId, isAnonymous, cancellationToken);
+        if (!permissions.CanViewPublished && !permissions.CanViewDraft)
+        {
+            return Array.Empty<UserAccessibleDocumentRecord>();
+        }
+
+        var entities = (await _businessEntityRepository.GetAllAsync(null, ct: cancellationToken))
+            .ToDictionary(entity => entity.Id);
+        if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != BusinessEntityTypeEnum.Space)
+        {
+            return Array.Empty<UserAccessibleDocumentRecord>();
+        }
+
+        var relations = await _businessEntityRelationRepository.GetAllAsync(
+            relation =>
+                relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString() ||
+                relation.RelationType == BusinessEntityRelationTypeEnum.RelatesTo.ToString(),
+            ct: cancellationToken);
+        var childrenByParentId = relations
+            .Where(relation => relation.RelationType == BusinessEntityRelationTypeEnum.Contains.ToString())
+            .GroupBy(relation => relation.ObjectAId)
+            .ToDictionary(
+                group => group.Key,
+                group => OrderEntityIds(group.Select(relation => relation.ObjectBId), entities));
+
+        var records = new List<UserAccessibleDocumentRecord>();
+        var visitedTreeIds = new HashSet<Guid>();
+        var addedDocumentIds = new HashSet<Guid>();
+
+        await VisitChildrenAsync(spaceId);
+
+        var relatedObjectIds = relations
+            .Where(relation => relation.RelationType == BusinessEntityRelationTypeEnum.RelatesTo.ToString() &&
+                               relation.ObjectAId == spaceId)
+            .Select(relation => relation.ObjectBId);
+        foreach (var relatedObjectId in OrderEntityIds(relatedObjectIds, entities))
+        {
+            await TryAddDocumentAsync(relatedObjectId);
+        }
+
+        return records;
+
+        async Task VisitChildrenAsync(Guid parentId)
+        {
+            if (!childrenByParentId.TryGetValue(parentId, out var childIds))
+            {
+                return;
+            }
+
+            foreach (var childId in childIds)
+            {
+                if (!visitedTreeIds.Add(childId))
+                {
+                    continue;
+                }
+
+                await TryAddDocumentAsync(childId);
+                await VisitChildrenAsync(childId);
+            }
+        }
+
+        async Task TryAddDocumentAsync(Guid entityId)
+        {
+            if (!addedDocumentIds.Add(entityId) ||
+                !entities.TryGetValue(entityId, out var entity) ||
+                !IsDocumentEntity(entity.EntityType) ||
+                !await IsReadableObjectAsync(entity, permissions, cancellationToken))
+            {
+                return;
+            }
+
+            records.Add(new UserAccessibleDocumentRecord
+            {
+                Id = entity.Id,
+                SpaceId = spaceId,
+                Name = entity.Name,
+                EntityType = entity.EntityType
+            });
+        }
+    }
+
     // Возвращает пространства, где у пользователя есть права и доступный контент.
     public async Task<IReadOnlyList<UserSpaceRecord>> GetSpacesWithAccessibleObjectsAsync(
         Guid userId,
@@ -201,6 +289,18 @@ internal sealed class UserSpaceContentAccessHelper
 
         return assignment.AssignmentType == UserRoleAssignmentTypes.GroupToRole &&
                groupIds.Contains(assignment.SubjectId);
+    }
+
+    // Упорядочивает ids так же стабильно, как дерево: по дате создания, затем по имени.
+    private static IReadOnlyList<Guid> OrderEntityIds(
+        IEnumerable<Guid> ids,
+        IReadOnlyDictionary<Guid, BusinessEntityDto> entities)
+    {
+        return ids
+            .OrderBy(id => entities.TryGetValue(id, out var entity) ? entity.CreatedDate : DateTime.MaxValue)
+            .ThenBy(id => entities.TryGetValue(id, out var entity) ? entity.Name : string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(id => id)
+            .ToList();
     }
 
     // Добавляет права роли к итоговому набору через OR.

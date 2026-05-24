@@ -119,6 +119,11 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
         // Возвращает пространства, где anonymous имеет права и есть доступные объекты.
         Task<IReadOnlyList<UserSpaceRecord>> GetAnonymousAccessibleSpacesAsync(CancellationToken cancellationToken = default);
 
+        // Возвращает документы в пространстве, которые anonymous может открыть для просмотра.
+        Task<IReadOnlyList<UserAccessibleDocumentRecord>> GetAnonymousAccessibleDocumentsAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default);
+
         // Возвращает профиль текущего пользователя для страницы "Профиль".
         Task<UserProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default);
 

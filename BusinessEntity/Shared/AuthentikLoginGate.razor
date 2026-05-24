@@ -4,60 +4,64 @@
 <PageTitle>Требуется вход</PageTitle>
 
 <div class="auth-gate">
-    <section class="auth-gate__panel" aria-label="Вход в систему">
-        <div class="auth-gate__brand">Business Entity</div>
-        @if (IsCheckingSession)
-        {
-            <h1>Проверяем сессию</h1>
-            <p>Пожалуйста, подождите.</p>
-        }
-        else
-        {
-            <h1>Требуется вход</h1>
-            <p>Введите логин и пароль Authentik для доступа к системе.</p>
-
-            @if (HasLoginError)
+    <div class="auth-gate__stack">
+        <section class="auth-gate__panel" aria-label="Вход в систему">
+            <div class="auth-gate__brand">Business Entity</div>
+            @if (IsCheckingSession)
             {
-                <div class="auth-gate__error" role="alert">
-                    Не удалось войти. Проверьте логин и пароль.
-                </div>
+                <h1>Проверяем сессию</h1>
+                <p>Пожалуйста, подождите.</p>
             }
+            else
+            {
+                <h1>Требуется вход</h1>
+                <p>Введите логин и пароль Authentik для доступа к системе.</p>
 
-            <form class="auth-gate__form" method="post" action="/auth/password-login">
-                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                @if (HasLoginError)
+                {
+                    <div class="auth-gate__error" role="alert">
+                        Не удалось войти. Проверьте логин и пароль.
+                    </div>
+                }
 
-                <div class="auth-gate__field">
-                    <label for="auth-login">Логин</label>
-                    <input id="auth-login"
-                           name="username"
-                           type="text"
-                           autocomplete="username"
-                           required
-                           autofocus />
-                </div>
+                <form class="auth-gate__form" method="post" action="/auth/password-login">
+                    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
 
-                <div class="auth-gate__field">
-                    <label for="auth-password">Пароль</label>
-                    <input id="auth-password"
-                           name="password"
-                           type="password"
-                           autocomplete="current-password"
-                           required />
-                </div>
+                    <div class="auth-gate__field">
+                        <label for="auth-login">Логин</label>
+                        <input id="auth-login"
+                               name="username"
+                               type="text"
+                               autocomplete="username"
+                               required
+                               autofocus />
+                    </div>
 
-                <div class="auth-gate__actions">
-                    <button class="auth-gate__submit" type="submit">Логин</button>
-                    <a class="auth-gate__fallback" href="@LoginUrl">Через страницу Authentik</a>
-                </div>
-            </form>
-        }
-    </section>
+                    <div class="auth-gate__field">
+                        <label for="auth-password">Пароль</label>
+                        <input id="auth-password"
+                               name="password"
+                               type="password"
+                               autocomplete="current-password"
+                               required />
+                    </div>
+
+                    <div class="auth-gate__actions">
+                        <button class="auth-gate__submit" type="submit">Логин</button>
+                        <a class="auth-gate__fallback" href="@LoginUrl">Через страницу Authentik</a>
+                    </div>
+                </form>
+            }
+        </section>
+        <a class="auth-gate__home" href="/">Home</a>
+    </div>
 </div>
 
 @code {
     [Parameter] public bool IsCheckingSession { get; set; }
+    [Parameter] public string? ReturnUrlOverride { get; set; }
 
-    private string ReturnUrl => RemoveLoginError(NormalizeReturnUrl());
+    private string ReturnUrl => RemoveLoginError(NormalizeReturnUrl(ReturnUrlOverride));
 
     private bool HasLoginError
     {
@@ -76,8 +80,13 @@
         }
     }
 
-    private string NormalizeReturnUrl()
+    private string NormalizeReturnUrl(string? explicitReturnUrl)
     {
+        if (!string.IsNullOrWhiteSpace(explicitReturnUrl))
+        {
+            return SanitizeLocalReturnUrl(explicitReturnUrl);
+        }
+
         var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri);
         var returnUrl = string.IsNullOrWhiteSpace(relativePath)
             ? "/"
@@ -89,6 +98,21 @@
         }
 
         return returnUrl;
+    }
+
+    // Оставляет только безопасный локальный returnUrl для локальной формы входа.
+    private static string SanitizeLocalReturnUrl(string returnUrl)
+    {
+        var trimmed = returnUrl.Trim();
+        if (!trimmed.StartsWith("/", StringComparison.Ordinal) ||
+            trimmed.StartsWith("//", StringComparison.Ordinal) ||
+            trimmed.StartsWith("/auth", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            return "/";
+        }
+
+        return trimmed;
     }
 
     private static string RemoveLoginError(string returnUrl)
@@ -134,12 +158,16 @@
     }
 
     .auth-gate__panel {
-        width: min(506px, 100%);
+        width: 100%;
         border: 1px solid #d4dce8;
         border-radius: 6px;
         background: #fff;
         padding: 28px 30px;
         box-shadow: 0 16px 40px rgba(29, 43, 68, 0.12);
+    }
+
+    .auth-gate__stack {
+        width: min(506px, 100%);
         transform: translateY(-20%);
     }
 
@@ -249,6 +277,21 @@
 
     .auth-gate__fallback:hover,
     .auth-gate__fallback:focus {
+        color: #0d6efd;
+        text-decoration: underline;
+    }
+
+    .auth-gate__home {
+        display: inline-flex;
+        margin-top: 10px;
+        color: #4f6687;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .auth-gate__home:hover,
+    .auth-gate__home:focus {
         color: #0d6efd;
         text-decoration: underline;
     }

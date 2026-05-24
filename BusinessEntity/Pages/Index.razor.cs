@@ -11,7 +11,6 @@ using BusinessEntity.Core.BaseClasses.Relations;
 namespace BusinessEntity.Pages
 {    public partial class Index : ComponentBase
     {
-        [Inject] public AuthentikSessionManager AuthService { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public IUserContextService UserContext { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
@@ -91,13 +90,14 @@ namespace BusinessEntity.Pages
             }
         }
 
-        private void RedirectToLogin()
+        // Открывает локальную форму входа и возвращает пользователя на главную после авторизации.
+        private void OpenLoginForm()
         {
             try
             {
-                var loginUrl = AuthService.GetLoginUrl("/");
-                Logger.LogInformation("Redirecting user to Authentik login url={LoginUrl}", loginUrl);
-                Navigation.NavigateTo(loginUrl, forceLoad: true);
+                var loginUrl = $"/login?returnUrl={Uri.EscapeDataString("/")}";
+                Logger.LogInformation("Redirecting anonymous user to local login form url={LoginUrl}", loginUrl);
+                Navigation.NavigateTo(loginUrl);
             }
             catch (Exception ex)
             {
@@ -112,6 +112,19 @@ namespace BusinessEntity.Pages
             try
             {
                 AnonymousAccessibleSpaces = await UserConnector.GetAnonymousAccessibleSpacesAsync();
+                if (AnonymousAccessibleSpaces.Count == 0)
+                {
+                    Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/")}", replace: true);
+                    return;
+                }
+
+                if (UserContext.CurrentSpaceId.HasValue &&
+                    AnonymousAccessibleSpaces.Any(space => space.Id == UserContext.CurrentSpaceId.Value))
+                {
+                    await OpenFirstAnonymousDocumentAsync(UserContext.CurrentSpaceId.Value);
+                    return;
+                }
+
                 if (AnonymousAccessibleSpaces.Count == 1 &&
                     (!UserContext.CurrentSpaceId.HasValue || UserContext.CurrentSpaceId.Value != AnonymousAccessibleSpaces[0].Id))
                 {
@@ -128,6 +141,37 @@ namespace BusinessEntity.Pages
         private void SelectAnonymousSpace(Guid spaceId)
         {
             Navigation.NavigateTo($"/api/space/select-anonymous/{spaceId}", forceLoad: true);
+        }
+
+        // Открывает первый anonymous-доступный документ текущего пространства.
+        private async Task OpenFirstAnonymousDocumentAsync(Guid spaceId)
+        {
+            var documents = await UserConnector.GetAnonymousAccessibleDocumentsAsync(spaceId);
+            var firstDocument = documents.FirstOrDefault();
+            if (firstDocument == null)
+            {
+                Logger.LogInformation("Anonymous space {SpaceId} has no openable documents", spaceId);
+                return;
+            }
+
+            var route = firstDocument.EntityType switch
+            {
+                BusinessEntityTypeEnum.RichTextDocument => $"/rich-document/{firstDocument.Id}",
+                BusinessEntityTypeEnum.Document => $"/document/{firstDocument.Id}",
+                _ => "/"
+            };
+
+            if (route == "/")
+            {
+                return;
+            }
+
+            Logger.LogInformation(
+                "Opening first anonymous document {DocumentId} of type {EntityType} in space {SpaceId}",
+                firstDocument.Id,
+                firstDocument.EntityType,
+                spaceId);
+            Navigation.NavigateTo(route);
         }
 
         // Вспомогательные методы для работы с выбранными узлами

@@ -996,6 +996,19 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 cancellationToken);
         }
 
+        // Возвращает документы выбранного пространства, которые anonymous может открыть.
+        public async Task<IReadOnlyList<UserAccessibleDocumentRecord>> GetAnonymousAccessibleDocumentsAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            var anonymousUser = await EnsureAnonymousUserAsync(cancellationToken);
+            return await _spaceContentAccessHelper.GetAccessibleDocumentsInSpaceAsync(
+                anonymousUser.Id,
+                spaceId,
+                isAnonymous: true,
+                cancellationToken);
+        }
+
         // Возвращает текущий профиль пользователя из локальной DTO и сохраненных Authentik-идентификаторов.
         public async Task<UserProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default)
         {

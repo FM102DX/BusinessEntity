@@ -7,6 +7,7 @@
 @implements IDisposable
 @inject IUserContextService UserContext
 @inject BusinessEntityHelper BusinessEntityHelper
+@inject NavigationManager Navigation
 
 <div class="app-header">
     @if (!string.IsNullOrWhiteSpace(CompanyName))
@@ -38,6 +39,10 @@
                 }
             </div>
         }
+        else
+        {
+            <a class="app-header__login" href="@LoginFormUrl">Войти</a>
+        }
     </div>
 </div>
 
@@ -47,6 +52,7 @@
     private string UserName { get; set; } = string.Empty;
     private string UserInitials { get; set; } = string.Empty;
     private bool IsUserMenuOpen { get; set; }
+    private string LoginFormUrl => $"/login?returnUrl={Uri.EscapeDataString(BuildCurrentReturnUrl())}";
     private CancellationTokenSource? _userMenuAutoCloseCts;
 
     [CascadingParameter]
@@ -110,6 +116,23 @@
         return trimmed.Length >= 2
             ? trimmed[..2].ToUpperInvariant()
             : trimmed.ToUpperInvariant();
+    }
+
+    // Возвращает локальный адрес, куда пользователь должен попасть после входа.
+    private string BuildCurrentReturnUrl()
+    {
+        var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var returnUrl = string.IsNullOrWhiteSpace(relativePath)
+            ? "/"
+            : "/" + relativePath;
+
+        if (returnUrl.StartsWith("/auth", StringComparison.OrdinalIgnoreCase) ||
+            returnUrl.StartsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            return "/";
+        }
+
+        return returnUrl.StartsWith("//", StringComparison.Ordinal) ? "/" : returnUrl;
     }
 
     private void ToggleUserMenu()

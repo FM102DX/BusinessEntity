@@ -1,0 +1,10 @@
+@page "/login"
+@attribute [AllowAnonymous]
+
+<AuthentikLoginGate ReturnUrlOverride="@ReturnUrl" />
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+}
