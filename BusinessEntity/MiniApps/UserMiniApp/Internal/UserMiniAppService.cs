@@ -17,6 +17,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         private const int MaxBookmarkTextLength = 500;
         private const int MaxBookmarkLabelLength = 80;
         private const string SystemAdminRoleName = "Админ";
+        private const string GuestRoleName = "Гость";
+        private const string ReadersRoleName = "Ридерс";
         private const string SystemAnonymousExternalId = "system-anonymous";
         private const string SystemAnonymousDisplayName = "Анонимус";
         private const string SystemAnonymousUserIdText = "00000000-0000-0000-0000-000000000002";
@@ -87,44 +89,13 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             await EnsureSystemUsersAsync(cancellationToken);
         }
 
-        // Гарантирует наличие системной роли Админ с полным набором прав.
+        // Гарантирует наличие базовых ролей матрицы доступа.
         public async Task EnsureSystemRolesAsync(CancellationToken cancellationToken = default)
         {
-            var roles = await _roleRepository.GetAllAsync(null, cancellationToken);
-            var adminRole = roles
-                .OrderBy(role => role.DateCreated)
-                .FirstOrDefault(role => string.Equals(role.Name, SystemAdminRoleName, StringComparison.OrdinalIgnoreCase));
-
-            if (adminRole == null)
-            {
-                var now = DateTime.UtcNow;
-                await _roleRepository.AddAsync(
-                    new UserRoleDto
-                    {
-                        Id = Guid.NewGuid(),
-                        Name = SystemAdminRoleName,
-                        Permissions = BuildAllPermissionString(),
-                        IsSystem = true,
-                        DateCreated = now,
-                        DateLastModified = now
-                    },
-                    cancellationToken);
-                return;
-            }
-
-            var expectedPermissions = BuildAllPermissionString();
-            if (adminRole.IsSystem &&
-                string.Equals(adminRole.Name, SystemAdminRoleName, StringComparison.Ordinal) &&
-                string.Equals(adminRole.Permissions, expectedPermissions, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            adminRole.Name = SystemAdminRoleName;
-            adminRole.Permissions = expectedPermissions;
-            adminRole.IsSystem = true;
-            adminRole.DateLastModified = DateTime.UtcNow;
-            await _roleRepository.UpdateAsync(adminRole, cancellationToken);
+            var roles = (await _roleRepository.GetAllAsync(null, cancellationToken)).ToList();
+            await EnsureRoleAsync(roles, SystemAdminRoleName, BuildAllPermissionString(), isSystem: true, cancellationToken);
+            await EnsureRoleAsync(roles, GuestRoleName, BuildReadPublishedPermissionString(), isSystem: false, cancellationToken);
+            await EnsureRoleAsync(roles, ReadersRoleName, BuildReadPublishedPermissionString(), isSystem: false, cancellationToken);
         }
 
         // Гарантирует наличие системного пользователя anonymous без Authentik-учетки.
@@ -549,9 +520,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             await EnsureSystemRolesAsync(cancellationToken);
             var role = await _roleRepository.GetByIdAsync(roleId, cancellationToken)
                        ?? throw new KeyNotFoundException("Роль не найдена.");
-            if (role.IsSystem)
+            if (role.IsSystem || IsBaselineRoleName(role.Name))
             {
-                throw new InvalidOperationException("Системную роль нельзя редактировать.");
+                throw new InvalidOperationException("Базовую роль политики доступа нельзя редактировать.");
             }
 
             var name = NormalizeRequiredText(request.Name, "Имя роли");
@@ -586,9 +557,9 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 return false;
             }
 
-            if (role.IsSystem)
+            if (role.IsSystem || IsBaselineRoleName(role.Name))
             {
-                throw new InvalidOperationException("Системную роль нельзя удалить.");
+                throw new InvalidOperationException("Базовую роль политики доступа нельзя удалить.");
             }
 
             var assignments = await _roleAssignmentRepository.GetAllAsync(
@@ -837,6 +808,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             var assignmentSpaceId = assignmentSubject == UserRoleAssignmentSubjects.AllSpaces
                 ? Guid.Empty
                 : spaceId;
+            await EnsureCurrentUserCanAdminRoleAssignmentsAsync(assignmentSpaceId, cancellationToken);
+
             var spaceName = await GetRoleAssignmentSpaceNameAsync(assignmentSpaceId, assignmentSubject, cancellationToken);
             var assignmentType = NormalizeAssignmentType(request.AssignmentType);
             await EnsureRoleExistsAsync(request.RoleId, cancellationToken);
@@ -898,6 +871,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 return false;
             }
 
+            await EnsureCurrentUserCanAdminRoleAssignmentsAsync(assignment.SpaceId, cancellationToken);
             await _roleAssignmentRepository.DeleteAsync(assignmentId, cancellationToken);
             return true;
         }
@@ -971,6 +945,66 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             }
 
             return await GetCurrentUserPermissionsForSpaceAsync(spaceId.Value, cancellationToken);
+        }
+
+        // Возвращает готовое content-access решение для текущего authenticated пользователя или anonymous mode.
+        public async Task<UserContentAccessDecision> GetCurrentUserContentAccessForEntityAsync(
+            UserContentAccessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            var currentBusinessUser = await GetCurrentUserAsync(cancellationToken);
+            var localUser = currentBusinessUser?.IsAuthenticated == true
+                ? await EnsureCurrentUserAsync(cancellationToken)
+                : null;
+            var permissions = await GetCurrentUserPermissionsForEntityAsync(request.EntityId, cancellationToken);
+            var currentUserId = permissions.IsAnonymous ? null : localUser?.Id;
+            var isAccessAdmin = IsAccessAdmin(currentBusinessUser);
+            var canViewDraft = ContentAccessPolicy.CanViewDraft(
+                request.EntityType,
+                request.IsCommon,
+                request.CreatedByUserId,
+                currentUserId,
+                isAccessAdmin,
+                permissions);
+            var canViewPublished = ContentAccessPolicy.CanViewPublished(
+                request.EntityType,
+                request.IsCommon,
+                request.CreatedByUserId,
+                currentUserId,
+                isAccessAdmin,
+                permissions,
+                request.PublishedVersion);
+
+            return new UserContentAccessDecision
+            {
+                IsOwner = ContentAccessPolicy.IsOwner(request.CreatedByUserId, currentUserId),
+                IsAccessAdmin = isAccessAdmin,
+                CanViewDraft = canViewDraft,
+                CanViewPublished = canViewPublished,
+                CanRead = canViewDraft || canViewPublished,
+                CanEditDraft = ContentAccessPolicy.CanEditDraft(
+                    request.EntityType,
+                    request.IsCommon,
+                    request.CreatedByUserId,
+                    currentUserId,
+                    isAccessAdmin,
+                    permissions),
+                CanPublishDraft = ContentAccessPolicy.CanPublishDraft(
+                    request.EntityType,
+                    request.IsCommon,
+                    request.CreatedByUserId,
+                    currentUserId,
+                    isAccessAdmin,
+                    permissions),
+                CanChangeCommonFlag = ContentAccessPolicy.CanChangeCommonFlag(
+                    request.CreatedByUserId,
+                    currentUserId,
+                    isAccessAdmin,
+                    permissions),
+                CanViewSpaceContainer = ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin)
+            };
         }
 
         // Возвращает права системного anonymous-пользователя для пространства.
@@ -1675,6 +1709,164 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                     UserRolePermissionCodes.AdminSpace,
                     UserRolePermissionCodes.GlobalAdmin
                 }.Select(code => code + ";"));
+        }
+
+        // Создает или синхронизирует базовую роль политики доступа.
+        private async Task EnsureRoleAsync(
+            IList<UserRoleDto> roles,
+            string name,
+            string permissions,
+            bool isSystem,
+            CancellationToken cancellationToken)
+        {
+            var role = roles
+                .OrderBy(role => role.DateCreated)
+                .FirstOrDefault(role => string.Equals(role.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (role == null)
+            {
+                var now = DateTime.UtcNow;
+                var newRole = new UserRoleDto
+                {
+                    Id = Guid.NewGuid(),
+                    Name = name,
+                    Permissions = permissions,
+                    IsSystem = isSystem,
+                    DateCreated = now,
+                    DateLastModified = now
+                };
+
+                await _roleRepository.AddAsync(newRole, cancellationToken);
+                roles.Add(newRole);
+                return;
+            }
+
+            if (string.Equals(role.Name, name, StringComparison.Ordinal) &&
+                string.Equals(role.Permissions, permissions, StringComparison.Ordinal) &&
+                role.IsSystem == isSystem)
+            {
+                return;
+            }
+
+            role.Name = name;
+            role.Permissions = permissions;
+            role.IsSystem = isSystem;
+            role.DateLastModified = DateTime.UtcNow;
+            await _roleRepository.UpdateAsync(role, cancellationToken);
+        }
+
+        // Собирает строковое представление роли только для published-чтения.
+        private static string BuildReadPublishedPermissionString()
+        {
+            return $"{UserRolePermissionCodes.ViewPublished};";
+        }
+
+        // Проверяет, является ли имя роли частью базовой матрицы доступа.
+        private static bool IsBaselineRoleName(string? roleName)
+        {
+            return string.Equals(roleName, SystemAdminRoleName, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(roleName, GuestRoleName, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(roleName, ReadersRoleName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Проверяет явный emergency/admin bypass для системных учеток приложения.
+        private static bool IsAccessAdmin(BusinessEntityUser? user)
+        {
+            return user?.IsAkadmin == true ||
+                   user?.IsGeneralAdmin == true ||
+                   string.Equals(user?.UserName, "admin", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Гарантирует право текущего пользователя менять назначения ролей.
+        private async Task EnsureCurrentUserCanAdminRoleAssignmentsAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken)
+        {
+            var currentUser = await GetCurrentUserAsync(cancellationToken);
+            if (IsAccessAdmin(currentUser))
+            {
+                return;
+            }
+
+            if (currentUser?.IsAuthenticated != true)
+            {
+                throw new UnauthorizedAccessException("Нет прав на администрирование пространства.");
+            }
+
+            var localUser = await EnsureCurrentUserAsync(cancellationToken);
+            if (localUser == null)
+            {
+                throw new UnauthorizedAccessException("Нет прав на администрирование пространства.");
+            }
+
+            if (spaceId == Guid.Empty)
+            {
+                if (await CurrentUserHasGlobalAdminRoleAsync(localUser.Id, cancellationToken))
+                {
+                    return;
+                }
+
+                throw new UnauthorizedAccessException("Нет прав глобального администратора.");
+            }
+
+            var permissions = await _spaceContentAccessHelper.GetEffectivePermissionsForSpaceAsync(
+                localUser.Id,
+                spaceId,
+                isAnonymous: false,
+                cancellationToken);
+            if (permissions.CanAdminSpace || permissions.CanGlobalAdmin)
+            {
+                return;
+            }
+
+            throw new UnauthorizedAccessException("Нет прав на администрирование пространства.");
+        }
+
+        // Проверяет наличие GlobalAdmin через прямые или групповые назначения ролей.
+        private async Task<bool> CurrentUserHasGlobalAdminRoleAsync(
+            Guid userId,
+            CancellationToken cancellationToken)
+        {
+            if (userId == Guid.Empty)
+            {
+                return false;
+            }
+
+            var groupIds = (await _groupMemberRepository.GetAllAsync(
+                    membership => membership.UserId == userId,
+                    cancellationToken))
+                .Select(membership => membership.GroupId)
+                .ToHashSet();
+            var assignments = await _roleAssignmentRepository.GetAllAsync(
+                assignment => assignment.Subject == UserRoleAssignmentSubjects.AllSpaces ||
+                              assignment.SpaceId == Guid.Empty,
+                cancellationToken);
+            var roleIds = assignments
+                .Where(assignment => IsRoleAssignmentApplicableToUser(assignment, userId, groupIds))
+                .Select(assignment => assignment.RoleId)
+                .Distinct()
+                .ToHashSet();
+            if (roleIds.Count == 0)
+            {
+                return false;
+            }
+
+            var roles = await _roleRepository.GetAllAsync(role => roleIds.Contains(role.Id), cancellationToken);
+            return roles.Any(role => ParsePermissionCodes(role.Permissions).Contains(UserRolePermissionCodes.GlobalAdmin));
+        }
+
+        // Проверяет применимость назначения роли к пользователю напрямую или через группу.
+        private static bool IsRoleAssignmentApplicableToUser(
+            UserRoleAssignmentDto assignment,
+            Guid userId,
+            HashSet<Guid> groupIds)
+        {
+            if (assignment.AssignmentType == UserRoleAssignmentTypes.UserToRole)
+            {
+                return assignment.SubjectId == userId;
+            }
+
+            return assignment.AssignmentType == UserRoleAssignmentTypes.GroupToRole &&
+                   groupIds.Contains(assignment.SubjectId);
         }
 
         // Собирает строковое представление выбранных прав роли.

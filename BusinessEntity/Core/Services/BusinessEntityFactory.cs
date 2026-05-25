@@ -60,6 +60,9 @@ namespace BusinessEntity.Core.Services
             entity.Id = coreEntity.Id;
             entity.CreatedDate = coreEntity.CreatedDate;
             entity.LastModifiedDate = coreEntity.LastModifiedDate;
+            entity.CreatedByUserId = coreEntity.CreatedByUserId;
+            entity.LastModifiedByUserId = coreEntity.LastModifiedByUserId;
+            entity.IsPublic = coreEntity.IsPublic;
             entity.Name = coreEntity.Name;
             entity.BusinessEntityType = coreEntity.BusinessEntityType;
             entity.EntityType = coreEntity.EntityType;
@@ -108,8 +111,16 @@ namespace BusinessEntity.Core.Services
                 LastModifiedDate = DateTime.UtcNow,
                 Name = name ?? string.Empty,
                 BusinessEntityType = type,
-                EntityType = type
+                EntityType = type,
+                IsPublic = GetDefaultIsPublic(type)
             };
+        }
+
+        // Возвращает дефолтный признак "Общее" только для контентных типов.
+        private static bool GetDefaultIsPublic(BusinessEntityTypeEnum type)
+        {
+            return type == BusinessEntityTypeEnum.Document ||
+                   type == BusinessEntityTypeEnum.RichTextDocument;
         }
     }
 }

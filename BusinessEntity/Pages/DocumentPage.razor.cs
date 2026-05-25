@@ -9,6 +9,7 @@ using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 
 namespace BusinessEntity.Pages
 {
@@ -31,8 +32,8 @@ namespace BusinessEntity.Pages
         private bool IsCurrentUserAdmin { get; set; }
         private bool HasFullDocumentAccess { get; set; }
         private bool CanViewPublishedDocument { get; set; }
-        private bool CanEditDocument => HasFullDocumentAccess;
-        private bool CanChangePublicFlag => IsDocumentOwner;
+        private bool CanEditDocument { get; set; }
+        private bool CanChangePublicFlag { get; set; }
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
@@ -58,12 +59,11 @@ namespace BusinessEntity.Pages
 
                 var latestDocument = await DataProviderConnector.GetDataAsync<global::BusinessEntity.Core.DomainEntities.Document>(Id);
                 await ResolveAccessAsync();
-                if (!HasFullDocumentAccess &&
-                    (!CanViewPublishedDocument || (latestDocument?.PublishedVersion ?? 0) <= 0))
+                if (!HasFullDocumentAccess && !CanViewPublishedDocument)
                 {
                     Entity = null;
                     DataList = null;
-                    Error = "Документ недоступен: опубликованная версия отсутствует.";
+                    Error = "Документ недоступен.";
                     return;
                 }
 
@@ -74,12 +74,9 @@ namespace BusinessEntity.Pages
                 }
                 else
                 {
-                    var publishedData = await DataProviderConnector.GetDataVersionAsync<global::BusinessEntity.Core.DomainEntities.Document>(
-                        Id,
-                        latestDocument!.PublishedVersion);
-                    list = publishedData == null
+                    list = latestDocument == null
                         ? Array.Empty<global::BusinessEntity.Core.Classes.BusinessEntityData>()
-                        : new global::BusinessEntity.Core.Classes.BusinessEntityData[] { publishedData };
+                        : new global::BusinessEntity.Core.Classes.BusinessEntityData[] { latestDocument };
                 }
 
                 DataList = list;
@@ -117,25 +114,28 @@ namespace BusinessEntity.Pages
             IsCurrentUserAdmin = false;
             HasFullDocumentAccess = false;
             CanViewPublishedDocument = false;
+            CanEditDocument = false;
+            CanChangePublicFlag = false;
             if (Entity == null)
             {
                 return;
             }
 
-            var user = await UserConnector.EnsureCurrentUserAsync();
-            var businessUser = await UserConnector.GetCurrentUserAsync();
-            var permissions = await UserConnector.GetCurrentUserPermissionsForEntityAsync(Entity.Id);
-            IsDocumentOwner = user != null && Entity.CreatedByUserId == user.Id;
-            IsCurrentUserAdmin = IsAccessAdmin(businessUser);
-            HasFullDocumentAccess = IsCurrentUserAdmin || IsDocumentOwner || permissions.CanViewDraft;
-            CanViewPublishedDocument = HasFullDocumentAccess || permissions.CanViewPublished || Entity.IsPublic;
-        }
-
-        private static bool IsAccessAdmin(BusinessEntityUser? user)
-        {
-            return user?.IsAkadmin == true ||
-                   user?.IsGeneralAdmin == true ||
-                   string.Equals(user?.UserName, "admin", StringComparison.OrdinalIgnoreCase);
+            var access = await UserConnector.GetCurrentUserContentAccessForEntityAsync(
+                new UserContentAccessRequest
+                {
+                    EntityId = Entity.Id,
+                    EntityType = Entity.EntityType,
+                    IsCommon = Entity.IsPublic,
+                    CreatedByUserId = Entity.CreatedByUserId,
+                    PublishedVersion = 0
+                });
+            IsDocumentOwner = access.IsOwner;
+            IsCurrentUserAdmin = access.IsAccessAdmin;
+            HasFullDocumentAccess = access.CanViewDraft;
+            CanViewPublishedDocument = access.CanViewPublished;
+            CanEditDocument = access.CanEditDraft;
+            CanChangePublicFlag = access.CanChangeCommonFlag;
         }
 
         private async Task HandlePublicChangedAsync(bool value)

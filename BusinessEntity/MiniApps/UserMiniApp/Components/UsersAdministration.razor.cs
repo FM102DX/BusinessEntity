@@ -28,6 +28,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
         private Guid? AccessSpaceId { get; set; }
         private Guid? AccessGroupId { get; set; }
         private Guid? AccessRoleId { get; set; }
+        private bool ShowAllAccessAssignments { get; set; } = true;
         private Guid? DeleteConfirmationUserId { get; set; }
         private Guid? DeleteConfirmationRoleId { get; set; }
         private Guid? DeleteConfirmationGroupId { get; set; }
@@ -417,7 +418,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
         }
 
-        // Загружает пространства и таблицу назначений ролей для выбранного пространства.
+        // Загружает пространства и таблицу назначений ролей с учетом режима показа.
         private async Task LoadAccessRightsCoreAsync(Guid? preferredSpaceId)
         {
             IsAccessRightsLoading = true;
@@ -433,9 +434,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                       AccessSpaces.FirstOrDefault()?.Id;
 
                 AccessSpaceId = nextSpaceId;
-                RoleAssignments = AccessSpaceId.HasValue
-                    ? await UserConnector.GetRoleAssignmentsAsync(AccessSpaceId.Value)
-                    : Array.Empty<UserRoleAssignmentRecord>();
+                RoleAssignments = await LoadRoleAssignmentsForCurrentViewAsync();
                 EnsureAccessAssignmentSelections();
                 IsAccessRightsLoaded = true;
             }
@@ -447,6 +446,51 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             {
                 IsAccessRightsLoading = false;
             }
+        }
+
+        // Загружает назначения ролей либо по всем пространствам, либо по выбранному пространству.
+        private async Task<IReadOnlyList<UserRoleAssignmentRecord>> LoadRoleAssignmentsForCurrentViewAsync()
+        {
+            if (ShowAllAccessAssignments)
+            {
+                var assignments = new List<UserRoleAssignmentRecord>();
+                foreach (var space in AccessSpaces)
+                {
+                    var spaceAssignments = await UserConnector.GetRoleAssignmentsAsync(space.Id);
+                    assignments.AddRange(spaceAssignments);
+                }
+
+                return assignments
+                    .OrderBy(assignment => assignment.SpaceName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(assignment => assignment.Subject, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(assignment => assignment.SubjectName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(assignment => assignment.RoleName, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return AccessSpaceId.HasValue
+                ? await LoadRoleAssignmentsForSelectedSpaceAsync(AccessSpaceId.Value)
+                : Array.Empty<UserRoleAssignmentRecord>();
+        }
+
+        // Загружает назначения, которые действуют на выбранное пространство.
+        private async Task<IReadOnlyList<UserRoleAssignmentRecord>> LoadRoleAssignmentsForSelectedSpaceAsync(Guid spaceId)
+        {
+            if (spaceId == Guid.Empty)
+            {
+                return await UserConnector.GetRoleAssignmentsAsync(spaceId);
+            }
+
+            var allSpacesAssignments = await UserConnector.GetRoleAssignmentsAsync(Guid.Empty);
+            var selectedSpaceAssignments = await UserConnector.GetRoleAssignmentsAsync(spaceId);
+
+            return allSpacesAssignments
+                .Concat(selectedSpaceAssignments)
+                .OrderBy(assignment => assignment.SpaceName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(assignment => assignment.Subject, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(assignment => assignment.SubjectName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(assignment => assignment.RoleName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         // Создает нового Authentik-пользователя приложения и выбирает его в списке.
@@ -743,7 +787,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
                         AssignmentType = UserRoleAssignmentTypes.GroupToRole,
                         RoleId = AccessRoleId.Value
                     });
-                RoleAssignments = await UserConnector.GetRoleAssignmentsAsync(AccessSpaceId.Value);
+                RoleAssignments = await LoadRoleAssignmentsForCurrentViewAsync();
                 StatusMessage = "Назначение роли сохранено.";
             }
             catch (Exception ex)
@@ -766,9 +810,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             try
             {
                 var deleted = await UserConnector.DeleteRoleAssignmentAsync(assignmentId);
-                RoleAssignments = AccessSpaceId.HasValue
-                    ? await UserConnector.GetRoleAssignmentsAsync(AccessSpaceId.Value)
-                    : Array.Empty<UserRoleAssignmentRecord>();
+                RoleAssignments = await LoadRoleAssignmentsForCurrentViewAsync();
                 StatusMessage = deleted ? "Назначение роли удалено." : "Назначение роли не найдено.";
             }
             catch (Exception ex)
@@ -1032,6 +1074,15 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Components
             }
 
             await LoadAccessRightsCoreAsync(spaceId);
+        }
+
+        // Переключает режим показа всех назначений или только выбранного пространства.
+        private async Task ChangeShowAllAccessAssignmentsAsync(ChangeEventArgs args)
+        {
+            ShowAllAccessAssignments = args.Value is bool value
+                ? value
+                : bool.TryParse(args.Value?.ToString(), out var parsedValue) && parsedValue;
+            RoleAssignments = await LoadRoleAssignmentsForCurrentViewAsync();
         }
 
         // Переключает группу для нового назначения роли.

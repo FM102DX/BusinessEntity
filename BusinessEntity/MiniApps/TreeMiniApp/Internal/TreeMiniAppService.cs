@@ -39,19 +39,18 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             var currentUser = await _userConnector.EnsureCurrentUserAsync(cancellationToken);
             var currentBusinessUser = await _userConnector.GetCurrentUserAsync(cancellationToken);
             var permissions = await _userConnector.GetCurrentUserPermissionsForSpaceAsync(space.Id, cancellationToken);
-            if (!IsAccessAdmin(currentBusinessUser) &&
-                !permissions.CanViewPublished &&
-                !permissions.CanViewDraft)
+            var isAccessAdmin = IsAccessAdmin(currentBusinessUser);
+            var children = await _treeVisibilityService.BuildVisibleChildrenAsync(
+                space.Id,
+                currentUser?.Id,
+                isAccessAdmin,
+                permissions,
+                cancellationToken);
+            if (children.Count == 0 && !ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin))
             {
                 return null;
             }
 
-            var children = await _treeVisibilityService.BuildVisibleChildrenAsync(
-                space.Id,
-                currentUser?.Id,
-                IsAccessAdmin(currentBusinessUser),
-                permissions,
-                cancellationToken);
             return new TreeSpaceSnapshot(space, children);
         }
 
@@ -59,6 +58,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         public async Task<BusinessEntity.Core.Classes.BusinessEntity> CreateEntityAsync(Guid parentId, BusinessEntityTypeEnum entityType, CancellationToken cancellationToken = default)
         {
             await EnsureAuthenticatedMutationAsync(cancellationToken);
+            await EnsureCanAdminItemsAsync(parentId, cancellationToken);
             var parent = await _businessEntityHelper.GetBusinessEntityById(parentId)
                 ?? throw new InvalidOperationException($"Parent entity '{parentId}' was not found.");
 
@@ -75,6 +75,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         public async Task<BusinessEntity.Core.Classes.BusinessEntity?> RenameEntityAsync(Guid entityId, string newName, CancellationToken cancellationToken = default)
         {
             await EnsureAuthenticatedMutationAsync(cancellationToken);
+            await EnsureCanAdminItemsAsync(entityId, cancellationToken);
             return await _businessEntityHelper.RenameEntity(entityId, newName, cancellationToken);
         }
 
@@ -82,7 +83,13 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         public async Task DeleteEntitiesAsync(IReadOnlyList<Guid> entityIds, CancellationToken cancellationToken = default)
         {
             await EnsureAuthenticatedMutationAsync(cancellationToken);
-            foreach (var entityId in entityIds.Distinct())
+            var distinctEntityIds = entityIds.Distinct().ToList();
+            foreach (var entityId in distinctEntityIds)
+            {
+                await EnsureCanAdminItemsAsync(entityId, cancellationToken);
+            }
+
+            foreach (var entityId in distinctEntityIds)
             {
                 await _businessEntityHelper.RemoveBusinessEntity(entityId);
             }
@@ -92,10 +99,17 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         public async Task MoveEntitiesAsync(IReadOnlyList<Guid> entityIds, Guid targetParentId, CancellationToken cancellationToken = default)
         {
             await EnsureAuthenticatedMutationAsync(cancellationToken);
+            await EnsureCanAdminItemsAsync(targetParentId, cancellationToken);
             var targetParent = await _businessEntityHelper.GetBusinessEntityById(targetParentId)
                 ?? throw new InvalidOperationException($"Target parent '{targetParentId}' was not found.");
 
-            foreach (var entityId in entityIds.Distinct())
+            var distinctEntityIds = entityIds.Distinct().ToList();
+            foreach (var entityId in distinctEntityIds)
+            {
+                await EnsureCanAdminItemsAsync(entityId, cancellationToken);
+            }
+
+            foreach (var entityId in distinctEntityIds)
             {
                 var entity = await _businessEntityHelper.GetBusinessEntityById(entityId)
                     ?? throw new InvalidOperationException($"Entity '{entityId}' was not found.");
@@ -114,6 +128,22 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             }
 
             throw new UnauthorizedAccessException("Для изменения дерева требуется вход.");
+        }
+
+        // Проверяет право администрирования элементов дерева в пространстве сущности.
+        private async Task EnsureCanAdminItemsAsync(Guid entityId, CancellationToken cancellationToken)
+        {
+            var currentUser = await _userConnector.GetCurrentUserAsync(cancellationToken);
+            var permissions = await _userConnector.GetCurrentUserPermissionsForEntityAsync(entityId, cancellationToken);
+            if (IsAccessAdmin(currentUser) ||
+                permissions.CanAdminItems ||
+                permissions.CanAdminSpace ||
+                permissions.CanGlobalAdmin)
+            {
+                return;
+            }
+
+            throw new UnauthorizedAccessException("Нет прав на администрирование элементов.");
         }
 
         private static bool IsAccessAdmin(BusinessEntityUser? user)

@@ -386,7 +386,7 @@ namespace BusinessEntity
                     ""LastModifiedDate"" timestamp with time zone NOT NULL,
                     ""CreatedByUserId"" uuid NULL,
                     ""LastModifiedByUserId"" uuid NULL,
-                    ""IsPublic"" boolean NOT NULL DEFAULT FALSE,
+                    ""IsPublic"" boolean NOT NULL DEFAULT TRUE,
                     ""Name"" text NOT NULL,
                     ""BusinessEntityType"" integer NOT NULL,
                     ""EntityType"" integer NOT NULL,
@@ -469,7 +469,8 @@ namespace BusinessEntity
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectBId"" ON ""BusinessEntityRelations"" (""ObjectBId"");
                 ALTER TABLE ""BusinessEntities"" ADD COLUMN IF NOT EXISTS ""CreatedByUserId"" uuid NULL;
                 ALTER TABLE ""BusinessEntities"" ADD COLUMN IF NOT EXISTS ""LastModifiedByUserId"" uuid NULL;
-                ALTER TABLE ""BusinessEntities"" ADD COLUMN IF NOT EXISTS ""IsPublic"" boolean NOT NULL DEFAULT FALSE;
+                ALTER TABLE ""BusinessEntities"" ADD COLUMN IF NOT EXISTS ""IsPublic"" boolean NOT NULL DEFAULT TRUE;
+                ALTER TABLE ""BusinessEntities"" ALTER COLUMN ""IsPublic"" SET DEFAULT TRUE;
                 DO $$
                 DECLARE legacy_owner uuid;
                 BEGIN

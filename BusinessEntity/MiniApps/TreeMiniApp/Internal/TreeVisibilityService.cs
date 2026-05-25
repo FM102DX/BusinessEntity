@@ -3,6 +3,7 @@ using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
+using BusinessEntity.Services;
 using BusinessEntity.WebLogger.Services;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
@@ -45,7 +46,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
                 if (IsFolderEntity(child.EntityType))
                 {
                     if (descendants.Count > 0 ||
-                        (ShowFoldersWithoutVisibleContent && CanDisplayContainer(permissions, isAccessAdmin)))
+                        (ShowFoldersWithoutVisibleContent && ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin)))
                     {
                         snapshots.Add(new TreeNodeSnapshot(child, descendants));
                     }
@@ -69,33 +70,20 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             UserEffectivePermissions permissions,
             CancellationToken cancellationToken)
         {
-            if (!CanDisplayContainer(permissions, isAccessAdmin))
+            if (!ContentAccessPolicy.IsCommonFlagContentType(entity.EntityType))
             {
-                return false;
-            }
-
-            if (!IsDocumentEntity(entity.EntityType))
-            {
-                return true;
-            }
-
-            if (isAccessAdmin || IsOwner(entity, currentUserId) || permissions.CanViewDraft)
-            {
-                return true;
-            }
-
-            if (!permissions.CanViewPublished)
-            {
-                return false;
-            }
-
-            if (entity.IsPublic)
-            {
-                return true;
+                return ContentAccessPolicy.CanViewSpaceContainer(permissions, isAccessAdmin);
             }
 
             var publishedVersion = await GetPublishedVersionAsync(entity, cancellationToken);
-            return publishedVersion > 0;
+            return ContentAccessPolicy.CanReadContent(
+                entity.EntityType,
+                entity.IsPublic,
+                entity.CreatedByUserId,
+                currentUserId,
+                isAccessAdmin,
+                permissions,
+                publishedVersion);
         }
 
         private async Task<int> GetPublishedVersionAsync(
@@ -104,9 +92,13 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
         {
             try
             {
+                if (ContentAccessPolicy.IsAlwaysPublishedWhenCommon(entity.EntityType))
+                {
+                    return 0;
+                }
+
                 return entity.EntityType switch
                 {
-                    BusinessEntityTypeEnum.Document => (await _businessEntityHelper.GetEntityWithDataAsync<Document>(entity.Id, cancellationToken))?.Data.PublishedVersion ?? 0,
                     BusinessEntityTypeEnum.RichTextDocument => (await _businessEntityHelper.GetEntityWithDataAsync<RichTextDocument>(entity.Id, cancellationToken))?.Data.PublishedVersion ?? 0,
                     _ => 0
                 };
@@ -122,25 +114,9 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Internal
             }
         }
 
-        private static bool CanDisplayContainer(UserEffectivePermissions permissions, bool isAccessAdmin)
-        {
-            return isAccessAdmin || permissions.CanViewDraft || permissions.CanViewPublished;
-        }
-
-        private static bool IsOwner(BusinessEntity.Core.Classes.BusinessEntity entity, Guid? currentUserId)
-        {
-            return currentUserId.HasValue && entity.CreatedByUserId == currentUserId.Value;
-        }
-
         private static bool IsFolderEntity(BusinessEntityTypeEnum entityType)
         {
             return entityType == BusinessEntityTypeEnum.Folder;
-        }
-
-        private static bool IsDocumentEntity(BusinessEntityTypeEnum entityType)
-        {
-            return entityType == BusinessEntityTypeEnum.Document ||
-                   entityType == BusinessEntityTypeEnum.RichTextDocument;
         }
     }
 }

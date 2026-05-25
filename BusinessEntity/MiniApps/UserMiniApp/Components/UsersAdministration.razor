@@ -200,6 +200,14 @@
                         </select>
                     </label>
 
+                    <label class="users-admin__access-show-all">
+                        <input type="checkbox"
+                               checked="@ShowAllAccessAssignments"
+                               @onchange="ChangeShowAllAccessAssignmentsAsync"
+                               disabled="@IsBusy" />
+                        <span>Показать все</span>
+                    </label>
+
                     <div class="users-admin__access-actions">
                         <label class="users-admin__access-picker">
                             <span>Группа</span>
@@ -267,6 +275,7 @@
                         <table class="users-admin__access-table">
                             <thead>
                                 <tr>
+                                    <th>Пространство</th>
                                     <th>Сабджект</th>
                                     <th>Назначение</th>
                                     <th>Группа / пользователь</th>
@@ -278,6 +287,7 @@
                                 @foreach (var assignment in RoleAssignments)
                                 {
                                     <tr>
+                                        <td>@assignment.SpaceName</td>
                                         <td>@assignment.Subject</td>
                                         <td>@assignment.AssignmentType</td>
                                         <td>@assignment.SubjectName</td>

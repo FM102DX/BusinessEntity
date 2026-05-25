@@ -198,6 +198,15 @@
     text-align: right;
 }
 
+.users-admin__access-show-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: fit-content;
+    margin: -0.25rem 0 0 8rem;
+    font-weight: 700;
+}
+
 .users-admin__access-actions {
     display: flex;
     flex-wrap: wrap;
@@ -327,6 +336,11 @@
 
 .users-admin__access-table th:first-child,
 .users-admin__access-table td:first-child {
+    width: 12rem;
+}
+
+.users-admin__access-table th:nth-child(2),
+.users-admin__access-table td:nth-child(2) {
     width: 10rem;
 }
 
@@ -474,5 +488,9 @@
 
     .users-admin__access-space > span {
         text-align: left;
+    }
+
+    .users-admin__access-show-all {
+        margin-left: 0;
     }
 }

@@ -5,6 +5,7 @@ using BusinessEntity.Components;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
@@ -44,9 +45,10 @@ namespace BusinessEntity.Pages
         private bool IsCurrentUserAdmin { get; set; }
         private bool HasFullDocumentAccess { get; set; }
         private bool CanViewPublishedDocument { get; set; }
-        private bool CanEditViewedVersion => HasFullDocumentAccess && ViewedVersion >= LatestVersion;
-        private bool CanPublishDocument => HasFullDocumentAccess;
-        private bool CanChangePublicFlag => IsDocumentOwner;
+        private bool CanEditDocument { get; set; }
+        private bool CanPublishDocument { get; set; }
+        private bool CanChangePublicFlag { get; set; }
+        private bool CanEditViewedVersion => CanEditDocument && ViewedVersion >= LatestVersion;
         private Guid _messagesForDocumentId;
         private Guid _loadedDocumentId;
         private const int OutlineChunkBatchSize = 5;
@@ -522,26 +524,32 @@ namespace BusinessEntity.Pages
             IsCurrentUserAdmin = false;
             HasFullDocumentAccess = false;
             CanViewPublishedDocument = false;
+            CanEditDocument = false;
+            CanPublishDocument = false;
+            CanChangePublicFlag = false;
 
-            if (Entity == null)
+            if (Entity == null || Manifest == null)
             {
                 return;
             }
 
-            var user = await UserConnector.EnsureCurrentUserAsync(cancellationToken);
-            var businessUser = await UserConnector.GetCurrentUserAsync(cancellationToken);
-            var permissions = await UserConnector.GetCurrentUserPermissionsForEntityAsync(Entity.Id, cancellationToken);
-            IsDocumentOwner = user != null && Entity.CreatedByUserId == user.Id;
-            IsCurrentUserAdmin = IsAccessAdmin(businessUser);
-            HasFullDocumentAccess = IsCurrentUserAdmin || IsDocumentOwner || permissions.CanViewDraft;
-            CanViewPublishedDocument = HasFullDocumentAccess || permissions.CanViewPublished || Entity.IsPublic;
-        }
-
-        private static bool IsAccessAdmin(BusinessEntityUser? user)
-        {
-            return user?.IsAkadmin == true ||
-                   user?.IsGeneralAdmin == true ||
-                   string.Equals(user?.UserName, "admin", StringComparison.OrdinalIgnoreCase);
+            var access = await UserConnector.GetCurrentUserContentAccessForEntityAsync(
+                new UserContentAccessRequest
+                {
+                    EntityId = Entity.Id,
+                    EntityType = Entity.EntityType,
+                    IsCommon = Entity.IsPublic,
+                    CreatedByUserId = Entity.CreatedByUserId,
+                    PublishedVersion = Manifest.PublishedVersion
+                },
+                cancellationToken);
+            IsDocumentOwner = access.IsOwner;
+            IsCurrentUserAdmin = access.IsAccessAdmin;
+            HasFullDocumentAccess = access.CanViewDraft;
+            CanViewPublishedDocument = access.CanViewPublished;
+            CanEditDocument = access.CanEditDraft;
+            CanPublishDocument = access.CanPublishDraft;
+            CanChangePublicFlag = access.CanChangeCommonFlag;
         }
 
         private bool CanReadCurrentDocument()

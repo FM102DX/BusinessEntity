@@ -5,6 +5,7 @@ using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Repositories;
+using BusinessEntity.Services;
 using System.Text.Json;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Internal;
@@ -97,11 +98,6 @@ internal sealed class UserSpaceContentAccessHelper
         CancellationToken cancellationToken = default)
     {
         var permissions = await GetEffectivePermissionsForSpaceAsync(userId, spaceId, isAnonymous, cancellationToken);
-        if (!permissions.CanViewPublished && !permissions.CanViewDraft)
-        {
-            return false;
-        }
-
         return await SpaceContainsReadableObjectAsync(spaceId, permissions, cancellationToken);
     }
 
@@ -113,11 +109,6 @@ internal sealed class UserSpaceContentAccessHelper
         CancellationToken cancellationToken = default)
     {
         var permissions = await GetEffectivePermissionsForSpaceAsync(userId, spaceId, isAnonymous, cancellationToken);
-        if (!permissions.CanViewPublished && !permissions.CanViewDraft)
-        {
-            return Array.Empty<UserAccessibleDocumentRecord>();
-        }
-
         var entities = (await _businessEntityRepository.GetAllAsync(null, ct: cancellationToken))
             .ToDictionary(entity => entity.Id);
         if (!entities.TryGetValue(spaceId, out var space) || space.EntityType != BusinessEntityTypeEnum.Space)
@@ -177,7 +168,7 @@ internal sealed class UserSpaceContentAccessHelper
         {
             if (!addedDocumentIds.Add(entityId) ||
                 !entities.TryGetValue(entityId, out var entity) ||
-                !IsDocumentEntity(entity.EntityType) ||
+                !ContentAccessPolicy.IsCommonFlagContentType(entity.EntityType) ||
                 !await IsReadableObjectAsync(entity, permissions, cancellationToken))
             {
                 return;
@@ -405,41 +396,38 @@ internal sealed class UserSpaceContentAccessHelper
         UserEffectivePermissions permissions,
         CancellationToken cancellationToken)
     {
-        if (entity.EntityType == BusinessEntityTypeEnum.Space ||
-            entity.EntityType == BusinessEntityTypeEnum.Folder)
+        if (!ContentAccessPolicy.IsCommonFlagContentType(entity.EntityType))
         {
             return false;
         }
 
-        if (permissions.CanViewDraft)
-        {
-            return true;
-        }
-
-        if (!permissions.CanViewPublished)
-        {
-            return false;
-        }
-
-        if (!IsDocumentEntity(entity.EntityType))
-        {
-            return true;
-        }
-
-        return entity.IsPublic || await HasPublishedVersionAsync(entity.Id, cancellationToken);
+        var publishedVersion = await GetPublishedVersionAsync(entity, cancellationToken);
+        return ContentAccessPolicy.CanReadContent(
+            entity.EntityType,
+            entity.IsPublic,
+            entity.CreatedByUserId,
+            permissions.UserId,
+            isAccessAdmin: false,
+            permissions,
+            publishedVersion);
     }
 
-    // Проверяет наличие publishedVersion в последнем payload документа.
-    private async Task<bool> HasPublishedVersionAsync(Guid entityId, CancellationToken cancellationToken)
+    // Возвращает publishedVersion из последнего payload документа.
+    private async Task<int> GetPublishedVersionAsync(BusinessEntityDto entity, CancellationToken cancellationToken)
     {
+        if (ContentAccessPolicy.IsAlwaysPublishedWhenCommon(entity.EntityType))
+        {
+            return 0;
+        }
+
         var dataItems = await _businessEntityDataRepository.GetAllAsync(
-            data => data.BusinessEntityId == entityId,
+            data => data.BusinessEntityId == entity.Id,
             ct: cancellationToken);
         var latestData = dataItems
             .OrderByDescending(data => data.Version <= 0 ? 1 : data.Version)
             .ThenByDescending(data => data.LastModifiedDate)
             .FirstOrDefault();
-        return TryReadPublishedVersion(latestData?.Data) > 0;
+        return TryReadPublishedVersion(latestData?.Data);
     }
 
     // Извлекает publishedVersion из storage-envelope или legacy payload.
@@ -467,13 +455,6 @@ internal sealed class UserSpaceContentAccessHelper
         {
             return 0;
         }
-    }
-
-    // Проверяет, относится ли тип объекта к документам с published-версией.
-    private static bool IsDocumentEntity(BusinessEntityTypeEnum entityType)
-    {
-        return entityType == BusinessEntityTypeEnum.Document ||
-               entityType == BusinessEntityTypeEnum.RichTextDocument;
     }
 
     // Разбирает строку прав роли в набор числовых кодов.

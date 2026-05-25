@@ -245,6 +245,14 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
             return _userMiniApp.GetCurrentUserPermissionsForEntityAsync(entityId, cancellationToken);
         }
 
+        // Возвращает готовое решение по доступу текущего или anonymous пользователя к контентной сущности.
+        public Task<UserContentAccessDecision> GetCurrentUserContentAccessForEntityAsync(
+            UserContentAccessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetCurrentUserContentAccessForEntityAsync(request, cancellationToken);
+        }
+
         // Возвращает effective permissions anonymous-пользователя в пространстве.
         public Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
             Guid spaceId,

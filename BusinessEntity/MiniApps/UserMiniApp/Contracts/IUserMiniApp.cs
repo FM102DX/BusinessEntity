@@ -111,6 +111,11 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
             Guid entityId,
             CancellationToken cancellationToken = default);
 
+        // Возвращает готовое решение по доступу текущего или anonymous пользователя к контентной сущности.
+        Task<UserContentAccessDecision> GetCurrentUserContentAccessForEntityAsync(
+            UserContentAccessRequest request,
+            CancellationToken cancellationToken = default);
+
         // Возвращает effective permissions системного anonymous-пользователя в пространстве.
         Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
             Guid spaceId,

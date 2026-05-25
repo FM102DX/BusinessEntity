@@ -255,6 +255,14 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
             return _userMiniAppService.GetCurrentUserPermissionsForEntityAsync(entityId, cancellationToken);
         }
 
+        // Делегирует расчет content-access решения текущего или anonymous пользователя.
+        public Task<UserContentAccessDecision> GetCurrentUserContentAccessForEntityAsync(
+            UserContentAccessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetCurrentUserContentAccessForEntityAsync(request, cancellationToken);
+        }
+
         // Делегирует расчет прав системного anonymous-пользователя в пространстве.
         public Task<UserEffectivePermissions> GetAnonymousPermissionsForSpaceAsync(
             Guid spaceId,
