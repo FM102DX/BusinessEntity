@@ -1,4 +1,5 @@
 using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Internal;
@@ -237,6 +238,28 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
             CancellationToken cancellationToken = default)
         {
             return _userMiniAppService.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
+        }
+
+        // Делегирует чтение пресетов печати во внутренний сервис mini-app.
+        public Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetDocPrintPresetsAsync(cancellationToken);
+        }
+
+        // Делегирует сохранение пресета печати во внутренний сервис mini-app.
+        public Task<DocPrintSettingsPreset> SaveDocPrintPresetAsync(
+            DocPrintSettingsPreset preset,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.SaveDocPrintPresetAsync(preset, cancellationToken);
+        }
+
+        // Делегирует удаление пресета печати во внутренний сервис mini-app.
+        public Task<bool> DeleteDocPrintPresetAsync(
+            string presetName,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.DeleteDocPrintPresetAsync(presetName, cancellationToken);
         }
 
         // Делегирует расчет прав текущего или anonymous пользователя в пространстве.

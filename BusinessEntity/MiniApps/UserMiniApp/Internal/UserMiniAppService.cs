@@ -2,6 +2,7 @@ using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Repositories;
 using BusinessEntity.Core.Classes;
+using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
@@ -16,6 +17,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
     {
         private const int MaxBookmarkTextLength = 500;
         private const int MaxBookmarkLabelLength = 80;
+        private const int MaxPrintPresetNameLength = 80;
         private const string SystemAdminRoleName = "Админ";
         private const string GuestRoleName = "Гость";
         private const string ReadersRoleName = "Ридерс";
@@ -1217,6 +1219,74 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 cancellationToken);
         }
 
+        // Возвращает коллекцию пользовательских пресетов печати документов.
+        public async Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default)
+        {
+            var user = await EnsureCurrentUserAsync(cancellationToken);
+            if (user == null)
+            {
+                return new DocPrintSettingsPresetCollection();
+            }
+
+            return await ReadDocPrintPresetsPayloadAsync(user.Id, cancellationToken);
+        }
+
+        // Сохраняет или перезаписывает пользовательский пресет печати документов.
+        public async Task<DocPrintSettingsPreset> SaveDocPrintPresetAsync(
+            DocPrintSettingsPreset preset,
+            CancellationToken cancellationToken = default)
+        {
+            var normalizedPreset = NormalizeDocPrintPreset(preset);
+            var user = await EnsureCurrentUserAsync(cancellationToken);
+            if (user == null)
+            {
+                throw new InvalidOperationException("Текущий пользователь не найден.");
+            }
+
+            var payload = await ReadDocPrintPresetsPayloadAsync(user.Id, cancellationToken);
+            payload.Presets.RemoveAll(x => string.Equals(x.Name, normalizedPreset.Name, StringComparison.OrdinalIgnoreCase));
+            payload.Presets.Add(normalizedPreset);
+            payload.SelectedPresetName = normalizedPreset.Name;
+            payload = NormalizeDocPrintPresetsPayload(payload);
+
+            await UpsertDocPrintPresetsPayloadAsync(user.Id, payload, cancellationToken);
+            return normalizedPreset;
+        }
+
+        // Удаляет пользовательский пресет печати документов по имени.
+        public async Task<bool> DeleteDocPrintPresetAsync(string presetName, CancellationToken cancellationToken = default)
+        {
+            var normalizedName = NormalizeOptionalText(presetName);
+            if (string.IsNullOrWhiteSpace(normalizedName))
+            {
+                return false;
+            }
+
+            normalizedName = NormalizePrintPresetName(normalizedName);
+
+            var user = await EnsureCurrentUserAsync(cancellationToken);
+            if (user == null)
+            {
+                return false;
+            }
+
+            var payload = await ReadDocPrintPresetsPayloadAsync(user.Id, cancellationToken);
+            var removedCount = payload.Presets.RemoveAll(x => string.Equals(x.Name, normalizedName, StringComparison.OrdinalIgnoreCase));
+            if (removedCount == 0)
+            {
+                return false;
+            }
+
+            if (string.Equals(payload.SelectedPresetName, normalizedName, StringComparison.OrdinalIgnoreCase))
+            {
+                payload.SelectedPresetName = payload.Presets.FirstOrDefault()?.Name ?? string.Empty;
+            }
+
+            payload = NormalizeDocPrintPresetsPayload(payload);
+            await UpsertDocPrintPresetsPayloadAsync(user.Id, payload, cancellationToken);
+            return true;
+        }
+
         private static UserData ReadUserData(UserDto user)
         {
             UserData userData;
@@ -2278,6 +2348,43 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             return new RichTextDocumentBookmarksPayload();
         }
 
+        // Читает payload пользовательских пресетов печати из единственной user-property.
+        private async Task<DocPrintSettingsPresetCollection> ReadDocPrintPresetsPayloadAsync(
+            Guid userId,
+            CancellationToken cancellationToken)
+        {
+            var property = (await _userPropertyRepository.GetAllAsync(
+                    x => x.ParentEntityId == userId &&
+                         x.PropertyType == (int)UserPropertyTypeEnum.DocPrintPresets,
+                    cancellationToken))
+                .OrderByDescending(x => x.DateLastModified)
+                .FirstOrDefault();
+
+            if (property == null || string.IsNullOrWhiteSpace(property.Data))
+            {
+                return new DocPrintSettingsPresetCollection();
+            }
+
+            try
+            {
+                var payload = JsonSerializer.Deserialize<DocPrintSettingsPresetCollection>(
+                    property.Data,
+                    UserMiniAppJsonOptions.Default);
+
+                if (payload?.SchemaVersion == 1 &&
+                    string.Equals(payload.Kind, nameof(DocPrintSettingsPresetCollection), StringComparison.Ordinal))
+                {
+                    return NormalizeDocPrintPresetsPayload(payload);
+                }
+            }
+            catch (JsonException)
+            {
+                // Invalid user property payload is treated as empty.
+            }
+
+            return new DocPrintSettingsPresetCollection();
+        }
+
         private async Task<RichDocDisplayedLevelProperty?> ReadDisplayedLevelPropertyAsync(
             Guid userId,
             Guid documentId,
@@ -2336,6 +2443,62 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                         DateLastModified = now,
                         ParentEntityId = userId,
                         PropertyType = (int)UserPropertyTypeEnum.RichDocBookmarks,
+                        Data = data,
+                        Metadata = metadata
+                    },
+                    cancellationToken);
+                return;
+            }
+
+            property.DateLastModified = now;
+            property.Data = data;
+            property.Metadata = metadata;
+            await _userPropertyRepository.UpdateAsync(property, cancellationToken);
+
+            foreach (var duplicate in properties.Skip(1))
+            {
+                await _userPropertyRepository.DeleteAsync(duplicate.Id, cancellationToken);
+            }
+        }
+
+        // Создает или обновляет единственную user-property с коллекцией пресетов печати.
+        private async Task UpsertDocPrintPresetsPayloadAsync(
+            Guid userId,
+            DocPrintSettingsPresetCollection payload,
+            CancellationToken cancellationToken)
+        {
+            var properties = (await _userPropertyRepository.GetAllAsync(
+                    x => x.ParentEntityId == userId &&
+                         x.PropertyType == (int)UserPropertyTypeEnum.DocPrintPresets,
+                    cancellationToken))
+                .OrderByDescending(x => x.DateLastModified)
+                .ToList();
+
+            payload = NormalizeDocPrintPresetsPayload(payload);
+
+            var now = DateTime.UtcNow;
+            var data = JsonSerializer.Serialize(payload, UserMiniAppJsonOptions.Default);
+            var metadata = JsonSerializer.Serialize(
+                new
+                {
+                    schemaVersion = 1,
+                    kind = "DocPrintPresetsMetadata",
+                    presetCount = payload.Presets.Count,
+                    selectedPresetName = payload.SelectedPresetName
+                },
+                UserMiniAppJsonOptions.Default);
+
+            var property = properties.FirstOrDefault();
+            if (property == null)
+            {
+                await _userPropertyRepository.AddAsync(
+                    new UserPropertyDto
+                    {
+                        Id = Guid.NewGuid(),
+                        DateCreated = now,
+                        DateLastModified = now,
+                        ParentEntityId = userId,
+                        PropertyType = (int)UserPropertyTypeEnum.DocPrintPresets,
                         Data = data,
                         Metadata = metadata
                     },
@@ -2439,6 +2602,97 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             }
 
             return null;
+        }
+
+        // Нормализует collection payload пресетов печати после чтения или перед записью.
+        private static DocPrintSettingsPresetCollection NormalizeDocPrintPresetsPayload(DocPrintSettingsPresetCollection? payload)
+        {
+            var presetsByName = new Dictionary<string, DocPrintSettingsPreset>(StringComparer.OrdinalIgnoreCase);
+            foreach (var preset in payload?.Presets ?? new List<DocPrintSettingsPreset>())
+            {
+                if (preset == null)
+                {
+                    continue;
+                }
+
+                var name = NormalizeOptionalText(preset.Name);
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                var normalizedPreset = NormalizeDocPrintPreset(
+                    new DocPrintSettingsPreset
+                    {
+                        Name = name,
+                        Settings = preset.Settings
+                    });
+                presetsByName[normalizedPreset.Name] = normalizedPreset;
+            }
+
+            var presets = presetsByName.Values
+                .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var selectedPresetName = NormalizeOptionalText(payload?.SelectedPresetName);
+            if (!string.IsNullOrWhiteSpace(selectedPresetName))
+            {
+                selectedPresetName = presets
+                    .FirstOrDefault(x => string.Equals(x.Name, selectedPresetName, StringComparison.OrdinalIgnoreCase))
+                    ?.Name ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedPresetName))
+            {
+                selectedPresetName = presets.FirstOrDefault()?.Name ?? string.Empty;
+            }
+
+            return new DocPrintSettingsPresetCollection
+            {
+                SchemaVersion = 1,
+                Kind = nameof(DocPrintSettingsPresetCollection),
+                SelectedPresetName = selectedPresetName,
+                Presets = presets
+            };
+        }
+
+        // Нормализует один именованный пресет печати.
+        private static DocPrintSettingsPreset NormalizeDocPrintPreset(DocPrintSettingsPreset? preset)
+        {
+            return new DocPrintSettingsPreset
+            {
+                Name = NormalizePrintPresetName(preset?.Name),
+                Settings = NormalizeDocPrintSettings(preset?.Settings)
+            };
+        }
+
+        // Нормализует числовые настройки печати.
+        private static DocPrintSettings NormalizeDocPrintSettings(DocPrintSettings? settings)
+        {
+            if (settings == null)
+            {
+                return new DocPrintSettings();
+            }
+
+            return new DocPrintSettings
+            {
+                SchemaVersion = settings.SchemaVersion > 0 ? settings.SchemaVersion : 1,
+                Kind = string.IsNullOrWhiteSpace(settings.Kind) ? nameof(DocPrintSettings) : settings.Kind,
+                FontScalePercent = settings.FontScalePercent,
+                MarginTopMm = settings.MarginTopMm,
+                MarginBottomMm = settings.MarginBottomMm,
+                MarginRightMm = settings.MarginRightMm,
+                MarginLeftMm = settings.MarginLeftMm
+            };
+        }
+
+        // Нормализует имя пресета печати и ограничивает его длину.
+        private static string NormalizePrintPresetName(string? value)
+        {
+            var normalized = NormalizeRequiredText(value, "Имя пресета печати");
+            return normalized.Length <= MaxPrintPresetNameLength
+                ? normalized
+                : normalized[..MaxPrintPresetNameLength].Trim();
         }
 
         private static int NormalizeDisplayedLevel(int value)

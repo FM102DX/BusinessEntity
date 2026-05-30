@@ -1,6 +1,7 @@
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
+using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
@@ -227,6 +228,28 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
             CancellationToken cancellationToken = default)
         {
             return _userMiniApp.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
+        }
+
+        // Возвращает пользовательские пресеты печати через публичный контракт user mini-app.
+        public Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetDocPrintPresetsAsync(cancellationToken);
+        }
+
+        // Сохраняет пользовательский пресет печати через публичный контракт user mini-app.
+        public Task<DocPrintSettingsPreset> SaveDocPrintPresetAsync(
+            DocPrintSettingsPreset preset,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.SaveDocPrintPresetAsync(preset, cancellationToken);
+        }
+
+        // Удаляет пользовательский пресет печати через публичный контракт user mini-app.
+        public Task<bool> DeleteDocPrintPresetAsync(
+            string presetName,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.DeleteDocPrintPresetAsync(presetName, cancellationToken);
         }
 
         // Возвращает effective permissions текущего или anonymous пользователя в пространстве.

@@ -1139,7 +1139,7 @@ namespace BusinessEntity.Services
         {
             return block.Kind switch
             {
-                "heading" or "paragraph" => RichTextChunkStorageSerializer.BuildInlineText(block.Html),
+                "heading" or "paragraph" or "code" or "list" => RichTextChunkStorageSerializer.BuildInlineText(block.Html),
                 "image" => block.AltText ?? string.Empty,
                 _ => string.Empty
             };

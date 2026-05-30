@@ -2,11 +2,12 @@
 @using Microsoft.AspNetCore.Components
 
 <div class="py-2">
-    <div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="rich-text-document-header mb-3">
+        <div class="rich-text-document-header__outline-spacer"></div>
         <div class="rich-text-document-title">
             <h4 class="mb-0">@EntityName</h4>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="rich-text-document-header__actions">
             @if (CanChangePublicFlag)
             {
                 <label class="form-check form-check-inline mb-0">
@@ -17,6 +18,12 @@
                     <span class="form-check-label">Общий</span>
                 </label>
             }
+            <a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+               title="Печать"
+               href="@($"/print/{BusinessEntityId}")">
+                <span class="material-icons" aria-hidden="true" style="font-size: 1rem; line-height: 1;">print</span>
+                <span>Печать</span>
+            </a>
             <button type="button"
                     class="btn btn-sm btn-outline-primary"
                     title="@(CanEdit ? "Редактировать последнюю версию" : "Редактирование доступно только для последней версии")"

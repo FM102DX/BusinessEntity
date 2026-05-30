@@ -12,6 +12,15 @@
                     <span class="form-check-label">Общий</span>
                 </label>
             }
+            @if (Entity != null)
+            {
+                <a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                   title="Печать"
+                   href="@($"/print/{Entity.Id}")">
+                    <span class="material-icons" aria-hidden="true" style="font-size: 1rem; line-height: 1;">print</span>
+                    <span>Печать</span>
+                </a>
+            }
             @if (CanEdit)
             {
                 <button class="btn btn-sm" title="Edit"

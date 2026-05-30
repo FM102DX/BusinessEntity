@@ -9,6 +9,7 @@
 @implements IDisposable
 @inject IUserContextService UserContext
 @inject BusinessEntityHelper BusinessEntityHelper
+@inject SpaceHelper SpaceHelper
 @inject IUserConnector UserConnector
 @inject NavigationManager Navigation
 
@@ -36,7 +37,40 @@
                 {
                     <div class="app-header__dropdown">
                         <a class="app-header__dropdown-item" href="/profile">Профиль</a>
-                        <a class="app-header__dropdown-item" href="/space-selection">Пространства</a>
+                        <div class="app-header__dropdown-separator" aria-hidden="true"></div>
+                        <div class="app-header__dropdown-submenu">
+                            <button type="button"
+                                    class="app-header__dropdown-item app-header__dropdown-submenu-trigger"
+                                    aria-haspopup="true">
+                                <span>Пространства</span>
+                                <span class="app-header__dropdown-submenu-arrow" aria-hidden="true">‹</span>
+                            </button>
+                            <div class="app-header__submenu">
+                                <a class="app-header__submenu-item app-header__submenu-item--all"
+                                   href="/space-selection"
+                                   @onclick="CloseUserMenu">
+                                    Все пространства
+                                </a>
+                                <div class="app-header__submenu-separator" aria-hidden="true"></div>
+                                @if (Spaces.Count == 0)
+                                {
+                                    <div class="app-header__submenu-empty">Нет пространств</div>
+                                }
+                                else
+                                {
+                                    @foreach (var space in Spaces)
+                                    {
+                                        <button type="button"
+                                                class="@GetSpaceMenuItemClass(space.Id)"
+                                                title="@space.Name"
+                                                @onclick="() => SelectSpace(space.Id)">
+                                            @space.Name
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        </div>
+                        <div class="app-header__dropdown-separator" aria-hidden="true"></div>
                         <a class="app-header__dropdown-item" href="/auth/logout">Выход</a>
                     </div>
                 }
@@ -59,6 +93,7 @@
     private string UserName { get; set; } = string.Empty;
     private string UserInitials { get; set; } = string.Empty;
     private bool IsUserMenuOpen { get; set; }
+    private IReadOnlyList<HeaderSpaceItem> Spaces { get; set; } = Array.Empty<HeaderSpaceItem>();
     private IReadOnlyList<UserSpaceRecord> AnonymousAccessibleSpaces { get; set; } = Array.Empty<UserSpaceRecord>();
     private bool ShowAnonymousSpacesLink => !IsAuthenticated && AnonymousAccessibleSpaces.Count > 1;
     private string LoginFormUrl => $"/login?returnUrl={Uri.EscapeDataString(BuildCurrentReturnUrl())}";
@@ -90,6 +125,7 @@
             IsAuthenticated = false;
             UserName = string.Empty;
             UserInitials = string.Empty;
+            Spaces = Array.Empty<HeaderSpaceItem>();
             return;
         }
 
@@ -102,6 +138,7 @@
             UserName = string.Empty;
             UserInitials = string.Empty;
             IsUserMenuOpen = false;
+            Spaces = Array.Empty<HeaderSpaceItem>();
             AnonymousAccessibleSpaces = await UserConnector.GetAnonymousAccessibleSpacesAsync();
             return;
         }
@@ -114,6 +151,7 @@
             ?? string.Empty;
 
         UserInitials = BuildInitials(UserName);
+        Spaces = await LoadSpacesAsync();
     }
 
     private static string BuildInitials(string userName)
@@ -188,7 +226,7 @@
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             if (!cancellationToken.IsCancellationRequested)
             {
                 await InvokeAsync(() =>
@@ -207,4 +245,40 @@
     {
         CancelUserMenuAutoClose();
     }
+
+    private async Task<IReadOnlyList<HeaderSpaceItem>> LoadSpacesAsync()
+    {
+        try
+        {
+            var spaces = await SpaceHelper.GetSpacesAsync();
+            return spaces
+                .OrderBy(space => space.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(space => new HeaderSpaceItem(space.Id, space.Name))
+                .ToList();
+        }
+        catch
+        {
+            return Array.Empty<HeaderSpaceItem>();
+        }
+    }
+
+    private void SelectSpace(Guid spaceId)
+    {
+        CloseUserMenu();
+        Navigation.NavigateTo(GetSpaceSelectUrl(spaceId), forceLoad: true);
+    }
+
+    private static string GetSpaceSelectUrl(Guid spaceId)
+    {
+        return $"/api/space/select/{spaceId}";
+    }
+
+    private string GetSpaceMenuItemClass(Guid spaceId)
+    {
+        return UserContext.CurrentSpaceId == spaceId
+            ? "app-header__submenu-item app-header__submenu-item--current"
+            : "app-header__submenu-item";
+    }
+
+    private sealed record HeaderSpaceItem(Guid Id, string Name);
 }

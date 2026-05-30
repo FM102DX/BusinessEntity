@@ -133,6 +133,36 @@ namespace BusinessEntity.Services.RichTextImport
                 return;
             }
 
+            if (nodeName is "ul" or "ol")
+            {
+                var listHtml = await SanitizeListHtmlAsync(node, files, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(listHtml))
+                {
+                    blocks.Add(new RichTextBlock
+                    {
+                        Kind = "list",
+                        Html = listHtml
+                    });
+                }
+
+                return;
+            }
+
+            if (nodeName == "pre")
+            {
+                var codeHtml = SanitizeCodeBlockHtml(node);
+                if (!string.IsNullOrWhiteSpace(codeHtml))
+                {
+                    blocks.Add(new RichTextBlock
+                    {
+                        Kind = "code",
+                        Html = codeHtml
+                    });
+                }
+
+                return;
+            }
+
             if (nodeName is "p" or "div")
             {
                 // Если контейнер содержит block-level потомков, обрабатываем их как самостоятельные блоки.
@@ -176,7 +206,120 @@ namespace BusinessEntity.Services.RichTextImport
             }
 
             var nodeName = node.Name.ToLowerInvariant();
-            return nodeName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "p" or "div" or "table";
+            return nodeName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "p" or "div" or "table" or "ul" or "ol" or "pre";
+        }
+
+        private static string SanitizeCodeBlockHtml(HtmlNode preNode)
+        {
+            var codeNode = preNode.Descendants("code").FirstOrDefault();
+            var rawText = HtmlEntity.DeEntitize((codeNode ?? preNode).InnerText ?? string.Empty)
+                .TrimEnd('\r', '\n');
+
+            return WebUtility.HtmlEncode(rawText);
+        }
+
+        private async Task<string> SanitizeListHtmlAsync(
+            HtmlNode listNode,
+            List<RichTextEmbeddedFile> files,
+            CancellationToken cancellationToken)
+        {
+            var builder = new StringBuilder();
+            await AppendSanitizedListHtmlAsync(listNode, builder, files, cancellationToken);
+            return builder.ToString().Trim();
+        }
+
+        private async Task AppendSanitizedListHtmlAsync(
+            HtmlNode node,
+            StringBuilder builder,
+            List<RichTextEmbeddedFile> files,
+            CancellationToken cancellationToken)
+        {
+            if (node.NodeType == HtmlNodeType.Text)
+            {
+                builder.Append(WebUtility.HtmlEncode(HtmlEntity.DeEntitize(node.InnerText ?? string.Empty)));
+                return;
+            }
+
+            if (node.NodeType != HtmlNodeType.Element)
+            {
+                return;
+            }
+
+            var nodeName = node.Name.ToLowerInvariant();
+            if (TryReadExistingVideo(node, out var existingVideo))
+            {
+                AppendInlineVideoMarker(builder, existingVideo);
+                return;
+            }
+
+            if (TryReadExistingEmbeddedImage(node, out var existingImage))
+            {
+                AppendInlineImageMarker(builder, existingImage);
+                return;
+            }
+
+            if (nodeName == "img")
+            {
+                var imageFile = await TryImportImageAsync(node, cancellationToken);
+                if (imageFile != null)
+                {
+                    files.Add(imageFile);
+                    AppendInlineImageMarker(
+                        builder,
+                        new InlineImageDescriptor
+                        {
+                            ImageId = imageFile.ImageId,
+                            DisplayVariant = imageFile.Variant,
+                            AltText = node.GetAttributeValue("alt", string.Empty),
+                            Width = ReadPositivePixelValue(node, "width"),
+                            Height = ReadPositivePixelValue(node, "height")
+                        });
+                }
+
+                return;
+            }
+
+            if (nodeName is "ul" or "ol" or "li" or "p")
+            {
+                builder.Append('<').Append(nodeName).Append('>');
+                foreach (var child in node.ChildNodes)
+                {
+                    await AppendSanitizedListHtmlAsync(child, builder, files, cancellationToken);
+                }
+
+                builder.Append("</").Append(nodeName).Append('>');
+                return;
+            }
+
+            if (nodeName == "br")
+            {
+                builder.Append("<br />");
+                return;
+            }
+
+            if (nodeName is "strong" or "b" or "em" or "i" or "u" or "code")
+            {
+                var normalizedTag = nodeName switch
+                {
+                    "b" => "strong",
+                    "i" => "em",
+                    _ => nodeName
+                };
+
+                builder.Append('<').Append(normalizedTag).Append('>');
+                foreach (var child in node.ChildNodes)
+                {
+                    await AppendSanitizedListHtmlAsync(child, builder, files, cancellationToken);
+                }
+
+                builder.Append("</").Append(normalizedTag).Append('>');
+                return;
+            }
+
+            foreach (var child in node.ChildNodes)
+            {
+                await AppendSanitizedListHtmlAsync(child, builder, files, cancellationToken);
+            }
         }
 
         // Санитизирует table-html как отдельный блочный объект rich-документа.
@@ -273,7 +416,7 @@ namespace BusinessEntity.Services.RichTextImport
                 return;
             }
 
-            if (nodeName is "strong" or "b" or "em" or "i" or "u")
+            if (nodeName is "strong" or "b" or "em" or "i" or "u" or "code")
             {
                 var normalizedTag = nodeName switch
                 {
@@ -581,7 +724,7 @@ namespace BusinessEntity.Services.RichTextImport
                 return;
             }
 
-            if (nodeName is "strong" or "b" or "em" or "i" or "u")
+            if (nodeName is "strong" or "b" or "em" or "i" or "u" or "code")
             {
                 var normalizedTag = nodeName switch
                 {

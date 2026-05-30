@@ -36,6 +36,7 @@ else
             CanChangePublicFlag="@CanChangePublicFlag"
             IsPublic="@(Entity?.IsPublic == true)"
             CanBrowseVersions="@HasFullDocumentAccess"
+            StartInEditMode="@StartInEditMode"
             OnImportSelected="OnImportSelectedAsync"
             OnRebuildTableOfContents="OnRebuildTableOfContentsAsync"
             OnEditorSaved="OnEditorSavedAsync"

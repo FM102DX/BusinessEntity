@@ -1,0 +1,340 @@
+.document-print-page {
+    min-height: 100vh;
+    background: #050505;
+    color: #111827;
+}
+
+.document-print-page__toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.8rem;
+    min-height: 6.8rem;
+    border-bottom: 1px solid #333333;
+    background: linear-gradient(180deg, #151515 0%, #050505 100%);
+    padding: 1rem 2rem;
+}
+
+.document-print-page__toolbar-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 1rem;
+    min-width: 0;
+}
+
+.document-print-page__toolbar-button,
+.document-print-page__save-settings-button,
+.document-print-page__delete-settings-button,
+.document-print-page__close-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    min-height: 4.85rem;
+    border: 1px solid #3d3d3d;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #252525 0%, #171717 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    color: #f7f7f7;
+    font-size: 1.65rem;
+    font-weight: 700;
+    line-height: 1.1;
+    padding: 0.75rem 2rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.document-print-page__toolbar-button {
+    min-width: 18rem;
+}
+
+.document-print-page__toolbar-button:hover,
+.document-print-page__toolbar-button:focus,
+.document-print-page__save-settings-button:hover,
+.document-print-page__save-settings-button:focus,
+.document-print-page__delete-settings-button:hover,
+.document-print-page__delete-settings-button:focus,
+.document-print-page__close-button:hover,
+.document-print-page__close-button:focus {
+    border-color: #6b7280;
+    background: linear-gradient(180deg, #303030 0%, #202020 100%);
+    color: #ffffff;
+}
+
+.document-print-page__toolbar-button:disabled,
+.document-print-page__save-settings-button:disabled,
+.document-print-page__delete-settings-button:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.document-print-page__toolbar-button .material-icons,
+.document-print-page__save-settings-button .material-icons,
+.document-print-page__delete-settings-button .material-icons,
+.document-print-page__close-button .material-icons {
+    font-size: 2.75rem;
+    line-height: 1;
+}
+
+.document-print-page__save-settings-button,
+.document-print-page__delete-settings-button {
+    min-width: 7.5rem;
+    min-height: 4.85rem;
+    gap: 0.75rem;
+    font-size: 1rem;
+    line-height: 1.15;
+    padding: 0.75rem 1rem;
+    white-space: normal;
+}
+
+.document-print-page__save-settings-button .material-icons,
+.document-print-page__delete-settings-button .material-icons {
+    font-size: 1.75rem;
+}
+
+.document-print-page__close-button {
+    min-width: 12rem;
+}
+
+.document-print-page__settings-panel {
+    display: flex;
+    align-items: stretch;
+    gap: 0.55rem;
+    min-height: 4.85rem;
+    min-width: 0;
+    padding: 0;
+}
+
+.document-print-page__settings {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(4.6rem, 1fr));
+    align-items: stretch;
+    gap: 0.55rem;
+    min-width: min(100%, 28rem);
+}
+
+.document-print-page__presets {
+    display: grid;
+    grid-template-columns: minmax(8rem, 10rem) minmax(9rem, 11rem);
+    align-items: stretch;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.document-print-page__setting {
+    display: grid;
+    align-content: stretch;
+    gap: 0.4rem;
+    grid-template-rows: auto 1fr;
+    min-width: 0;
+}
+
+.document-print-page__setting-label {
+    color: #d1d5db;
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.document-print-page__setting-control {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 3.3rem;
+    border: 1px solid #3d3d3d;
+    border-radius: 6px;
+    background: #111111;
+    color: #f7f7f7;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 0.45rem 0.55rem;
+}
+
+.document-print-page__setting-control input,
+.document-print-page__setting-control select {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: #ffffff;
+    font: inherit;
+    line-height: 1;
+    outline: none;
+}
+
+.document-print-page__setting-control select {
+    cursor: pointer;
+}
+
+.document-print-page__setting-control input:disabled,
+.document-print-page__setting-control select:disabled {
+    opacity: 0.55;
+}
+
+.document-print-page__body {
+    display: flex;
+    justify-content: center;
+    min-height: calc(100vh - 6.8rem);
+    padding: 1rem 2rem 4rem;
+}
+
+.document-print-page__paper {
+    width: min(100%, 52.5rem);
+    min-height: 72rem;
+    background: #ffffff;
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.25);
+    font-size: calc(1rem * var(--doc-print-font-scale, 1));
+    padding: var(--doc-print-margin-top, 15mm) var(--doc-print-margin-right, 15mm) var(--doc-print-margin-bottom, 15mm) var(--doc-print-margin-left, 15mm);
+}
+
+.document-print-page__paper--rich {
+    width: min(100%, 78rem);
+}
+
+.document-print-page__title {
+    color: #111827;
+    font-size: 1.75em;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 1.2rem;
+}
+
+.document-print-page__plain-text {
+    border-top: 1px solid #9ca3af;
+    color: #111827;
+    font-size: 1em;
+    line-height: 1.55;
+    padding-top: 1rem;
+    white-space: pre-wrap;
+}
+
+.document-print-page__message {
+    width: min(100%, 52.5rem);
+    border: 1px solid #cfd8e3;
+    background: #ffffff;
+    color: #374151;
+    font-size: 1rem;
+    padding: 1rem;
+}
+
+.document-print-page__message--error {
+    border-color: #f5c2c7;
+    color: #842029;
+}
+
+.document-print-page__message--warning {
+    border-color: #ffecb5;
+    color: #664d03;
+}
+
+.document-print-page__paper ::deep .rich-text-document-viewport {
+    font-size: 1em;
+    max-height: calc(100vh - 15rem);
+    padding: 0;
+}
+
+.document-print-page__paper ::deep .rich-text-document-viewport h1 {
+    font-size: 2em;
+}
+
+.document-print-page__paper ::deep .rich-text-document-viewport h2 {
+    font-size: 1.5em;
+}
+
+.document-print-page__paper ::deep .rich-text-document-viewport h3 {
+    font-size: 1.25em;
+}
+
+.document-print-page__paper ::deep .rich-text-document-viewport p,
+.document-print-page__paper ::deep .rich-text-document-viewport li,
+.document-print-page__paper ::deep .rich-text-document-viewport td,
+.document-print-page__paper ::deep .rich-text-document-viewport th {
+    font-size: 1em;
+}
+
+.document-print-page__paper ::deep .rich-text-document-viewport pre {
+    font-size: 0.95em;
+    padding: 1em 1.25em;
+}
+
+.document-print-page__paper ::deep .rich-text-document-viewport :not(pre) > code {
+    font-size: 0.95em;
+    padding: 0.1em 0.3em;
+}
+
+@media (max-width: 900px) {
+    .document-print-page__toolbar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 0.8rem;
+    }
+
+    .document-print-page__toolbar-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .document-print-page__settings-panel,
+    .document-print-page__settings,
+    .document-print-page__presets {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        min-width: 0;
+    }
+
+    .document-print-page__settings-panel {
+        display: grid;
+    }
+
+    .document-print-page__toolbar-button,
+    .document-print-page__save-settings-button,
+    .document-print-page__delete-settings-button,
+    .document-print-page__close-button {
+        width: 100%;
+        min-width: 0;
+        min-height: 3.8rem;
+        font-size: 1.2rem;
+    }
+
+    .document-print-page__body {
+        padding: 0.75rem;
+    }
+
+    .document-print-page__paper,
+    .document-print-page__paper--rich {
+        min-height: auto;
+    }
+}
+
+@media print {
+    .document-print-page {
+        background: #ffffff;
+    }
+
+    .document-print-page__toolbar {
+        display: none;
+    }
+
+    .document-print-page__body {
+        display: block;
+        min-height: auto;
+        padding: 0;
+    }
+
+    .document-print-page__paper,
+    .document-print-page__paper--rich {
+        width: auto;
+        min-height: auto;
+        box-shadow: none;
+        padding: 0;
+    }
+
+    .document-print-page__paper ::deep .rich-text-document-viewport {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+}

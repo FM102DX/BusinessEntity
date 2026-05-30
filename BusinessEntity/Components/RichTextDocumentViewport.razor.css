@@ -37,6 +37,36 @@
     scroll-margin-top: 12px;
 }
 
+.rich-text-document-viewport ::deep pre {
+    background: #f0f0f0;
+    border-radius: 4px;
+    color: #111111;
+    font-family: Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    margin: 0 0 1rem 0;
+    overflow-x: auto;
+    padding: 1rem 1.25rem;
+    white-space: pre-wrap;
+}
+
+.rich-text-document-viewport ::deep pre code {
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+}
+
+.rich-text-document-viewport ::deep :not(pre) > code {
+    background: #eeeeee;
+    border-radius: 4px;
+    color: #a40000;
+    font-family: Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.95em;
+    padding: 0.1rem 0.3rem;
+}
+
 .rich-text-document-viewport ::deep table {
     border-collapse: collapse;
     margin: 0 0 1rem 0;

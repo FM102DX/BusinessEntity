@@ -1,4 +1,5 @@
 using BusinessEntity.Core.RichText;
+using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 
 namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
@@ -155,6 +156,19 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts
         Task SaveRichDocDisplayedLevelAsync(
             Guid documentId,
             int displayLevelCount,
+            CancellationToken cancellationToken = default);
+
+        // Возвращает пользовательскую коллекцию пресетов печати документов.
+        Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default);
+
+        // Сохраняет или перезаписывает пользовательский пресет печати документов.
+        Task<DocPrintSettingsPreset> SaveDocPrintPresetAsync(
+            DocPrintSettingsPreset preset,
+            CancellationToken cancellationToken = default);
+
+        // Удаляет пользовательский пресет печати документов по имени.
+        Task<bool> DeleteDocPrintPresetAsync(
+            string presetName,
             CancellationToken cancellationToken = default);
     }
 }

@@ -31,6 +31,7 @@ namespace BusinessEntity.Components
         [Parameter] public bool CanChangePublicFlag { get; set; }
         [Parameter] public bool IsPublic { get; set; }
         [Parameter] public bool CanBrowseVersions { get; set; } = true;
+        [Parameter] public bool StartInEditMode { get; set; }
 
         private RichTextDocumentEditView? EditView { get; set; }
         private bool IsEditMode { get; set; }
@@ -39,9 +40,24 @@ namespace BusinessEntity.Components
         private string? TitleValidationMessage { get; set; }
         private RichTextDocumentViewportPosition? EditInitialPosition { get; set; }
         private RichTextDocumentViewportPosition? ReadInitialPosition { get; set; }
+        private Guid? StartInEditModeAppliedFor { get; set; }
 
         protected override void OnParametersSet()
         {
+            if (!StartInEditMode)
+            {
+                StartInEditModeAppliedFor = null;
+            }
+            else if (CanEditViewedVersion && StartInEditModeAppliedFor != BusinessEntityId)
+            {
+                EditInitialPosition = null;
+                ReadInitialPosition = null;
+                IsEditMode = true;
+                EditableEntityName = RichTextDocumentHelper.FilterRichTextDocumentTitle(EntityName);
+                TitleValidationMessage = null;
+                StartInEditModeAppliedFor = BusinessEntityId;
+            }
+
             if (!CanEditViewedVersion && IsEditMode)
             {
                 IsEditMode = false;

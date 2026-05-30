@@ -2,6 +2,7 @@ using BusinessEntity.Core.RichText;
 using BusinessEntity.Contracts;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
 using BusinessEntity.Services;
+using BusinessEntity.Services.RichTextPaste;
 using BusinessEntity.Settings;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Components;
@@ -51,6 +52,7 @@ namespace BusinessEntity.Components
         [Inject] public IMediaServerService MediaServerService { get; set; } = default!;
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
+        [Inject] public RichTextClipboardImportHelper ClipboardImportHelper { get; set; } = default!;
         [Inject] public IWebLoggerService? WebLogger { get; set; }
 
         private IReadOnlyList<RichTextDocumentChunk> LoadedChunks { get; set; } = Array.Empty<RichTextDocumentChunk>();
@@ -435,6 +437,27 @@ namespace BusinessEntity.Components
                 "[rich-doc-table] " +
                 $"entityId={BusinessEntityId:D} viewport={ViewportElementId} " +
                 safeMessage);
+        }
+
+        // Конвертирует clipboard Markdown/HTML через server-side import pipeline и возвращает editor HTML.
+        [JSInvokable]
+        public async Task<RichTextClipboardPasteResult> OnClipboardPasteAsync(RichTextClipboardPasteRequest request)
+        {
+            try
+            {
+                return await ClipboardImportHelper.ConvertAsync(BusinessEntityId, request);
+            }
+            catch (Exception ex)
+            {
+                await LogEditorViewportAsync(
+                    "[rich-doc-clipboard-paste] " +
+                    $"entityId={BusinessEntityId:D} error={ex.Message}");
+                return new RichTextClipboardPasteResult
+                {
+                    Handled = false,
+                    ErrorMessage = ex.Message
+                };
+            }
         }
 
         [JSInvokable]

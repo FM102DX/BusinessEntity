@@ -66,6 +66,96 @@ window.TreeMultiSelect = {
     }
 };
 
+window.TreeNodeTooltip = {
+    tooltip: null,
+    showTimer: null,
+    lastClientX: 0,
+    lastClientY: 0,
+    moveHandler: null,
+
+    show: function (content, clientX, clientY) {
+        this.hide();
+
+        if (!content) {
+            return;
+        }
+
+        this.lastClientX = clientX || 0;
+        this.lastClientY = clientY || 0;
+        this.moveHandler = (event) => {
+            this.lastClientX = event.clientX;
+            this.lastClientY = event.clientY;
+            this.position();
+        };
+
+        document.addEventListener('mousemove', this.moveHandler);
+        this.showTimer = window.setTimeout(() => {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'tree-node-full-name-tooltip';
+            tooltip.textContent = content;
+            tooltip.style.cssText = `
+                position: fixed;
+                z-index: 10001;
+                max-width: 420px;
+                padding: 6px 9px;
+                border-radius: 4px;
+                background: rgba(17, 24, 39, 0.96);
+                color: #ffffff;
+                font-size: 12px;
+                line-height: 1.3;
+                pointer-events: none;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
+                white-space: normal;
+                overflow-wrap: anywhere;
+            `;
+
+            document.body.appendChild(tooltip);
+            this.tooltip = tooltip;
+            this.position();
+        }, 1000);
+    },
+
+    position: function () {
+        if (!this.tooltip) {
+            return;
+        }
+
+        const offset = 12;
+        const margin = 8;
+        let left = this.lastClientX + offset;
+        let top = this.lastClientY + offset;
+        const rect = this.tooltip.getBoundingClientRect();
+
+        if (left + rect.width + margin > window.innerWidth) {
+            left = Math.max(margin, this.lastClientX - rect.width - offset);
+        }
+
+        if (top + rect.height + margin > window.innerHeight) {
+            top = Math.max(margin, this.lastClientY - rect.height - offset);
+        }
+
+        this.tooltip.style.left = `${left}px`;
+        this.tooltip.style.top = `${top}px`;
+    },
+
+    hide: function () {
+        if (this.showTimer) {
+            window.clearTimeout(this.showTimer);
+            this.showTimer = null;
+        }
+
+        if (this.tooltip) {
+            this.tooltip.remove();
+            this.tooltip = null;
+        }
+
+        if (this.moveHandler) {
+            document.removeEventListener('mousemove', this.moveHandler);
+            this.moveHandler = null;
+        }
+    }
+};
+
 // Функция для создания всплывающего элемента с именами перетаскиваемых элементов
 window.createDragTooltip = function(content) {
     try {

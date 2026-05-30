@@ -1,28 +1,31 @@
 @using BusinessEntity.Components
 
 <div class="rich-text-outline">
-    <div class="rich-text-outline__title">Содержание</div>
-    <div class="rich-text-outline__controls">
-        <fieldset class="rich-text-outline__level-options" aria-label="Количество уровней содержания">
-            @foreach (var level in DisplayLevels)
-            {
-                <label class="@GetDisplayLevelOptionClass(level)" title="@($"{level} уровень")">
-                    <input type="radio"
-                           name="@DisplayLevelInputName"
-                           value="@level"
-                           checked="@(DisplayLevelCount == level)"
-                           @onchange="@((ChangeEventArgs _) => HandleDisplayLevelCountChangedAsync(level))" />
-                    <span>@level</span>
-                </label>
-            }
-        </fieldset>
-        <button type="button"
-                class="btn btn-sm btn-outline-secondary rich-text-outline__rebuild"
-                title="@(CanRebuild ? "Обновить содержание загруженного окна" : "Доступно только для последней версии")"
-                disabled="@(IsRebuilding || !CanRebuild)"
-                @onclick="HandleRebuildRequestedAsync">
-            @(IsRebuilding ? "Обновление..." : "Обновить содержание")
-        </button>
+    <div class="rich-text-outline__header">
+        <div class="rich-text-outline__title">Содержание</div>
+        <div class="rich-text-outline__controls">
+            <fieldset class="rich-text-outline__level-options" aria-label="Количество уровней содержания">
+                @foreach (var level in DisplayLevels)
+                {
+                    <label class="@GetDisplayLevelOptionClass(level)" title="@($"{level} уровень")">
+                        <input type="radio"
+                               name="@DisplayLevelInputName"
+                               value="@level"
+                               checked="@(DisplayLevelCount == level)"
+                               @onchange="@((ChangeEventArgs _) => HandleDisplayLevelCountChangedAsync(level))" />
+                        <span>@level</span>
+                    </label>
+                }
+            </fieldset>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary rich-text-outline__rebuild"
+                    title="@(CanRebuild ? "Обновить содержание загруженного окна" : "Доступно только для последней версии")"
+                    aria-label="@(IsRebuilding ? "Содержание обновляется" : "Обновить содержание")"
+                    disabled="@(IsRebuilding || !CanRebuild)"
+                    @onclick="HandleRebuildRequestedAsync">
+                <span class="material-icons rich-text-outline__rebuild-icon" aria-hidden="true">refresh</span>
+            </button>
+        </div>
     </div>
 
     @if (Nodes != null && Nodes.Count > 0)

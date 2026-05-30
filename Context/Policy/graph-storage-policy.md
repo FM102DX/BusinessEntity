@@ -232,6 +232,7 @@ Property DTO нужны для хранения вспомогательных �
 Текущие значения:
 
 - `BusinessEntityPropertyTypeEnum.Undefined = 0`
+- `BusinessEntityPropertyTypeEnum.GenericSpaceProperties = 1`
 - `BusinessEntityDataPropertyTypeEnum.Undefined = 0`
 - `BusinessEntityDataChunkPropertyTypeEnum.Undefined = 0`
 - `BusinessEntityDataChunkPropertyTypeEnum.RichDocTableOfContents = 100`

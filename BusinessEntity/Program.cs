@@ -21,6 +21,7 @@ using BusinessEntity.Service.WebLogging;
 using BusinessEntity.Services;
 using BusinessEntity.Services.BackupRestore;
 using BusinessEntity.Services.RichTextImport;
+using BusinessEntity.Services.RichTextPaste;
 using BusinessEntity.Settings;
 using BusinessEntity.WebLogger.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -148,6 +149,8 @@ namespace BusinessEntity
             builder.Services.AddScoped<IRichDocFormatConverter, HtmlRichTextImportConverter>();
             builder.Services.AddScoped<IRichDocFormatConverterFactory, RichDocFormatConverterFactory>();
             builder.Services.AddScoped<BusinessEntity.Services.RichTextDocumentImportService>();
+            builder.Services.AddScoped<IRichTextClipboardPasteDetector, RichTextClipboardPasteDetector>();
+            builder.Services.AddScoped<RichTextClipboardImportHelper>();
             builder.Services.AddScoped<BusinessEntity.Contracts.IUserContextService, BusinessEntity.Services.UserContextService>();
             builder.Services.AddSingleton<ReactiveUI.IMessageBus, ReactiveUI.MessageBus>();
             builder.Services.AddScoped<BusinessEntity.Services.ITreeSelectionService, BusinessEntity.Services.TreeSelectionService>();

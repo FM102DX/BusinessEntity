@@ -64,6 +64,12 @@ internal static class RichTextChunkStorageSerializer
                 case "paragraph":
                     builder.Append(BuildInlineText(block.Html));
                     break;
+                case "code":
+                    builder.Append(BuildCodeText(block.Html));
+                    break;
+                case "list":
+                    builder.Append(BuildListPlainText(block.Html));
+                    break;
                 case "image":
                     if (!string.IsNullOrWhiteSpace(block.AltText))
                     {
@@ -109,6 +115,12 @@ internal static class RichTextChunkStorageSerializer
                 case "paragraph":
                     builder.Append($"<p>{BuildInlineHtmlCache(businessEntityId, block.Html)}</p>");
                     break;
+                case "code":
+                    builder.Append($"<pre><code>{BuildCodeHtmlCache(block.Html)}</code></pre>");
+                    break;
+                case "list":
+                    builder.Append(BuildListHtmlCache(businessEntityId, block.Html));
+                    break;
                 case "image":
                     var encodedAlt = WebUtility.HtmlEncode(block.AltText ?? string.Empty);
                     var imageId = Uri.EscapeDataString(block.ImageId ?? string.Empty);
@@ -124,6 +136,56 @@ internal static class RichTextChunkStorageSerializer
                     builder.Append(BuildTableHtmlCache(businessEntityId, block.Html));
                     break;
             }
+        }
+
+        return builder.ToString();
+    }
+
+    private static string BuildCodeText(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        return HtmlEntity.DeEntitize(StripTags(html));
+    }
+
+    private static string BuildCodeHtmlCache(string? html)
+    {
+        return WebUtility.HtmlEncode(BuildCodeText(html));
+    }
+
+    private static string BuildListPlainText(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var document = LoadInlineHtmlDocument(html);
+        var root = document.DocumentNode.SelectSingleNode("//root") ?? document.DocumentNode;
+        var items = root.Descendants("li")
+            .Select(x => BuildInlineText(x.InnerHtml))
+            .Where(x => !string.IsNullOrWhiteSpace(x));
+
+        return string.Join(Environment.NewLine, items).Trim();
+    }
+
+    private static string BuildListHtmlCache(Guid businessEntityId, string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var document = LoadInlineHtmlDocument(html);
+        var root = document.DocumentNode.SelectSingleNode("//root") ?? document.DocumentNode;
+        var builder = new StringBuilder();
+
+        foreach (var child in root.ChildNodes)
+        {
+            AppendListHtmlCache(businessEntityId, child, builder);
         }
 
         return builder.ToString();
@@ -339,7 +401,7 @@ internal static class RichTextChunkStorageSerializer
             return;
         }
 
-        if (nodeName is "strong" or "b" or "em" or "i" or "u")
+        if (nodeName is "strong" or "b" or "em" or "i" or "u" or "code")
         {
             var normalizedTag = nodeName switch
             {
@@ -361,6 +423,75 @@ internal static class RichTextChunkStorageSerializer
         foreach (var child in node.ChildNodes)
         {
             AppendTableHtmlCache(businessEntityId, child, builder);
+        }
+    }
+
+    private static void AppendListHtmlCache(Guid businessEntityId, HtmlNode node, StringBuilder builder)
+    {
+        if (node.NodeType == HtmlNodeType.Text)
+        {
+            builder.Append(WebUtility.HtmlEncode(HtmlEntity.DeEntitize(node.InnerText ?? string.Empty)));
+            return;
+        }
+
+        if (node.NodeType != HtmlNodeType.Element)
+        {
+            return;
+        }
+
+        if (TryReadInlineImage(node, out var image))
+        {
+            AppendRenderedInlineImage(businessEntityId, image, builder);
+            return;
+        }
+
+        if (TryReadInlineVideo(node, out var video))
+        {
+            AppendRenderedInlineVideo(video, builder);
+            return;
+        }
+
+        var nodeName = node.Name.ToLowerInvariant();
+        if (nodeName is "ul" or "ol" or "li" or "p")
+        {
+            builder.Append('<').Append(nodeName).Append('>');
+            foreach (var child in node.ChildNodes)
+            {
+                AppendListHtmlCache(businessEntityId, child, builder);
+            }
+
+            builder.Append("</").Append(nodeName).Append('>');
+            return;
+        }
+
+        if (nodeName == "br")
+        {
+            builder.Append("<br />");
+            return;
+        }
+
+        if (nodeName is "strong" or "b" or "em" or "i" or "u" or "code")
+        {
+            var normalizedTag = nodeName switch
+            {
+                "b" => "strong",
+                "i" => "em",
+                _ => nodeName
+            };
+
+            builder.Append('<').Append(normalizedTag).Append('>');
+            foreach (var child in node.ChildNodes)
+            {
+                AppendListHtmlCache(businessEntityId, child, builder);
+            }
+
+            builder.Append("</").Append(normalizedTag).Append('>');
+            return;
+        }
+
+        foreach (var child in node.ChildNodes)
+        {
+            AppendListHtmlCache(businessEntityId, child, builder);
         }
     }
 
@@ -519,7 +650,7 @@ internal static class RichTextChunkStorageSerializer
             return;
         }
 
-        if (nodeName is "strong" or "b" or "em" or "i" or "u")
+        if (nodeName is "strong" or "b" or "em" or "i" or "u" or "code")
         {
             var normalizedTag = nodeName switch
             {

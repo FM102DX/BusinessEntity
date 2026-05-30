@@ -436,7 +436,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             var uri = entityType switch
             {
                 BusinessEntityTypeEnum.Document => editMode ? $"/document/{entityId}?edit=1" : $"/document/{entityId}",
-                BusinessEntityTypeEnum.RichTextDocument => $"/rich-document/{entityId}",
+                BusinessEntityTypeEnum.RichTextDocument => editMode ? $"/rich-document/{entityId}?edit=1" : $"/rich-document/{entityId}",
                 _ => $"/document/{entityId}"
             };
             NavigationManager.NavigateTo(uri);
@@ -622,6 +622,18 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             }
         }
 
+        private async Task SelectSingleNodeAsync(TreeNodeItemViewModelBase node)
+        {
+            await ClearAllSelectionsCoreAsync(refreshUi: false);
+            node.SetSelected(true);
+            SelectedNodes = new List<TreeNodeItemViewModelBase> { node };
+            IsMultiSelectMode = false;
+            IsCtrlGroupSelectionActive = false;
+            TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
+            await InvokeAsync(StateHasChanged);
+            await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
+        }
+
         private string DumpTree(IEnumerable<TreeNodeItemViewModelBase> nodes, int indentLevel)
         {
             var sb = new System.Text.StringBuilder();
@@ -703,7 +715,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 return Task.CompletedTask;
             }
 
-            if (node.Entity?.EntityType == BusinessEntityTypeEnum.Document)
+            if (node.Entity?.EntityType == BusinessEntityTypeEnum.Document ||
+                node.Entity?.EntityType == BusinessEntityTypeEnum.RichTextDocument)
             {
                 CancelPendingOpenEntityOpen();
                 OpenEntityPage(node.Entity.Id, node.Entity.EntityType, editMode: true);
@@ -796,7 +809,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                                 EntityType = newRichDocument.EntityType.ToString(),
                                 Parent = parentNode,
                                 OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
-                                OnEntityOpenRequested = OnEntityOpenRequestedAsync
+                                OnEntityOpenRequested = OnEntityOpenRequestedAsync,
+                                OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync
                             };
 
                             parentNode.Children.Add(richDocNode);
@@ -804,6 +818,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                             _nodeById[newRichDocument.Id] = richDocNode;
 
                             WebLogger?.Information($"Successfully created rich-text document '{newRichDocument.Name}' under '{parentNode.Entity.Name}'");
+                            await SelectSingleNodeAsync(richDocNode);
+                            OpenEntityPage(newRichDocument.Id, newRichDocument.EntityType, editMode: true);
                         }
                         break;
                         
@@ -1046,6 +1062,49 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             catch (Exception ex)
             {
                 WebLogger?.Error(ex);
+            }
+        }
+
+        /// <summary>
+        /// Показывает задержанную подсказку с полным именем узла дерева.
+        /// </summary>
+        private async Task ShowTreeNodeTooltipAsync(MouseEventArgs e, TreeNodeItemViewModelBase? node)
+        {
+            if (node == null || string.IsNullOrWhiteSpace(node.Title))
+            {
+                return;
+            }
+
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("TreeNodeTooltip.show", node.Title, e.ClientX, e.ClientY);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Компонент уже уничтожается, подсказка больше не нужна.
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Warning($"Failed to show tree node tooltip: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Скрывает подсказку полного имени узла дерева.
+        /// </summary>
+        private async Task HideTreeNodeTooltipAsync()
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("TreeNodeTooltip.hide");
+            }
+            catch (JSDisconnectedException)
+            {
+                // Компонент уже уничтожается, подсказка больше не нужна.
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Warning($"Failed to hide tree node tooltip: {ex.Message}");
             }
         }
 

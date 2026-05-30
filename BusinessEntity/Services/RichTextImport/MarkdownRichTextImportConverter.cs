@@ -25,7 +25,7 @@ namespace BusinessEntity.Services.RichTextImport
             byte[] fileBytes,
             CancellationToken cancellationToken = default)
         {
-            var markdown = Encoding.UTF8.GetString(fileBytes ?? Array.Empty<byte>());
+            var markdown = MarkdownImportPreprocessor.Normalize(Encoding.UTF8.GetString(fileBytes ?? Array.Empty<byte>()));
             var html = Markdown.ToHtml(markdown, MarkdownPipeline);
             return _htmlToBlocksConverter.ConvertHtmlAsync(html, cancellationToken);
         }

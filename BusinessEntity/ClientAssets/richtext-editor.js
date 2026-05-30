@@ -925,6 +925,168 @@ function handleImagePaste(viewportElementId, registry, sortOrder, event) {
     return true;
 }
 
+function getClipboardPlainText(event) {
+    return event?.clipboardData?.getData("text/plain") || "";
+}
+
+function getClipboardHtml(event) {
+    return event?.clipboardData?.getData("text/html") || "";
+}
+
+function getClipboardTypes(event) {
+    return Array.from(event?.clipboardData?.types || []);
+}
+
+function looksLikeMarkdownTable(text) {
+    if (!text || !text.includes("|")) {
+        return false;
+    }
+
+    const lines = String(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    const separator = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/;
+    for (let index = 1; index < lines.length; index++) {
+        if (separator.test(lines[index]) && countUnescapedPipes(lines[index - 1]) >= 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function looksLikeMarkdown(text) {
+    if (!text) {
+        return false;
+    }
+
+    const normalized = String(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    if (looksLikeMarkdownTable(normalized)) {
+        return true;
+    }
+
+    const lines = normalized.split("\n");
+    if (lines.some(line => /^\s{0,3}#{1,6}\s+\S/.test(line) || /^\s{0,3}(```|~~~)/.test(line))) {
+        return true;
+    }
+
+    if (lines.filter(line => /^\s{0,3}([-*+]|\d+[.)])\s+\S/.test(line)).length >= 2) {
+        return true;
+    }
+
+    return /\[[^\]]+\]\([^)]+\)/.test(normalized) || /`[^`\r\n]+`/.test(normalized);
+}
+
+function looksLikeSupportedClipboardHtml(html) {
+    return /<\s*(table|thead|tbody|tfoot|tr|td|th|h[1-6]|p|div|ul|ol|li|blockquote|pre|code|img|span|strong|b|em|i|u|br)\b/i
+        .test(html || "");
+}
+
+function countUnescapedPipes(value) {
+    let count = 0;
+    let escaped = false;
+    for (const char of String(value || "")) {
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (char === "\\") {
+            escaped = true;
+            continue;
+        }
+
+        if (char === "|") {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+function escapeHtml(value) {
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function shouldHandleClipboardImportPaste(event) {
+    const plainText = getClipboardPlainText(event);
+    if (looksLikeMarkdown(plainText)) {
+        return true;
+    }
+
+    return looksLikeSupportedClipboardHtml(getClipboardHtml(event));
+}
+
+function buildClipboardPastePayload(event) {
+    return {
+        PlainText: getClipboardPlainText(event),
+        Html: getClipboardHtml(event),
+        Types: getClipboardTypes(event)
+    };
+}
+
+function insertClipboardFallback(editor, payload) {
+    const text = payload?.PlainText || "";
+    if (!text) {
+        return;
+    }
+
+    const html = text
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .split(/\n{2,}/)
+        .map(paragraph => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+        .join("");
+
+    if (html) {
+        editor.chain().focus().insertContent(html).run();
+    }
+}
+
+function handleClipboardImportPaste(viewportElementId, registry, sortOrder, event) {
+    if (!registry.dotNetReference || !shouldHandleClipboardImportPaste(event)) {
+        return false;
+    }
+
+    const state = registry.editors.get(sortOrder);
+    if (!state?.editor) {
+        return false;
+    }
+
+    const payload = buildClipboardPastePayload(event);
+    event.preventDefault();
+    registry.dotNetReference
+        .invokeMethodAsync("OnClipboardPasteAsync", payload)
+        .then(result => {
+            const handled = result?.handled ?? result?.Handled ?? false;
+            const html = result?.html ?? result?.Html ?? "";
+            const currentState = registry.editors.get(sortOrder);
+            const editor = currentState?.editor;
+            if (!editor) {
+                return;
+            }
+
+            if (handled && html) {
+                editor.chain().focus().insertContent(html).run();
+                return;
+            }
+
+            insertClipboardFallback(editor, payload);
+        })
+        .catch(error => {
+            console.error("[rich-text-clipboard-paste]", error);
+            const currentState = registry.editors.get(sortOrder);
+            if (currentState?.editor) {
+                insertClipboardFallback(currentState.editor, payload);
+            }
+        });
+
+    return true;
+}
+
 function getDataTransferVideoFile(event) {
     const files = Array.from(event?.dataTransfer?.files || []);
     return files.find(file => file.type && file.type.startsWith("video/")) || null;
@@ -1251,7 +1413,11 @@ function createEditor(viewportElementId, registry, host, item) {
                 class: "rich-text-tiptap-content"
             },
             handlePaste: (view, event) => {
-                return handleImagePaste(viewportElementId, registry, sortOrder, event);
+                if (handleImagePaste(viewportElementId, registry, sortOrder, event)) {
+                    return true;
+                }
+
+                return handleClipboardImportPaste(viewportElementId, registry, sortOrder, event);
             },
             handleDrop: (view, event) => {
                 return handleVideoDrop(registry, sortOrder, event);

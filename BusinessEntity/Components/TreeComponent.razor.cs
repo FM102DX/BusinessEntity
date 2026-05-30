@@ -18,6 +18,7 @@ namespace BusinessEntity.Components
     public partial class TreeComponent : ComponentBase, IDisposable
     {
         [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
+        [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public SpaceHelper SpaceHelper { get; set; } = default!;
         [Inject] IWebLoggerService? WebLogger { get; set; }
         [Inject] public IUserContextService UserContextService { get; set; } = default!;
@@ -218,6 +219,7 @@ namespace BusinessEntity.Components
             {
                 "Folder" => new FolderTreeNodeItemViewModel(entityData, WebLogger),
                 "Document" => new DocumentTreeNodeItemViewModel(WebLogger),
+                "RichTextDocument" => new RichTextDocumentTreeNodeItemViewModel(WebLogger),
                 "Page" => new DocumentTreeNodeItemViewModel(WebLogger),
                 _ => new FolderTreeNodeItemViewModel(entityData, WebLogger) // По умолчанию используем Folder
             };
@@ -245,6 +247,8 @@ namespace BusinessEntity.Components
             
             // Устанавливаем обратный вызов для переименования сущностей для всех типов узлов
             treeNodeVm.OnEntityRenameRequested = OnEntityRenameRequestedAsync;
+            treeNodeVm.OnEntityOpenRequested = OnEntityOpenRequestedAsync;
+            treeNodeVm.OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync;
 
             // Получаем дочерние сущности через BusinessEntityHelper для получения детей
             var children = await BusinessEntityHelper.GetContainedEntitiesAsync(entityData.Id);
@@ -268,6 +272,7 @@ namespace BusinessEntity.Components
                 "Space" => "dashboard",            // or "account_tree" / "layers"
                 "Folder" => "folder",
                 "Document" => "description",       // alternatively: "insert_drive_file" / "article"
+                "RichTextDocument" => "article",
                 "Page" => "insert_drive_file",
                 _ => "insert_drive_file"
             };
@@ -337,7 +342,10 @@ namespace BusinessEntity.Components
                 switch (entity.EntityType)
                 {
                     case BusinessEntityTypeEnum.Document:
-                        NavigationManager.NavigateTo($"/document/{entity.Id}");
+                        OpenEntityPage(entity.Id, entity.EntityType, editMode: false);
+                        break;
+                    case BusinessEntityTypeEnum.RichTextDocument:
+                        OpenEntityPage(entity.Id, entity.EntityType, editMode: false);
                         break;
                     // В будущем можно добавить другие типы
 
@@ -351,6 +359,39 @@ namespace BusinessEntity.Components
                 WebLogger?.Error(ex);
             }
             await Task.CompletedTask;
+        }
+
+        private Task OnEntityOpenRequestedAsync(TreeNodeItemViewModelBase node)
+        {
+            if (node.Entity?.EntityType == BusinessEntityTypeEnum.Document ||
+                node.Entity?.EntityType == BusinessEntityTypeEnum.RichTextDocument)
+            {
+                OpenEntityPage(node.Entity.Id, node.Entity.EntityType, editMode: false);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private Task OnEntityOpenForEditRequestedAsync(TreeNodeItemViewModelBase node)
+        {
+            if (node.Entity?.EntityType == BusinessEntityTypeEnum.Document ||
+                node.Entity?.EntityType == BusinessEntityTypeEnum.RichTextDocument)
+            {
+                OpenEntityPage(node.Entity.Id, node.Entity.EntityType, editMode: true);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private void OpenEntityPage(Guid entityId, BusinessEntityTypeEnum entityType, bool editMode)
+        {
+            var uri = entityType switch
+            {
+                BusinessEntityTypeEnum.Document => editMode ? $"/document/{entityId}?edit=1" : $"/document/{entityId}",
+                BusinessEntityTypeEnum.RichTextDocument => editMode ? $"/rich-document/{entityId}?edit=1" : $"/rich-document/{entityId}",
+                _ => $"/document/{entityId}"
+            };
+            NavigationManager.NavigateTo(uri);
         }
 
         // Обработка выбора узла с учетом модификаторов клавиш
@@ -527,6 +568,18 @@ namespace BusinessEntity.Components
             }
         }
 
+        private async Task SelectSingleNodeAsync(TreeNodeItemViewModelBase node)
+        {
+            await ClearAllSelectionsCoreAsync(refreshUi: false);
+            node.SetSelected(true);
+            SelectedNodes = new List<TreeNodeItemViewModelBase> { node };
+            IsMultiSelectMode = false;
+            IsCtrlGroupSelectionActive = false;
+            TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
+            await InvokeAsync(StateHasChanged);
+            await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
+        }
+
         private string DumpTree(IEnumerable<TreeNodeItemViewModelBase> nodes, int indentLevel)
         {
             var sb = new System.Text.StringBuilder();
@@ -638,7 +691,9 @@ namespace BusinessEntity.Components
                                 Entity = newDoc,
                                 EntityType = newDoc.EntityType.ToString(),
                                 Parent = parentNode,
-                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync
+                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
+                                OnEntityOpenRequested = OnEntityOpenRequestedAsync,
+                                OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync
                             };
 
                             // Добавляем в дерево и разворачиваем родителя
@@ -648,6 +703,32 @@ namespace BusinessEntity.Components
                             _nodeById[newDoc.Id] = docNode;
 
                             WebLogger?.Information($"Successfully created document '{newDoc.Name}' under '{parentNode.Entity.Name}'");
+                        }
+                        break;
+
+                    case "RichTextDocument":
+                        {
+                            var newRichDocument = await RichTextDocumentHelper.CreateRichTextDocumentAsync(parentNode.Entity);
+
+                            var richDocNode = new RichTextDocumentTreeNodeItemViewModel(WebLogger)
+                            {
+                                Title = newRichDocument.Name,
+                                Icon = GetEntityIcon(newRichDocument.EntityType),
+                                Entity = newRichDocument,
+                                EntityType = newRichDocument.EntityType.ToString(),
+                                Parent = parentNode,
+                                OnEntityDeleteRequested = OnEntityDeleteRequestedAsync,
+                                OnEntityOpenRequested = OnEntityOpenRequestedAsync,
+                                OnEntityOpenForEditRequested = OnEntityOpenForEditRequestedAsync
+                            };
+
+                            parentNode.Children.Add(richDocNode);
+                            parentNode.Expanded = true;
+                            _nodeById[newRichDocument.Id] = richDocNode;
+
+                            WebLogger?.Information($"Successfully created rich-text document '{newRichDocument.Name}' under '{parentNode.Entity.Name}'");
+                            await SelectSingleNodeAsync(richDocNode);
+                            OpenEntityPage(newRichDocument.Id, newRichDocument.EntityType, editMode: true);
                         }
                         break;
                         
@@ -892,6 +973,49 @@ namespace BusinessEntity.Components
             catch (Exception ex)
             {
                 WebLogger?.Error(ex);
+            }
+        }
+
+        /// <summary>
+        /// Показывает задержанную подсказку с полным именем узла дерева.
+        /// </summary>
+        private async Task ShowTreeNodeTooltipAsync(MouseEventArgs e, TreeNodeItemViewModelBase? node)
+        {
+            if (node == null || string.IsNullOrWhiteSpace(node.Title))
+            {
+                return;
+            }
+
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("TreeNodeTooltip.show", node.Title, e.ClientX, e.ClientY);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Компонент уже уничтожается, подсказка больше не нужна.
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Warning($"Failed to show tree node tooltip: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Скрывает подсказку полного имени узла дерева.
+        /// </summary>
+        private async Task HideTreeNodeTooltipAsync()
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("TreeNodeTooltip.hide");
+            }
+            catch (JSDisconnectedException)
+            {
+                // Компонент уже уничтожается, подсказка больше не нужна.
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Warning($"Failed to hide tree node tooltip: {ex.Message}");
             }
         }
 

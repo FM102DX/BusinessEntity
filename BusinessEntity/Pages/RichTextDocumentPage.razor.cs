@@ -16,6 +16,8 @@ namespace BusinessEntity.Pages
     public partial class RichTextDocumentPage : IDisposable
     {
         [Parameter] public Guid Id { get; set; }
+        [SupplyParameterFromQuery(Name = "edit")]
+        public string? EditQuery { get; set; }
 
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
         [Inject] public RichTextDocumentImportService ImportService { get; set; } = default!;
@@ -48,6 +50,9 @@ namespace BusinessEntity.Pages
         private bool CanEditDocument { get; set; }
         private bool CanPublishDocument { get; set; }
         private bool CanChangePublicFlag { get; set; }
+        private bool RequestedEditMode => string.Equals(EditQuery, "1", StringComparison.OrdinalIgnoreCase) ||
+                                          string.Equals(EditQuery, "true", StringComparison.OrdinalIgnoreCase);
+        private bool StartInEditMode => RequestedEditMode && CanEditViewedVersion;
         private bool CanEditViewedVersion => CanEditDocument && ViewedVersion >= LatestVersion;
         private Guid _messagesForDocumentId;
         private Guid _loadedDocumentId;
