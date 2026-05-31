@@ -1,0 +1,28 @@
+@page "/document/{id:guid}"
+
+<PageTitle>Document</PageTitle>
+
+@if (!string.IsNullOrEmpty(Error))
+{
+    <div class="alert alert-danger">@Error</div>
+}
+else if (IsLoading)
+{
+    <div class="alert alert-info">Загрузка документа...</div>
+}
+else if (Entity == null)
+{
+    <div class="alert alert-warning">Документ не найден.</div>
+}
+else
+{
+    <div class="py-2 px-2">
+        <Document Entity="Entity"
+                  DataList="DataList"
+                  StartInEditMode="StartInEditMode"
+                  CanEdit="CanEditDocument"
+                  CanChangePublicFlag="CanChangePublicFlag"
+                  IsPublic="@(Entity?.IsPublic == true)"
+                  OnPublicChanged="HandlePublicChangedAsync" />
+    </div>
+}

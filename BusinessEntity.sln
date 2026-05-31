@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32616.157
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "WebLogger", "WebLogger", "{73E58599-8E32-4A18-88AF-DA652E84AF6B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorServerWebLogger", "BlazorServerWebLogger\BlazorServerWebLogger.csproj", "{0BB14D07-9F88-4C98-AB08-40726AC01EFE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BusinessEntity", "BusinessEntity", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BusinessEntity", "BusinessEntity\BusinessEntity.csproj", "{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docker-compose-authentic", "docker-compose-authentic", "{211A9479-A83F-41B1-8531-C5CC62440BD4}"
+	ProjectSection(SolutionItems) = preProject
+		Authentic\docker-compose.yml = Authentic\docker-compose.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docker-compose-main", "docker-compose-main", "{196E7BB8-708C-446A-8E95-240206BAE38A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Context", "Context", "{8083D019-AD30-40A3-9C63-5D9AE193AB47}"
+	ProjectSection(SolutionItems) = preProject
+		BusinessEntity\AuthReadme.md = BusinessEntity\AuthReadme.md
+		CHANGELOG.md = CHANGELOG.md
+		BusinessEntity.Resources\DataFill_01.txt = BusinessEntity.Resources\DataFill_01.txt
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0BB14D07-9F88-4C98-AB08-40726AC01EFE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0BB14D07-9F88-4C98-AB08-40726AC01EFE} = {73E58599-8E32-4A18-88AF-DA652E84AF6B}
+		{B2681F9A-BEC0-0F3D-775C-57C0E3FD61B8} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{211A9479-A83F-41B1-8531-C5CC62440BD4} = {8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}
+		{196E7BB8-708C-446A-8E95-240206BAE38A} = {8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0C280E46-39B2-4D5B-977F-38B4085CD8ED}
+	EndGlobalSection
+EndGlobal

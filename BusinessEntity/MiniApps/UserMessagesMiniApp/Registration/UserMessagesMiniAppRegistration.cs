@@ -1,0 +1,18 @@
+using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
+using BusinessEntity.MiniApps.UserMessagesMiniApp.Internal;
+
+namespace BusinessEntity.MiniApps.UserMessagesMiniApp.Registration;
+
+// Регистрирует mini-app пользовательских сообщений в DI.
+public static class UserMessagesMiniAppRegistration
+{
+    // Подключает state, bus handler и фасад mini-app пользовательских сообщений.
+    public static IServiceCollection AddUserMessagesMiniApp(this IServiceCollection services)
+    {
+        services.AddSingleton<UserMessagesMiniAppState>();
+        services.AddSingleton<UserMessagesMiniAppMessageHandler>();
+        services.AddSingleton<IUserMessagesMiniApp, Facade.UserMessagesMiniApp>();
+
+        return services;
+    }
+}

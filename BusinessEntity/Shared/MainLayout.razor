@@ -1,28 +1,32 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@using BusinessEntity.MiniApps.TreeMiniApp.Components
 
-<PageTitle>Business Entity Engine</PageTitle>
+<PageTitle>Business EntityData Engine</PageTitle>
 
 <div class="page">
     <div class="sidebar">
         <NavMenu />
     </div>
 
-    <div class="tree-panel">
-        <div class="tree-header">
-            <h6>Главное дерево системы</h6>
+    <div class="center-area">
+        <div class="top-row px-4">
+            <AppHeader />
         </div>
-        <div class="tree-content">
-            <TreeComponent />
+
+        <div class="main-row">
+            <div class="tree-panel">
+                <div class="tree-content">
+                    <TreeMiniAppComponent />
+                </div>
+            </div>
+
+            <main>
+                <article class="content px-2">
+                    @Body
+                </article>
+            </main>
+
+            <RightSidebar />
         </div>
     </div>
-
-    <main>
-        <div class="top-row px-4">
-            <a href="https://docs.microsoft.com/aspnet/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
 </div>

@@ -1,58 +1,113 @@
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using BusinessEntity.Services;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts;
+using ReactiveUI;
 
 namespace BusinessEntity.Controllers
 {
+    /// <summary>
+    /// Контроллер точек входа аутентификации.
+    /// Login/Logout работают через единый AuthentikSessionManager.
+    /// Callback завершает code-flow и создаёт локальную cookie-сессию.
+    /// </summary>
     [Route("auth")]
     public class AuthController : Controller
     {
         private readonly ILogger<AuthController> _logger;
-        private readonly IApplicationSideAuthService _authService;
-        private readonly IConfiguration _configuration;
+        private readonly AuthentikSessionManager _authService;
+        private readonly IUserConnector _userConnector;
+        private readonly IMessageBus _messageBus;
 
         public AuthController(
             ILogger<AuthController> logger,
-            IApplicationSideAuthService authService,
-            IConfiguration configuration)
+            AuthentikSessionManager authService,
+            IUserConnector userConnector,
+            IMessageBus messageBus)
         {
             _logger = logger;
             _authService = authService;
-            _configuration = configuration;
+            _userConnector = userConnector;
+            _messageBus = messageBus;
         }
 
+        /// <summary>
+        /// Перенаправляет браузер на Authentik authorize endpoint.
+        /// </summary>
         [HttpGet("login")]
-        public IActionResult Login(string? returnUrl = null)
+        public async Task<IActionResult> Login(string? returnUrl = null)
         {
             _logger.LogInformation("[AuthController.Login] Processing login request for returnUrl: {ReturnUrl}", returnUrl);
             
             // Если пользователь уже авторизован, перенаправляем
             if (User.Identity?.IsAuthenticated == true)
             {
+                await _userConnector.EnsureCurrentUserAsync(HttpContext.RequestAborted);
                 _logger.LogInformation("[AuthController.Login] User already authenticated, redirecting to: {ReturnUrl}", returnUrl ?? "/");
                 return LocalRedirect(returnUrl ?? "/");
             }
 
-            // Перенаправляем на страницу авторизации Authentic
             var loginUrl = _authService.GetLoginUrl(returnUrl);
-            _logger.LogInformation("[AuthController.Login] Redirecting to Authentic login: {LoginUrl}", loginUrl);
-
+            _logger.LogInformation("[AuthController.Login] Redirecting to Authentik login URL: {LoginUrl}", loginUrl);
             return Redirect(loginUrl);
         }
 
+        /// <summary>
+        /// Принимает локальную форму логин/пароль и выполняет server-side login flow в Authentik без browser redirect.
+        /// </summary>
+        [HttpPost("password-login")]
+        public async Task<IActionResult> PasswordLogin(
+            [FromForm] string? username,
+            [FromForm] string? password,
+            [FromForm] string? returnUrl = null)
+        {
+            var safeReturnUrl = NormalizeReturnUrl(returnUrl);
+
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                await _userConnector.EnsureCurrentUserAsync(HttpContext.RequestAborted);
+                return LocalRedirect(safeReturnUrl);
+            }
+
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                return LocalRedirect(BuildLoginErrorReturnUrl(safeReturnUrl));
+            }
+
+            try
+            {
+                var redirectUrl = await _authService.CompletePasswordLoginAsync(
+                    username.Trim(),
+                    password,
+                    safeReturnUrl,
+                    HttpContext.RequestAborted);
+                var localUser = await _userConnector.EnsureCurrentUserAsync(HttpContext.RequestAborted);
+                _logger.LogInformation(
+                    "[AuthController.PasswordLogin] Local user ensured. localUserId={LocalUserId} name={LocalUserName}",
+                    localUser?.Id,
+                    localUser?.ExternalId);
+                PublishClearUserMessages(localUser?.Id);
+                PublishLoginSuccessMessage(localUser?.Id, username.Trim());
+                return LocalRedirect(redirectUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[AuthController.PasswordLogin] Password login failed for username: {Username}", username);
+                return LocalRedirect(BuildLoginErrorReturnUrl(safeReturnUrl));
+            }
+        }
+
+        /// <summary>
+        /// Callback для Authentik authorization-code flow.
+        /// </summary>
         [HttpGet("callback")]
         public async Task<IActionResult> Callback(string? code, string? state, string? error)
         {
-            _logger.LogInformation("[AuthController.Callback] Received callback from Authentic");
-            _logger.LogInformation("[AuthController.Callback] Params: code={Code}, state={State}, error={Error}",
-                code, state, error);
-
-            // Проверяем на ошибки OAuth
             if (!string.IsNullOrEmpty(error))
             {
-                _logger.LogError("[AuthController.Callback] Authentication error from Authentic: {Error}", error);
+                _logger.LogError("[AuthController.Callback] Authentication error from Authentik: {Error}", error);
                 return Redirect($"/auth/error?message={Uri.EscapeDataString(error)}");
             }
 
@@ -64,46 +119,14 @@ namespace BusinessEntity.Controllers
 
             try
             {
-                // Обрабатываем OAuth callback через сервис
-                var result = await _authService.ProcessOAuthCallbackAsync(code);
-                
-                if (!result.IsSuccess)
-                {
-                    _logger.LogError("[AuthController.Callback] OAuth processing failed: {Error}", result.ErrorMessage);
-                    return Redirect($"/auth/error?message={Uri.EscapeDataString(result.ErrorMessage ?? "Authentication failed")}");
-                }
-
-                // Выполняем SignIn
-                _logger.LogInformation("[AuthController.Callback] Signing in user: {UserName}", result.UserName);
-                var authProperties = new AuthenticationProperties
-                {
-                    IsPersistent = true,
-                    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(24)
-                };
-                
-                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, 
-                    result.UserPrincipal!, authProperties);
-                _logger.LogInformation("[AuthController.Callback] SignIn completed successfully");
-
-                // Сохраняем токены в куки
-                _logger.LogInformation("[AuthController.Callback] Setting authentication cookies");
-                var cookieOptions = new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = false,
-                    SameSite = SameSiteMode.Lax,
-                    Expires = DateTimeOffset.UtcNow.AddHours(24)
-                };
-                
-                Response.Cookies.Append("jwt_token", result.Tokens!.IdToken, cookieOptions);
-                Response.Cookies.Append("access_token", result.Tokens.AccessToken, cookieOptions);
-                _logger.LogInformation("[AuthController.Callback] Authentication cookies set successfully");
-
-                // Безопасное перенаправление
-                var returnUrl = _authService.GetSafeReturnUrl(state);
-                _logger.LogInformation("[AuthController.Callback] User {UserName} successfully authenticated, redirecting to: {ReturnUrl}", 
-                    result.UserName, returnUrl);
-                
+                var returnUrl = await _authService.CompleteLoginAsync(code, state, HttpContext.RequestAborted);
+                var localUser = await _userConnector.EnsureCurrentUserAsync(HttpContext.RequestAborted);
+                _logger.LogInformation(
+                    "[AuthController.Callback] Local user ensured. localUserId={LocalUserId} name={LocalUserName}",
+                    localUser?.Id,
+                    localUser?.ExternalId);
+                PublishClearUserMessages(localUser?.Id);
+                PublishLoginSuccessMessage(localUser?.Id, User.Identity?.Name);
                 return LocalRedirect(returnUrl);
             }
             catch (Exception ex)
@@ -113,47 +136,67 @@ namespace BusinessEntity.Controllers
             }
         }
 
+        /// <summary>
+        /// Завершает локальную сессию и инициирует logout в Authentik.
+        /// </summary>
         [HttpGet("logout")]
         [Authorize]
-        public async Task<IActionResult> Logout()
+        public async Task<IActionResult> Logout(string? returnUrl = null)
         {
-            _logger.LogInformation("[AuthController.Logout] Processing logout request");
-            _logger.LogInformation("[AuthController.Logout] User: {User}, Authenticated: {IsAuth}", 
-                User.Identity?.Name, User.Identity?.IsAuthenticated);
-            
-            try
+            _logger.LogInformation("[AuthController.Logout] Initiating sign-out. User: {User}", User.Identity?.Name);
+            var redirectUrl = await _authService.SignOutAsync(HttpContext.RequestAborted);
+            return Redirect(string.IsNullOrWhiteSpace(redirectUrl) ? (returnUrl ?? "/auth/logged-out") : redirectUrl);
+        }
+
+        private static string BuildLoginErrorReturnUrl(string returnUrl)
+        {
+            return QueryHelpers.AddQueryString(returnUrl, "loginError", "1");
+        }
+
+        // Публикует команду очистки пользовательских сообщений при новом входе.
+        private void PublishClearUserMessages(Guid? userId)
+        {
+            if (userId is not { } normalizedUserId || normalizedUserId == Guid.Empty)
             {
-                var success = await _authService.SignOutAsync();
-                if (success)
-                {
-                    _logger.LogInformation("[AuthController.Logout] Logout completed successfully");
-                    
-                    // Проверяем, есть ли URL для фронт-ченнел logout
-                    var frontChannelUrl = _authService.GetFrontChannelLogoutUrl();
-                    if (!string.IsNullOrEmpty(frontChannelUrl))
-                    {
-                        _logger.LogInformation("[AuthController.Logout] Redirecting to front-channel logout: {Url}", frontChannelUrl);
-                        return Redirect(frontChannelUrl); // Отправляем браузер в Authentik для очистки сессии
-                    }
-                    
-                    return Redirect("/auth/logged-out"); // fallback
-                }
-                else
-                {
-                    _logger.LogError("[AuthController.Logout] Logout returned false");
-                    return StatusCode(500, "Logout failed");
-                }
+                return;
             }
-            catch (AuthSignOutFromAuthenticException ex)
+
+            _messageBus.SendMessage(new ClearUserMessages(normalizedUserId));
+        }
+
+        // Публикует пользовательское сообщение о завершенном входе в систему.
+        private void PublishLoginSuccessMessage(Guid? userId, string? userName)
+        {
+            if (userId is not { } normalizedUserId || normalizedUserId == Guid.Empty)
             {
-                _logger.LogError(ex, "[AuthController.Logout] Authentik logout failed");
-                return StatusCode(500, "Failed to logout from authentication server. The logout process has been stopped.");
+                return;
             }
-            catch (Exception ex)
+
+            var normalizedUserName = userName?.Trim();
+            var messageText = string.IsNullOrWhiteSpace(normalizedUserName)
+                ? "Вход выполнен успешно."
+                : $"Вход выполнен успешно. Пользователь {normalizedUserName} авторизован.";
+
+            _messageBus.SendMessage(new PostUserMessage(
+                normalizedUserId,
+                messageText,
+                UserMessageLevel.Success,
+                "Логин успешен"));
+        }
+
+        private static string NormalizeReturnUrl(string? returnUrl)
+        {
+            if (string.IsNullOrWhiteSpace(returnUrl))
             {
-                _logger.LogError(ex, "[AuthController.Logout] Unexpected error during logout");
-                return StatusCode(500, "Logout failed due to unexpected error");
+                return "/";
             }
+
+            if (!returnUrl.StartsWith("/", StringComparison.Ordinal) || returnUrl.StartsWith("//", StringComparison.Ordinal))
+            {
+                return "/";
+            }
+
+            return returnUrl.StartsWith("/auth", StringComparison.OrdinalIgnoreCase) ? "/" : returnUrl;
         }
     }
 }

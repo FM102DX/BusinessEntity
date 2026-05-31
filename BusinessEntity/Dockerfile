@@ -11,9 +11,6 @@ FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["BusinessEntity/BusinessEntity.csproj", "BusinessEntity/"]
-COPY ["SampleOnlineMall.Core/SampleOnlineMall.Core.csproj", "SampleOnlineMall.Core/"]
-COPY ["SampleOnlineMall.DataAccess/SampleOnlineMall.DataAccess.csproj", "SampleOnlineMall.DataAccess/"]
-COPY ["SampleOnlineMall.Service/SampleOnlineMall.Service.csproj", "SampleOnlineMall.Service/"]
 RUN dotnet restore "./BusinessEntity/BusinessEntity.csproj"
 COPY . .
 WORKDIR "/src/BusinessEntity"

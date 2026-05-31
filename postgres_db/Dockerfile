@@ -1,13 +1,26 @@
-# Используем официальный образ PostgreSQL
-FROM postgres:latest
+# Базовый образ PostgreSQL
+FROM postgres:17-alpine
 
-# (Необязательно) Задаём переменные окружения по умолчанию.
-# Здесь вы можете поменять имя БД, пользователя и пароль на свои.
-ENV POSTGRES_DB=production_db_db
-ENV POSTGRES_USER=postgres
-ENV POSTGRES_PASSWORD=yourpassword
+# Аргументы для версии и окружения (можно переопределить при сборке)
+ARG POSTGRES_DB=main
+ARG POSTGRES_USER=adm01
+ARG POSTGRES_PASSWORD=adm01pwd
 
-# Указываем, что контейнер слушает 5432 порт
+# Задаём переменные окружения для контейнера
+ENV POSTGRES_DB=${POSTGRES_DB} \
+    POSTGRES_USER=${POSTGRES_USER} \
+    POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+
+# Копируем скрипты инициализации, если они есть
+# Все .sql и .sh из папки initdb будут выполнены при первом старте
+COPY initdb/ /docker-entrypoint-initdb.d/
+
+# Указываем, что каталог с данными будет храниться во внешнем томе
+VOLUME ["/var/lib/postgresql/data"]
+
+# Прокидываем порт
 EXPOSE 5432
 
-# По умолчанию образ уже запускает PostgreSQL, так что ENTRYPOINT/CMD не меняем
+# Точка входа: стандартный entrypoint от образа postgres
+# CMD можно не указывать, так как он унаследован, но можно переопределить:
+CMD ["postgres"]

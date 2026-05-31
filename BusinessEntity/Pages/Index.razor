@@ -1,15 +1,12 @@
-﻿@page "/"
+@page "/"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @attribute [AllowAnonymous]
-
 <PageTitle>KMS-Business-Entities-Main</PageTitle>
-
 <AuthorizeView>
     <Authorized>
-        <h1>KMS Business Entity</h1>
-        
+        <h1>KMS Business EntityData</h1>
         <div class="user-info-container">
             @if (!string.IsNullOrEmpty(CurrentUserName))
             {
@@ -28,152 +25,17 @@
             }
         </div>
 
-        <div class="main-content">
-            <div class="row">
-                <!-- Левая панель - Дерево сущностей -->
-                <div class="col-md-3">
-                    <TreeComponent OnNodeSelected="@OnTreeNodeSelected" />
-                </div>
-                
-                <!-- Правая панель - Остальной контент -->
-                <div class="col-md-9">
-                    <!-- Demo Business Entities Section -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5>Демонстрационные бизнес-сущности</h5>
-                                </div>
-                                <div class="card-body">
-                                    @if (BusinessEntities != null && BusinessEntities.Any())
-                                    {
-                                        <div class="row">
-                                            @foreach (var entity in BusinessEntities.OrderBy(e => e.EntityType).ThenBy(e => e.Name))
-                                            {
-                                                <div class="col-md-6 mb-2">
-                                                    <div class="d-flex align-items-center">
-                                                        @if (entity.EntityType == BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Space)
-                                                        {
-                                                            <span class="badge bg-primary me-2">📁 Space</span>
-                                                        }
-                                                        else if (entity.EntityType == BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Folder)
-                                                        {
-                                                            <span class="badge bg-warning me-2">📂 Folder</span>
-                                                        }
-                                                        else if (entity.EntityType == BusinessEntity.Core.Classes.BusinessEntityTypeEnum.Page)
-                                                        {
-                                                            <span class="badge bg-success me-2">📄 Page</span>
-                                                        }
-                                                        <span class="text-muted small">@entity.Name</span>
-                                                    </div>
-                                                </div>
-                                            }
-                                        </div>
-                                        <hr class="my-3">
-                                        <small class="text-muted">
-                                            Всего сущностей: <strong>@BusinessEntities.Count</strong> 
-                                            (создано автоматически при первом запуске)
-                                        </small>
-                                    }
-                                    else
-                                    {
-                                        <div class="alert alert-info mb-0">
-                                            <small>Загрузка демонстрационных данных...</small>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        </div>
+        @* Информация о выбранных узлах дерева *@
+        <div class="selected-nodes-info">
+            <div class="alert alert-secondary">
+                @if (IsMultiSelectActive)
+                {
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            Используйте Ctrl+клик для мульти-селекта. Shift+клик отключен.
+                        </small>
                     </div>
-                    
-                    <div class="row">
-                        <!-- Возможные отношения между сущностями -->
-                        <div class="col-md-8">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5>Возможные отношения между сущностями</h5>
-                                </div>
-                                <div class="card-body">
-                                    @if (PossibleRelations != null && PossibleRelations.Any())
-                                    {
-                                        <div class="table-responsive">
-                                            <table class="table table-striped">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Название отношения</th>
-                                                        <th>Тип A</th>
-                                                        <th>Тип B</th>
-                                                        <th>Тип отношения</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach (var relation in PossibleRelations)
-                                                    {
-                                                        <tr>
-                                                            <td><strong>@relation.RelationName</strong></td>
-                                                            <td><span class="badge bg-primary">@relation.RelationObjectTypeA</span></td>
-                                                            <td><span class="badge bg-success">@relation.RelationObjectTypeB</span></td>
-                                                            <td><span class="badge bg-info">@relation.RelationType</span></td>
-                                                        </tr>
-                                                    }
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="alert alert-info mb-0">
-                                            <small>Отношения загружаются...</small>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Enum значения -->
-                        <div class="col-md-4">
-                            <!-- Типы сущностей -->
-                            <div class="card mb-3">
-                                <div class="card-header">
-                                    <h6>Типы сущностей (Enum)</h6>
-                                </div>
-                                <div class="card-body">
-                                    @if (EntityTypeEnums != null && EntityTypeEnums.Any())
-                                    {
-                                        <ul class="list-group list-group-flush">
-                                            @foreach (var entityType in EntityTypeEnums)
-                                            {
-                                                <li class="list-group-item py-1">
-                                                    <span class="badge bg-primary">@entityType</span>
-                                                </li>
-                                            }
-                                        </ul>
-                                    }
-                                </div>
-                            </div>
-                            
-                            <!-- Типы отношений -->
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6>Типы отношений (Enum)</h6>
-                                </div>
-                                <div class="card-body">
-                                    @if (RelationTypeEnums != null && RelationTypeEnums.Any())
-                                    {
-                                        <ul class="list-group list-group-flush">
-                                            @foreach (var relationType in RelationTypeEnums)
-                                            {
-                                                <li class="list-group-item py-1">
-                                                    <span class="badge bg-info">@relationType</span>
-                                                </li>
-                                            }
-                                        </ul>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                }
             </div>
         </div>
     </Authorized>
@@ -181,12 +43,52 @@
         <div class="container mt-5">
             <div class="row justify-content-center">
                 <div class="col-md-8">
-                    <h1>KMS Business Entity</h1>
-                    <div class="alert alert-warning">
-                        <h4>Требуется авторизация</h4>
-                        <p>Для доступа к системе KMS Business Entity необходимо войти в систему через Authentic.</p>
-                        <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentic</button>
-                    </div>
+                    <h1>KMS Business EntityData</h1>
+                    @if (IsAnonymousSpacesLoading)
+                    {
+                        <div class="alert alert-info">
+                            <h4>Проверяем публичный доступ</h4>
+                            <p>Пожалуйста, подождите.</p>
+                        </div>
+                    }
+                    else if (AnonymousAccessibleSpaces.Count > 0)
+                    {
+                        <div class="alert alert-info">
+                            <h4>Доступно без входа</h4>
+                            @if (CurrentAnonymousSpace != null)
+                            {
+                                <p>Открыто пространство: <strong>@CurrentAnonymousSpace.Name</strong>.</p>
+                            }
+                            else
+                            {
+                                <p>Выберите пространство, доступное для просмотра без входа.</p>
+                            }
+
+                            @if (AnonymousAccessibleSpaces.Count > 1 || CurrentAnonymousSpace == null)
+                            {
+                                <div class="list-group mb-3">
+                                    @foreach (var space in AnonymousAccessibleSpaces)
+                                    {
+                                        <button type="button"
+                                                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                                @onclick="@(() => SelectAnonymousSpace(space.Id))">
+                                            <span>@space.Name</span>
+                                            @if (CurrentAnonymousSpace?.Id == space.Id)
+                                            {
+                                                <span class="badge bg-primary">текущее</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+
+                            <button class="btn btn-primary" @onclick="OpenLoginForm">Войти</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <AuthentikLoginGate />
+                    }
                 </div>
             </div>
         </div>
@@ -195,6 +97,10 @@
 
 <style>
     .user-info-container {
+        margin-bottom: 20px;
+    }
+
+    .selected-nodes-info {
         margin-bottom: 20px;
     }
 

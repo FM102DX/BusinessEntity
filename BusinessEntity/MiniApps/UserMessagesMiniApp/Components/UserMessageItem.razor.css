@@ -1,0 +1,54 @@
+.user-message-item {
+  border: 1px solid #d8e1ec;
+  border-left-width: 3px;
+  border-radius: 4px;
+  background: #f8fbff;
+  padding: 8px;
+}
+
+.user-message-item--success {
+  border-left-color: #2f8f46;
+  background: #f5fbf6;
+}
+
+.user-message-item--warning {
+  border-left-color: #bf8610;
+  background: #fffaf0;
+}
+
+.user-message-item--error {
+  border-left-color: #c03942;
+  background: #fff5f6;
+}
+
+.user-message-item--info {
+  border-left-color: #3976b8;
+}
+
+.user-message-item__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.user-message-item__title {
+  color: #1f3855;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.user-message-item__time {
+  color: #6f7f95;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.user-message-item__text {
+  color: #26394f;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}

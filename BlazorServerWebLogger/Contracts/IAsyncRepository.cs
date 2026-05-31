@@ -1,7 +1,5 @@
 ﻿using BlazorServerWebLogger.DataAccess.Repository;
-using SampleOnlineMall.DataAccess.Abstract;
-using SampleOnlineMall.DataAccess.Models;
-using SampleOnlineMall.Service;
+using BusinessEntity.Service;
 using System.Linq.Expressions;
 
 namespace BlazorServerWebLogger.Contracts

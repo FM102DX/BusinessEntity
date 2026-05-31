@@ -5,18 +5,16 @@ using BlazorServerWebLogger.Data.App;
 using BlazorServerWebLogger.Data.Services;
 using BlazorServerWebLogger.Data.Services.HostedServices;
 using BlazorServerWebLogger.DataAccess.Repository;
+using BlazorServerWebLogger.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
-using SampleOnlineMall.Core;
-using SampleOnlineMall.Core.Models;
-using SampleOnlineMall.DataAccess;
-using SampleOnlineMall.DataAccess.Abstract;
-using SampleOnlineMall.WebLogger.DataAccess;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.Core;
 using AutoMapper;
+using BusinessEntity.WebLogger.DataAccess;
+using BusinessEntity.WebLogger.Models;
 
 namespace BlazorServerWebLogger
 {
@@ -32,15 +30,16 @@ namespace BlazorServerWebLogger
             builder.Services.AddServerSideBlazor();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddAutoMapper(typeof(Program));
+            builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(90));
             var _app = new WebLoggerApp();
 
-            // Чтение настроек из appsettings.json
+            // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ appsettings.json
             builder.Services.Configure<LogEraserSettings>(
                 builder.Configuration.GetSection("LogEraserSettings"));
             builder.Services.Configure<SampleLogSettings>(
                 builder.Configuration.GetSection("SampleLogSettings"));
 
-            builder.Services.AddSingleton(typeof(WebLoggerApp), (x) => _app); // само приложение
+            builder.Services.AddSingleton(typeof(WebLoggerApp), (x) => _app); // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
            
 
 
@@ -48,21 +47,44 @@ namespace BlazorServerWebLogger
                 ? builder.Configuration.GetConnectionString("DockerConnection")
                 : builder.Configuration.GetConnectionString("IisExpressConnection");
 
+            Console.WriteLine($"[DB-DIAG] Environment IS_DOCKER = {Environment.GetEnvironmentVariable("IS_DOCKER")}");
+            Console.WriteLine($"[DB-DIAG] Selected ConnectionString = {connectionString}");
 
+            // Р”РёР°РіРЅРѕСЃС‚РёРєР°: С‚РѕР»СЊРєРѕ РїР°СЂСЃРёРј СЃС‚СЂРѕРєСѓ РїРѕРґРєР»СЋС‡РµРЅРёСЏ (Р±РµР· DNS/TCP РїСЂРѕР±)
+            if (!string.IsNullOrEmpty(connectionString))
+            {
+                try
+                {
+                    var csb = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+                    Console.WriteLine($"[DB-DIAG] Parsed - Host: {csb.Host}, Port: {csb.Port}, Database: {csb.Database}, User: {csb.Username}");
+                }
+                catch (Exception parseEx)
+                {
+                    Console.WriteLine($"[DB-DIAG] вњ— Failed to parse connection string: {parseEx.Message}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[DB-DIAG] вњ— Connection string is empty or null!");
+            }
 
-            Console.WriteLine($"ConnectionString={connectionString}");
-
-            //Создаем опции
+            //пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ retry policy
             var optionsBuilder = new DbContextOptionsBuilder<WebLoggerDbContext>();
-            optionsBuilder.UseNpgsql(connectionString); // Указываем использование PostgreSQL
+            optionsBuilder.UseNpgsql(connectionString, options =>
+            {
+                options.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(10),
+                    errorCodesToAdd: null);
+                options.CommandTimeout(120);
+            }); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ PostgreSQL
 
-            // Регистрируем DbContextOptions<WebLoggerDbContext> в DI
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ DbContextOptions<WebLoggerDbContext> пїЅ DI
             builder.Services.AddSingleton(provider => optionsBuilder.Options);
 
-            // Убедитесь, что база данных и таблицы созданы
+            // Ensure database schema exists (non-destructive). Do NOT drop or clear.
             using (var context = new WebLoggerDbContext(optionsBuilder.Options))
             {
-                //context.Database.EnsureDeleted();
                 context.Database.EnsureCreated();
             }
             builder.Services.AddAutoMapper(typeof(Program));
@@ -70,14 +92,22 @@ namespace BlazorServerWebLogger
             builder.Services.AddSingleton<AppSettingsManager>();
             builder.Services.AddScoped<Contracts.IAsyncRepository<AppSettingsDbStorable>, BlazorServerWebLogger.DataAccess.Repository.EfAsyncRepository<AppSettingsDbStorable>>();
             builder.Services.AddScoped<Contracts.IAsyncRepository<LogEntryDbStorable>, BlazorServerWebLogger.DataAccess.Repository.EfAsyncRepository<LogEntryDbStorable>>();
-            builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // Регистрация фабрики дбконтекстов
-            builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>(); // Регистрация фабрики репозиториев
-            builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>(); // Регистрация фабрики репозиториев
+            builder.Services.AddSingleton<ThreadSafeDbContextFactory>(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            builder.Services.AddSingleton<IRepositoryFactory<LogEntryDbStorable>, RepositoryFactory<LogEntryDbStorable>>(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            builder.Services.AddSingleton<IRepositoryFactory<AppSettingsDbStorable>, RepositoryFactory<AppSettingsDbStorable>>(); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+            builder.Services.AddSingleton<LogIngestionQueue>();
+            builder.Services.AddSingleton<ILogIngestionQueue>(provider => provider.GetRequiredService<LogIngestionQueue>());
+            builder.Services.AddHostedService(provider => provider.GetRequiredService<LogIngestionQueue>());
             builder.Services.AddScoped<LogReaderService>();
             builder.Services.AddHostedService<SampleLogGeneratorService>();
-            builder.Services.AddHostedService<LogEraserService>();
+            var logEraserEnabled = builder.Configuration.GetSection("LogEraserSettings").GetValue<bool>("Enabled");
+            if (logEraserEnabled)
+            {
+                builder.Services.AddHostedService<LogEraserService>();
+            }
+            builder.Services.AddHostedService<BlazorServerWebLogger.Services.DatabaseConnectionMonitorService>(); // РњРѕРЅРёС‚РѕСЂРёРЅРі РїРѕРґРєР»СЋС‡РµРЅРёСЏ Рє Р‘Р”
 
-            // Добавление Swagger
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Swagger
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 

@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using BlazorServerWebLogger.Contracts;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.WebLogger.Models;
 using ReactiveUI;
 using BlazorServerWebLogger.Data.Messages;
 

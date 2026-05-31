@@ -19,6 +19,10 @@
 **/node_modules
 **/npm-debug.log
 **/obj
+BusinessEntityStorage
+artifacts
+restore-diag.log
+Job_00604_fpinega@geo-naft.ru.txt
 **/secrets.dev.yaml
 **/values.dev.yaml
 LICENSE

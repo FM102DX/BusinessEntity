@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using SampleOnlineMall.WebLogger.Models;
-using BlazorServerWebLogger.Contracts;
-using AutoMapper;
-using SampleOnlineMall.Service.WebLogging;
+using BusinessEntity.Service.WebLogging;
+using BlazorServerWebLogger.Services;
 
 namespace BlazorServerWebLogger.Controllers
 {
@@ -12,13 +10,11 @@ namespace BlazorServerWebLogger.Controllers
     [Route("api/[controller]")]
     public class WebLoggerController : ControllerBase
     {
-        private readonly IRepositoryFactory<LogEntryDbStorable> _repositoryFactory;
-        private readonly IMapper _mapper;
+        private readonly ILogIngestionQueue _logIngestionQueue;
 
-        public WebLoggerController(IRepositoryFactory<LogEntryDbStorable> repositoryFactory, IMapper mapper)
+        public WebLoggerController(ILogIngestionQueue logIngestionQueue)
         {
-            _repositoryFactory = repositoryFactory ?? throw new ArgumentNullException(nameof(repositoryFactory));
-            _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+            _logIngestionQueue = logIngestionQueue ?? throw new ArgumentNullException(nameof(logIngestionQueue));
         }
 
         /// <summary>
@@ -31,15 +27,8 @@ namespace BlazorServerWebLogger.Controllers
         {
             try
             {
-                var repository = _repositoryFactory.GetRepository();
-
-                // Маппинг DTO в сущность для базы данных
-                var logEntryDb = _mapper.Map<LogEntryDbStorable>(logEntryDto);
-                logEntryDb.Id=Guid.NewGuid();
-                // Сохранение в базе данных
-                await repository.InsertAsync(logEntryDb);
-
-                return Ok("Log record created successfully.");
+                await _logIngestionQueue.EnqueueAsync(logEntryDto, HttpContext.RequestAborted);
+                return Ok("Log record queued successfully.");
             }
             catch (Exception ex)
             {

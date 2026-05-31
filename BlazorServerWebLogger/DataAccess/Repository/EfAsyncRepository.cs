@@ -1,13 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using SampleOnlineMall.WebLogger.DataAccess;
+using BusinessEntity.WebLogger.DataAccess;
 using BlazorServerWebLogger.Contracts;
-using SampleOnlineMall.DataAccess.Models;
-using SampleOnlineMall.Service;
+using BusinessEntity.Service;
 using Radzen;
 
 namespace BlazorServerWebLogger.DataAccess.Repository

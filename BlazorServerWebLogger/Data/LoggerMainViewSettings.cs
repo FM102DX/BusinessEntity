@@ -11,6 +11,10 @@ namespace BlazorServerWebLogger.Data
         public string DisplayedMessageTypes { get; set; }
         public string NonDisplayedMessageTypes { get; set; }
 
+        // New: tags selection persistence
+        public string DisplayedTags { get; set; }
+        public string NonDisplayedTags { get; set; }
+
         public bool LogGenerationIsOn { get; set; }
         public bool Equals(LoggerMainViewSettings other)
         {

@@ -24,12 +24,29 @@
                         {
                             <p class="user-id"><strong>ID пользователя:</strong> @CurrentUserId</p>
                         }
-                        @if (CurrentUser?.Identity != null)
+                        @if (CurrentUserModel != null)
                         {
-                            <p class="auth-type"><strong>Тип авторизации:</strong> @CurrentUser.Identity.AuthenticationType</p>
-                            <p class="auth-status"><strong>Авторизован:</strong> @(CurrentUser.Identity.IsAuthenticated ? "Да" : "Нет")</p>
+                            <p class="auth-type"><strong>Тип авторизации:</strong> Cookies</p>
+                            <p class="auth-status"><strong>Авторизован:</strong> @AuthenticationStatusText</p>
                         }
                         <p class="claims-count"><strong>Количество клеймов:</strong> @AllClaims.Count</p>
+
+                        <div class="groups-summary mt-4">
+                            <strong>Группы пользователя в Authentik:</strong>
+                            @if (AuthentikGroups.Any())
+                            {
+                                <div class="groups-badges mt-2">
+                                    @foreach (var group in AuthentikGroups)
+                                    {
+                                        <span class="badge bg-primary me-2 mb-2">@group</span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted mb-0 mt-2">Группы в claims не найдены.</p>
+                            }
+                        </div>
                     </div>
 
                     <!-- Детальная информация о клеймах -->
@@ -92,18 +109,18 @@
                         </div>
                     }
 
-                    <!-- JWT Token информация (если есть) -->
-                    @if (!string.IsNullOrEmpty(JwtToken))
+                    <!-- ID Token информация (если есть) -->
+                    @if (!string.IsNullOrEmpty(IdentityToken))
                     {
                         <div class="token-section">
                             <h4>Информация о токене:</h4>
                             <div class="token-info">
-                                <p><strong>JWT токен присутствует:</strong> Да</p>
-                                <p><strong>Длина токена:</strong> @JwtToken.Length символов</p>
+                                <p><strong>ID токен присутствует:</strong> Да</p>
+                                <p><strong>Длина токена:</strong> @IdentityToken.Length символов</p>
                                 <details>
                                     <summary>Показать токен (осторожно!)</summary>
                                     <div class="token-value">
-                                        <code>@JwtToken</code>
+                                        <code>@IdentityToken</code>
                                     </div>
                                 </details>
                             </div>
@@ -126,7 +143,7 @@
         <div class="alert alert-warning">
             <h4>Требуется авторизация</h4>
             <p>Для просмотра информации об авторизации необходимо войти в систему.</p>
-            <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentic</button>
+            <button class="btn btn-primary" @onclick="RedirectToLogin">Войти через Authentik</button>
         </div>
     </NotAuthorized>
 </AuthorizeView>
@@ -159,6 +176,16 @@
 
     .user-email, .user-id, .auth-type, .auth-status, .claims-count {
         color: #495057;
+    }
+
+    .groups-summary {
+        padding-top: 12px;
+        border-top: 1px solid #ced4da;
+    }
+
+    .groups-badges .badge {
+        font-size: 0.9rem;
+        font-weight: 500;
     }
 
     .claims-section {

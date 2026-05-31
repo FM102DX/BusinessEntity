@@ -1,13 +1,16 @@
-﻿@page "/"
+@page "/"
 @using Radzen
 @using Radzen.Blazor
-@using SampleOnlineMall.WebLogger.Models
+@using BusinessEntity.WebLogger.Models
 @using BlazorServerWebLogger.Pages
 @using BlazorServerWebLogger.Components
 
-<PageTitle>LoggerMain</PageTitle>
+<PageTitle>web-logger</PageTitle>
 
-<h1>LoggerMain</h1>
+<h1>
+    web-logger
+    <small class="text-muted" style="font-size: 0.6em; margin-left: 8px;">v@(AppVersion) (@ReleaseDate)</small>
+</h1>
 
 <div class="main-logger-content">
 
@@ -15,7 +18,7 @@
         <RadzenDataGrid TItem="LogEntryDbStorable" 
                         Data="@FilteredLogEntries" 
                         AllowPaging="true" 
-                        PageSize="20" 
+                        PageSize="90" 
                         Count="@FilteredLogEntries.Count()" 
                         RowSelect="OnRowSelect">
             <Columns>
@@ -53,6 +56,24 @@
                 </label>
             }
 
+        </LoggerWidget>
+
+        <LoggerWidget Title="Теги">
+            @if (TagFilter?.Count > 0)
+            {
+                @foreach (var item in TagFilter)
+                {
+                    <label style="display: block; margin-bottom: 5px;">
+                        <RadzenCheckBox @bind-Value="item.Selected" TValue="bool"
+                                        Change="(bool newValue) => SaveTagsFilterAsync(item, newValue)" />
+                        [@item.Code]
+                    </label>
+                }
+            }
+            else
+            {
+                <div class="text-muted">Тегов не найдено</div>
+            }
         </LoggerWidget>
 
         <LoggerWidget Title="Статистика">

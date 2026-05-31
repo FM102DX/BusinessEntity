@@ -1,0 +1,496 @@
+.users-admin {
+    display: grid;
+    grid-template-columns: minmax(12rem, 16.5rem) minmax(0, 1fr);
+    gap: 1rem;
+    min-height: 34rem;
+    font-size: 0.875rem;
+    line-height: 1.35;
+}
+
+.users-admin .btn {
+    font-size: 0.875rem;
+    line-height: 1.25;
+    padding: 0.34rem 0.62rem;
+}
+
+.users-admin .btn-sm {
+    font-size: 0.8125rem;
+    padding: 0.27rem 0.55rem;
+}
+
+.users-admin .form-control,
+.users-admin ::deep .form-control {
+    font-size: 0.875rem;
+    line-height: 1.35;
+    padding: 0.34rem 0.55rem;
+}
+
+.users-admin__sidebar,
+.users-admin__details {
+    min-width: 0;
+}
+
+.users-admin__sidebar-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.65rem;
+}
+
+.users-admin__list {
+    border: 1px solid #2f3a45;
+}
+
+.users-admin__user {
+    display: grid;
+    gap: 0.1rem;
+    width: 100%;
+    min-height: 2.45rem;
+    border: 0;
+    border-bottom: 1px solid #2f3a45;
+    background: #ffffff;
+    color: #111827;
+    padding: 0.42rem 0.6rem;
+    font-size: 0.875rem;
+    line-height: 1.3;
+    text-align: left;
+}
+
+.users-admin__user:last-child {
+    border-bottom: 0;
+}
+
+.users-admin__user:hover {
+    background: #edf5ff;
+}
+
+.users-admin__user--selected {
+    background: #cfe5fb;
+}
+
+.users-admin__user-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-admin__user-subtitle {
+    color: #586879;
+    font-size: 0.74rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-admin__user-code {
+    color: #6d7785;
+    font-size: 0.7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-admin__user-state {
+    color: #a52834;
+    font-size: 0.7rem;
+}
+
+.users-admin__tabs {
+    display: flex;
+    align-items: flex-end;
+}
+
+.users-admin__tab {
+    border: 1px solid #2f3a45;
+    border-bottom: 0;
+    background: #f8fafc;
+    color: #111827;
+    min-width: 7.6rem;
+    padding: 0.52rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25;
+    text-align: left;
+}
+
+.users-admin__tab + .users-admin__tab {
+    border-left: 0;
+}
+
+.users-admin__tab--active {
+    background: #cfe5fb;
+}
+
+.users-admin__panel {
+    border: 1px solid #2f3a45;
+    min-height: 30rem;
+    padding: 1rem;
+}
+
+.users-admin__form {
+    display: grid;
+    gap: 0.85rem;
+    max-width: 34rem;
+}
+
+.users-admin__field {
+    display: grid;
+    grid-template-columns: 10.5rem minmax(0, 1fr);
+    align-items: center;
+    gap: 1rem;
+    margin: 0;
+}
+
+.users-admin__field > span {
+    font-weight: 700;
+    text-align: right;
+}
+
+.users-admin__password-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2.75rem;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.users-admin__password-input {
+    min-width: 0;
+}
+
+.users-admin__password-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    padding: 0;
+}
+
+.users-admin__form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-left: 11.5rem;
+}
+
+.users-admin__empty {
+    font-size: 0.875rem;
+    padding: 0.5rem 0;
+}
+
+.users-admin__empty {
+    color: #586879;
+}
+
+.users-admin__access {
+    display: grid;
+    gap: 1rem;
+}
+
+.users-admin__access-space {
+    display: grid;
+    grid-template-columns: 7rem minmax(14rem, 28rem);
+    align-items: center;
+    gap: 1rem;
+    margin: 0;
+}
+
+.users-admin__access-space > span {
+    font-weight: 700;
+    text-align: right;
+}
+
+.users-admin__access-show-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: fit-content;
+    margin: -0.25rem 0 0 8rem;
+    font-weight: 700;
+}
+
+.users-admin__access-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.users-admin__access-picker {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 14rem;
+    margin: 0;
+}
+
+.users-admin__access-picker > span {
+    font-weight: 700;
+}
+
+.users-admin__roles {
+    display: grid;
+    gap: 1rem;
+}
+
+.users-admin__roles-actions,
+.users-admin__groups-actions,
+.users-admin__group-members-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.users-admin__groups-actions {
+    flex-wrap: nowrap;
+}
+
+.users-admin__groups-actions > button {
+    flex: 0 0 auto;
+}
+
+.users-admin__group-inline-editor {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.users-admin__group-inline-editor .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.users-admin__group-inline-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1 1 18rem;
+    margin: 0;
+}
+
+.users-admin__group-inline-field > span {
+    flex: 0 0 auto;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.users-admin__group-inline-field .form-control {
+    min-width: 10rem;
+    max-width: 24rem;
+}
+
+.users-admin__roles-table,
+.users-admin__groups-table,
+.users-admin__membership-table,
+.users-admin__access-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    line-height: 1.3;
+    table-layout: fixed;
+}
+
+.users-admin__roles-table th,
+.users-admin__roles-table td,
+.users-admin__groups-table th,
+.users-admin__groups-table td,
+.users-admin__membership-table th,
+.users-admin__membership-table td,
+.users-admin__access-table th,
+.users-admin__access-table td {
+    border: 1px solid #b8c5d6;
+    padding: 0.34rem 0.5rem;
+    vertical-align: middle;
+}
+
+.users-admin__roles-table th,
+.users-admin__groups-table th,
+.users-admin__membership-table th,
+.users-admin__access-table th {
+    background: #eef2f7;
+    font-weight: 700;
+}
+
+.users-admin__roles-table th:not(:first-child),
+.users-admin__roles-table td:not(:first-child) {
+    text-align: center;
+    width: 6.85rem;
+}
+
+.users-admin__groups-table th:last-child,
+.users-admin__groups-table td:last-child {
+    text-align: center;
+    width: 8rem;
+}
+
+.users-admin__membership-table th:first-child,
+.users-admin__membership-table td:first-child {
+    text-align: center;
+    width: 6rem;
+}
+
+.users-admin__membership-table th:last-child,
+.users-admin__membership-table td:last-child {
+    width: 14rem;
+}
+
+.users-admin__access-table th:first-child,
+.users-admin__access-table td:first-child {
+    width: 12rem;
+}
+
+.users-admin__access-table th:nth-child(2),
+.users-admin__access-table td:nth-child(2) {
+    width: 10rem;
+}
+
+.users-admin__access-table th:last-child,
+.users-admin__access-table td:last-child {
+    width: 8rem;
+    text-align: center;
+}
+
+.users-admin__role-row,
+.users-admin__group-row {
+    cursor: pointer;
+}
+
+.users-admin__role-row:hover,
+.users-admin__group-row:hover {
+    background: #edf5ff;
+}
+
+.users-admin__role-row--selected,
+.users-admin__group-row--selected {
+    background: #cfe5fb;
+}
+
+.users-admin__role-select,
+.users-admin__group-select {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: #111827;
+    padding: 0;
+    font-size: 0.875rem;
+    line-height: 1.3;
+    text-align: left;
+}
+
+.users-admin__role-system {
+    border: 1px solid #b8c5d6;
+    border-radius: 4px;
+    color: #586879;
+    font-size: 0.72rem;
+    padding: 0.05rem 0.3rem;
+}
+
+.users-admin__role-editor {
+    display: grid;
+    gap: 0.85rem;
+    max-width: 34rem;
+}
+
+.users-admin__role-permissions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem 1rem;
+    padding-left: 11.5rem;
+}
+
+.users-admin__role-permissions label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+}
+
+.users-admin__role-form-actions {
+    margin-top: 0;
+}
+
+.users-admin__groups,
+.users-admin__group-members {
+    display: grid;
+    gap: 1rem;
+}
+
+.users-admin__membership-selector {
+    display: grid;
+    grid-template-columns: 5rem minmax(14rem, 28rem);
+    align-items: center;
+    gap: 1rem;
+    margin: 0;
+}
+
+.users-admin__membership-selector > span {
+    font-weight: 700;
+    text-align: right;
+}
+
+.users-admin__membership-name,
+.users-admin__membership-code {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-admin__membership-code {
+    color: #6d7785;
+    font-size: 0.72rem;
+}
+
+@media (max-width: 900px) {
+    .users-admin {
+        grid-template-columns: 1fr;
+    }
+
+    .users-admin__field {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+
+    .users-admin__field > span {
+        text-align: left;
+    }
+
+    .users-admin__password-control {
+        grid-template-columns: minmax(0, 1fr) 2.75rem;
+    }
+
+    .users-admin__form-actions {
+        padding-left: 0;
+    }
+
+    .users-admin__role-permissions {
+        grid-template-columns: 1fr;
+        padding-left: 0;
+    }
+
+    .users-admin__membership-selector {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+
+    .users-admin__membership-selector > span {
+        text-align: left;
+    }
+
+    .users-admin__access-space {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+
+    .users-admin__access-space > span {
+        text-align: left;
+    }
+
+    .users-admin__access-show-all {
+        margin-left: 0;
+    }
+}

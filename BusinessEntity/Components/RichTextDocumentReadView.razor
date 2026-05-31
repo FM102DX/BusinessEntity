@@ -1,0 +1,98 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components
+
+<div class="py-2">
+    <div class="rich-text-document-header mb-3">
+        <div class="rich-text-document-header__outline-spacer"></div>
+        <div class="rich-text-document-title">
+            <h4 class="mb-0">@EntityName</h4>
+        </div>
+        <div class="rich-text-document-header__actions">
+            @if (CanChangePublicFlag)
+            {
+                <label class="form-check form-check-inline mb-0">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           checked="@IsPublic"
+                           @onchange="HandlePublicChangedAsync" />
+                    <span class="form-check-label">Общий</span>
+                </label>
+            }
+            <a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+               title="Печать"
+               href="@($"/print/{BusinessEntityId}")">
+                <span class="material-icons" aria-hidden="true" style="font-size: 1rem; line-height: 1;">print</span>
+                <span>Печать</span>
+            </a>
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    title="@(CanEdit ? "Редактировать последнюю версию" : "Редактирование доступно только для последней версии")"
+                    disabled="@(!CanEdit)"
+                    @onclick="HandleEditAsync">
+                Edit
+            </button>
+            <label class="btn btn-sm btn-outline-secondary mb-0">
+                Импорт
+                <InputFile class="d-none" OnChange="HandleImportSelected" accept=".txt,.md,.markdown,.html,.htm" disabled="@(!CanEdit)" />
+            </label>
+            <button type="button"
+                    class="btn btn-sm btn-outline-success"
+                    disabled="@(!CanPublish)"
+                    @onclick="HandlePublishAsync">
+                Опубликовать
+            </button>
+        </div>
+    </div>
+
+    @if (IsBusy)
+    {
+        <div class="alert alert-secondary mb-0">Обработка rich-text документа...</div>
+    }
+    else if (IsDocumentEmpty)
+    {
+        <div class="alert alert-secondary mb-0">Документ пуст. Импортируйте .txt, .md или .html.</div>
+    }
+    else
+    {
+        <div class="rich-text-document-layout">
+            <div class="rich-text-document-layout__outline">
+                <RichTextDocumentOutline Nodes="VisibleOutlineNodes"
+                                         TreeElementId="@OutlineTreeElementId"
+                                         DisplayLevelCount="@DisplayLevelCount"
+                                         IsLoading="@IsOutlineLoading"
+                                         IsRebuilding="@IsRebuildingTableOfContents"
+                                         CanRebuild="@CanEdit"
+                                         HideScrollbar="@HideTableOfContentsScrollbar"
+                                         OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
+                                         OnRebuildRequested="HandleRebuildTableOfContentsAsync"
+                                         OnHeadingSelected="HandleHeadingSelectedAsync" />
+            </div>
+            <div class="rich-text-document-layout__content">
+                <RichTextDocumentViewport @ref="Viewport"
+                                          ViewportElementId="@ViewportElementId"
+                                          BusinessEntityId="@BusinessEntityId"
+                                          DocumentVersion="@ViewedVersion"
+                                          OutlineNodes="@LocalOutlineNodes"
+                                          IsInitialContentLoading="@IsInitialContentLoading"
+                                          InitialTargetPosition="@InitialTargetPosition"
+                                          InitialWindow="@InitialChunkWindow" />
+            </div>
+            <div class="rich-text-document-layout__widgets">
+                <RichTextDocumentWidgets BusinessEntityId="@BusinessEntityId"
+                                         Bookmarks="@Bookmarks"
+                                         ActiveBookmarkId="@ActiveBookmarkId"
+                                         VersionsRefreshToken="@VersionsRefreshToken"
+                                         ViewedVersion="@ViewedVersion"
+                                         LatestVersion="@LatestVersion"
+                                         PublishedVersion="@PublishedVersion"
+                                         CanBrowseVersions="@CanBrowseVersions"
+                                         OnSearchNext="HandleSearchNextAsync"
+                                         OnSearchPrevious="HandleSearchPreviousAsync"
+                                         OnCreateBookmark="HandleCreateBookmarkAsync"
+                                         OnBookmarkSelected="HandleBookmarkSelectedAsync"
+                                         OnBookmarkDeleted="HandleBookmarkDeletedAsync"
+                                         OnVersionSelected="HandleVersionSelectedAsync" />
+            </div>
+        </div>
+    }
+</div>

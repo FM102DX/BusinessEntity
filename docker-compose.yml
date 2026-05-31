@@ -1,0 +1,171 @@
+name: businessentity-stack
+
+services:
+
+  # ── Authentik PostgreSQL ──────────────────────────────────────────────────
+  authentic_postgresql:
+    image: docker.io/library/postgres:16-alpine
+    env_file:
+      - ./Authentic/.env
+    environment:
+      POSTGRES_DB: ${PG_DB:-authentik}
+      POSTGRES_PASSWORD: ${PG_PASS:?database password required}
+      POSTGRES_USER: ${PG_USER:-authentik}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    volumes:
+      - authentic_database:/var/lib/postgresql/data
+    networks:
+      - common
+
+  # ── Authentik Server ──────────────────────────────────────────────────────
+  authentic_server:
+    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.1}
+    command: server
+    depends_on:
+      authentic_postgresql:
+        condition: service_healthy
+    env_file:
+      - ./Authentic/.env
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: authentic_postgresql
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?secret key required}
+      AUTHENTIK_DEFAULT_LOCALE: en
+    ports:
+      - ${COMPOSE_PORT_HTTP:-9000}:9000
+      - ${COMPOSE_PORT_HTTPS:-9443}:9443
+    restart: unless-stopped
+    shm_size: 512mb
+    volumes:
+      - ./Authentic/data:/data
+      - ./Authentic/custom-templates:/templates
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/-/health/live/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - common
+
+  # ── Authentik Worker ──────────────────────────────────────────────────────
+  authentic_worker:
+    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.1}
+    command: worker
+    depends_on:
+      authentic_postgresql:
+        condition: service_healthy
+    env_file:
+      - ./Authentic/.env
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: authentic_postgresql
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?secret key required}
+    restart: unless-stopped
+    shm_size: 512mb
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./Authentic/data:/data
+      - ./Authentic/certs:/certs
+      - ./Authentic/custom-templates:/templates
+    networks:
+      - common
+
+  # ── BusinessEntity PostgreSQL ─────────────────────────────────────────────
+  postgres-production-db:
+    container_name: postgres-production-db
+    build:
+      context: ./postgres_db
+      dockerfile: Dockerfile
+    ports:
+      - "5470:5432"
+    environment:
+      POSTGRES_DB: main
+      POSTGRES_USER: adm01
+      POSTGRES_PASSWORD: adm01pwd
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adm01 -d main"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - common
+
+  # ── BusinessEntity App ────────────────────────────────────────────────────
+  business-entity:
+    container_name: business-entity-container
+    build:
+      context: .
+      dockerfile: ./BusinessEntity/Dockerfile
+    ports:
+      - "7000:80"
+    environment:
+      ASPNETCORE_URLS: http://*:80
+      ASPNETCORE_ENVIRONMENT: Development
+      IS_DOCKER: "true"
+      ConnectionStrings__DockerConnection: Host=postgres-production-db;Port=5432;Database=business_entity;Username=adm01;Password=adm01pwd
+      # Inside the common Docker network, talk to the Authentik service directly via DNS name
+      AUTHENTIK_BASE_URL: http://authentic_server:9000
+      # What browsers should use to reach Authentik
+      AUTHENTIK_BASE_URL_FOR_BROWSER: http://localhost:9000
+      # API token from Authentik (created via Django shell)
+      AUTHENTIK_API_TOKEN: ecm2ragMCo5vRjIqtdzXXnFARVbeczUyZtkCYrpgBD4dcz4JzfjdLQrL5ksZ
+      # Redirect URIs for our app (signin-oidc will be auto-added per host)
+      AUTHENTIK_REDIRECT_URIS: http://localhost:7000/auth/callback
+      # Disable bootstrap temporarily to test
+      EnsureAuthentikOnStartup: "false"
+      Storage__RootPath: /app/storage
+      Storage__HostRootPath: "C:\\Develop\\BusinessEntity\\BusinessEntityStorage"
+    volumes:
+      - ./BusinessEntityStorage:/app/storage
+    depends_on:
+      postgres-production-db:
+        condition: service_healthy
+      authentic_server:
+        condition: service_healthy
+    networks:
+      - common
+
+  # ── Web Logger ────────────────────────────────────────────────────────────
+  web_logger:
+    container_name: web_logger-container
+    build:
+      context: .
+      dockerfile: ./BlazorServerWebLogger/Dockerfile
+    ports:
+      - "5080:80"
+    environment:
+      ASPNETCORE_URLS: http://*:80
+      ASPNETCORE_ENVIRONMENT: Development
+      IS_DOCKER: "true"
+      ConnectionStrings__DockerConnection: Host=postgres-production-db;Port=5432;Database=web_logger;Username=adm01;Password=adm01pwd
+    depends_on:
+      postgres-production-db:
+        condition: service_healthy
+    networks:
+      - common
+
+# External shared network used across scripts and containers
+networks:
+  common:
+    external: true
+    name: docker-business-entity-common-bridge
+
+volumes:
+  pgdata:
+    driver: local
+  authentic_database:
+    driver: local

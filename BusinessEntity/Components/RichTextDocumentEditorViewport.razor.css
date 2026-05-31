@@ -1,0 +1,355 @@
+.rich-text-document-editor {
+    min-width: 0;
+}
+
+.rich-text-document-editor__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0 0.6rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #ffffff;
+}
+
+.rich-text-document-editor__toolbar .btn {
+    min-width: 2rem;
+    min-height: 1.9rem;
+    line-height: 1;
+}
+
+.rich-text-document-editor__toolbar .rich-text-document-editor__toggle-button.active,
+.rich-text-document-editor__toolbar .rich-text-document-editor__toggle-button.rich-text-document-editor__toggle-button--active {
+    color: #ffffff;
+    background: #2b6fd6;
+    border-color: #2b6fd6;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.rich-text-document-editor__table-control--hidden {
+    display: none;
+}
+
+.rich-text-document-editor__toolbar-separator {
+    align-self: stretch;
+    border-left: 1px solid #d9e1ea;
+    margin: 0 0.15rem;
+}
+
+.rich-text-document-editor__dirty {
+    color: #7a4d00;
+    font-size: 0.9rem;
+    margin-left: 0.5rem;
+}
+
+.rich-text-document-editor__viewport {
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+    background: #ffffff;
+    padding: 0.25rem 0 0.5rem 0;
+    min-height: 0;
+}
+
+.rich-text-document-editor__viewport:focus {
+    outline: none;
+}
+
+.rich-text-document-editor__spacer {
+    flex: 0 0 auto;
+    pointer-events: none;
+}
+
+.rich-text-document-editor__chunk {
+    display: block;
+    min-height: 1px;
+    border-left: 2px solid #dbe5f0;
+    padding-left: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.rich-text-document-editor__chunk--dirty {
+    border-left-color: #d58a00;
+}
+
+.rich-text-document-editor__chunk:focus-within {
+    border-left-color: #2b6fd6;
+}
+
+.rich-text-document-editor__chunk-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #7a8aa0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+.rich-text-document-editor__chunk-dirty {
+    color: #9a6200;
+}
+
+.rich-text-document-editor__host {
+    min-height: 2.5rem;
+}
+
+.rich-text-document-editor__loading {
+    color: #6c7a89;
+    font-size: 0.95rem;
+    padding: 0.25rem 0;
+}
+
+::deep .rich-text-tiptap-content {
+    min-height: 2.5rem;
+    outline: none;
+    line-height: 1.45;
+}
+
+::deep .rich-text-tiptap-content p {
+    margin: 0 0 1rem 0;
+}
+
+::deep .rich-text-tiptap-content h1,
+::deep .rich-text-tiptap-content h2,
+::deep .rich-text-tiptap-content h3 {
+    scroll-margin-top: 12px;
+}
+
+::deep .rich-text-tiptap-content pre {
+    background: #f0f0f0;
+    border-radius: 4px;
+    color: #111111;
+    font-family: Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    margin: 0 0 1rem 0;
+    overflow-x: auto;
+    padding: 1rem 1.25rem;
+    white-space: pre-wrap;
+}
+
+::deep .rich-text-tiptap-content pre code {
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+}
+
+::deep .rich-text-tiptap-content :not(pre) > code {
+    background: #eeeeee;
+    border-radius: 4px;
+    color: #a40000;
+    font-family: Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.95em;
+    padding: 0.1rem 0.3rem;
+}
+
+::deep .rich-text-tiptap-content table {
+    border-collapse: collapse;
+    margin: 0 0 1rem 0;
+    table-layout: fixed;
+    width: 100%;
+}
+
+::deep .rich-text-tiptap-content td,
+::deep .rich-text-tiptap-content th {
+    border: 1px solid #b9c6d5;
+    box-sizing: border-box;
+    min-width: 3rem;
+    padding: 0.35rem 0.45rem;
+    position: relative;
+    vertical-align: top;
+}
+
+::deep .rich-text-tiptap-content.resize-cursor {
+    cursor: col-resize;
+}
+
+::deep .rich-text-tiptap-content .column-resize-handle {
+    position: absolute !important;
+    right: -3px !important;
+    top: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    display: none !important;
+    overflow: hidden !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+    z-index: 20;
+    background: transparent !important;
+    pointer-events: none;
+}
+
+::deep .rich-text-tiptap-content .column-resize-handle * {
+    display: none !important;
+}
+
+::deep .rich-text-tiptap-content td:has(.column-resize-handle)::before,
+::deep .rich-text-tiptap-content th:has(.column-resize-handle)::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -3px;
+    bottom: 0;
+    width: 6px;
+    z-index: 20;
+    background: rgba(43, 111, 214, 0.35);
+    pointer-events: none;
+}
+
+::deep .rich-text-tiptap-content .column-resize-dragging {
+    background: rgba(43, 111, 214, 0.05);
+}
+
+::deep .rich-text-tiptap-content th {
+    background: #f1effa;
+    font-weight: 700;
+}
+
+::deep .rich-text-tiptap-content td[data-rich-table-row-number="true"],
+::deep .rich-text-tiptap-content th[data-rich-table-row-number="true"] {
+    background: #f8f6ff;
+    color: #536075;
+    font-weight: 700;
+    text-align: center;
+    width: 3.25rem;
+}
+
+::deep .rich-text-tiptap-content td > :last-child,
+::deep .rich-text-tiptap-content th > :last-child {
+    margin-bottom: 0;
+}
+
+::deep .rich-text-tiptap-content td > p:last-of-type,
+::deep .rich-text-tiptap-content th > p:last-of-type {
+    margin-bottom: 0;
+}
+
+::deep .rich-text-tiptap-content .selectedCell::after {
+    background: rgba(43, 111, 214, 0.12);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 1;
+}
+
+::deep .rich-text-tiptap-content .rich-text-image {
+    margin: 0 0 1rem 0;
+}
+
+::deep .rich-text-tiptap-content .rich-text-image img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    cursor: pointer;
+}
+
+::deep .rich-text-tiptap-content .rich-text-inline-image {
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
+    vertical-align: top;
+}
+
+::deep .rich-text-tiptap-content .rich-text-inline-image img {
+    max-width: 100%;
+    height: auto;
+    display: inline-block;
+    cursor: pointer;
+    vertical-align: top;
+}
+
+::deep .rich-text-tiptap-content .rich-text-video,
+::deep .rich-text-tiptap-content .rich-text-inline-video {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
+}
+
+::deep .rich-text-tiptap-content .rich-text-inline-video video,
+::deep .rich-text-tiptap-content .rich-text-video video {
+    height: 300px;
+    max-width: 100%;
+    display: inline-block;
+    vertical-align: top;
+    background: #000000;
+}
+
+::deep .rich-text-tiptap-content .rich-text-inline-video-upload-placeholder {
+    position: relative;
+    width: 300px;
+    height: 220px;
+    max-width: 100%;
+    display: inline-grid;
+    place-items: center;
+    border: 2px solid #8794a3;
+    background: #ffffff;
+    box-shadow: inset 0 0 18px rgba(15, 23, 42, 0.08);
+    vertical-align: top;
+}
+
+::deep .rich-text-tiptap-content .rich-text-inline-video-upload-play {
+    width: 0;
+    height: 0;
+    border-top: 42px solid transparent;
+    border-bottom: 42px solid transparent;
+    border-left: 70px solid #ef3d3d;
+    transform: translateX(8px);
+}
+
+::deep .rich-text-tiptap-content .rich-text-inline-video-upload-spinner {
+    position: absolute;
+    inset: 22px;
+    border-radius: 50%;
+    border: 14px solid transparent;
+    border-top-color: rgba(239, 61, 61, 0.95);
+    border-right-color: rgba(239, 61, 61, 0.65);
+    border-bottom-color: rgba(239, 61, 61, 0.25);
+    border-left-color: rgba(135, 148, 163, 0.35);
+    animation: rich-video-upload-spin 1.1s linear infinite;
+}
+
+::deep .rich-text-tiptap-content .rich-text-inline-video-upload-placeholder--failed {
+    border-color: #d73b3b;
+    background: #fff7f7;
+}
+
+::deep .rich-text-tiptap-content .rich-text-inline-video-upload-placeholder--failed .rich-text-inline-video-upload-spinner {
+    animation: none;
+    border-color: rgba(215, 59, 59, 0.2);
+}
+
+@keyframes rich-video-upload-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 1100px) {
+    .rich-text-document-editor__toolbar {
+        position: static;
+        flex-wrap: wrap;
+    }
+
+    .rich-text-document-editor__viewport {
+        max-height: none;
+        overflow: visible;
+        overscroll-behavior: auto;
+    }
+}

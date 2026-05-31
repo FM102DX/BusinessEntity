@@ -1,4 +1,8 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
+using System.Reflection;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using BlazorServerWebLogger.Contracts;
 using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.Messages;
@@ -7,20 +11,28 @@ using DynamicData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.WebLogger.Models;
+using System.Text.RegularExpressions;
 
 namespace BlazorServerWebLogger.Pages
 {
     public partial class Index : ComponentBase, IDisposable
     {
+        public string AppVersion { get; set; } = "1.0.0";
+        public string ReleaseDate { get; set; } = "2025-08-31";
         public int TotalLogsCount { get; set; } = 0;
         public ObservableCollection<LogEntryDbStorable> LogEntries { get; set; } = new();
         public List<FilterItem> ServiceCodeFilter { get; set; } = new();
         public List<FilterItem> MessageTypeFilter { get; set; } = new();
+        // New: Tags filter
+        public List<FilterItem> TagFilter { get; set; } = new();
+
         public IEnumerable<LogEntryDbStorable> FilteredLogEntries => LogEntries
             .Where(entry =>
                 ServiceCodeFilter.Any(filter => filter.Selected && filter.Code == entry.ServiceCode) &&
-                MessageTypeFilter.Any(filter => filter.Selected && filter.Code == entry.MessageType));
+                MessageTypeFilter.Any(filter => filter.Selected && filter.Code == entry.MessageType) &&
+                PassesTagFilter(entry)
+            );
         public LoggerMainViewSettings LoggerMainViewSettings { get; set; }
 
         [Inject]
@@ -35,10 +47,19 @@ namespace BlazorServerWebLogger.Pages
 
         public LogEntryDbStorable SelectedLogEntry { get; set; }
 
-        private Timer _timer;
+        private PeriodicTimer? _refreshTimer;
+        private CancellationTokenSource? _refreshLoopCts;
+        private Task? _refreshLoopTask;
+        private int _updateInProgress;
 
         protected override async Task OnInitializedAsync()
         {
+            // Версия и дата релиза из атрибутов сборки
+            var asm = typeof(Index).Assembly;
+            AppVersion = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? AppVersion;
+            var meta = asm.GetCustomAttributes<AssemblyMetadataAttribute>();
+            ReleaseDate = meta.FirstOrDefault(m => m.Key == "ReleaseDate")?.Value ?? ReleaseDate;
+
             // Загружаем начальные данные логов
             var data = await LogReaderService.ReadInitialAsync(n: 50);
             TotalLogsCount = data.Count;
@@ -51,28 +72,83 @@ namespace BlazorServerWebLogger.Pages
             // Обновляем состояние интерфейса
             StateHasChanged();
 
-            // Запускаем таймер для обновления данных
-            _timer = new Timer(async _ => await UpdateDataAsync(), null, 0, 500);
+            // Запускаем последовательный polling-цикл без наложения timer callbacks.
+            _refreshLoopCts = new CancellationTokenSource();
+            _refreshTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+            _refreshLoopTask = RunRefreshLoopAsync(_refreshLoopCts.Token);
+        }
+
+        private async Task RunRefreshLoopAsync(CancellationToken cancellationToken)
+        {
+            if (_refreshTimer == null)
+            {
+                return;
+            }
+
+            try
+            {
+                while (await _refreshTimer.WaitForNextTickAsync(cancellationToken))
+                {
+                    await UpdateDataAsync();
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Нормальное завершение цикла при dispose страницы.
+            }
         }
 
         private async Task UpdateDataAsync()
         {
-            var newEntries = await LogReaderService.ReadNewEntriesAsync(LogEntries.FirstOrDefault()?.Timestamp ?? DateTime.MinValue);
-            var totalCount = await LogReaderService.GetTotalLogCount();
-
-            await InvokeAsync(() =>
+            // Не допускаем наложения poll-циклов друг на друга.
+            if (Interlocked.Exchange(ref _updateInProgress, 1) == 1)
             {
-                if (newEntries.Any())
+                return;
+            }
+
+            try
+            {
+                var newEntries = await LogReaderService.ReadNewEntriesAsync(LogEntries.FirstOrDefault()?.Timestamp ?? DateTime.MinValue);
+                var totalCount = await LogReaderService.GetTotalLogCount();
+
+                await InvokeAsync(() =>
                 {
-                    foreach (var entry in newEntries)
+                    if (newEntries.Any())
                     {
-                        LogEntries.Insert(0, entry);
+                        // UI хранит только уникальные записи по Id, даже если read-цикл пересекся.
+                        var existingIds = LogEntries.Select(entry => entry.Id).ToHashSet();
+                        foreach (var entry in newEntries)
+                        {
+                            if (existingIds.Add(entry.Id))
+                            {
+                                LogEntries.Insert(0, entry);
+                            }
+                        }
+                        TotalLogsCount = totalCount;
+                        UpdateFilters();
                     }
-                    TotalLogsCount = totalCount;
-                    UpdateFilters();
+                    StateHasChanged();
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[INDEX-ERROR] Ошибка обновления данных UI: {ex.Message}");
+                if (ex.Message.Contains("Failed to connect") || ex.Message.Contains("timeout") || 
+                    ex.Message.Contains("Timeout") || ex.Message.Contains("172.22.0."))
+                {
+                    Console.WriteLine($"[INDEX-ERROR] 🚨 КРИТИЧЕСКАЯ ОШИБКА ПОДКЛЮЧЕНИЯ К БД!");
+                    Console.WriteLine($"[INDEX-ERROR] UI не может получить данные из БД");
+                    Console.WriteLine($"[INDEX-ERROR] Время: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+                    Console.WriteLine($"[INDEX-ERROR] Количество записей в UI: {LogEntries.Count}");
                 }
-                StateHasChanged();
-            });
+
+                // Не пробрасываем исключение, чтобы таймер продолжал работать
+                // Следующая попытка будет через 500ms
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _updateInProgress, 0);
+            }
         }
 
         private async Task UpdateFilters()
@@ -87,6 +163,12 @@ namespace BlazorServerWebLogger.Pages
             MessageTypeFilter = UpdateFilter(MessageTypeFilter,
                 s => s.MessageType,
                 s => new FilterItem() { Code = s, Selected = GetIsServiceCodeSelected(MessageTypeFilter, s, LoggerMainViewSettings.NonDisplayedMessageTypes) });
+
+            // Обновление Tags (получаем из текущих сообщений LINQ'ом)
+            TagFilter = UpdateFilterMany(TagFilter,
+                e => ExtractTags(e),
+                tag => new FilterItem { Code = tag, Selected = GetIsServiceCodeSelected(TagFilter, tag, LoggerMainViewSettings.NonDisplayedTags) }
+            );
 
             // Обновляем настройки на основе выбранных фильтров
             StateHasChanged();
@@ -103,6 +185,28 @@ namespace BlazorServerWebLogger.Pages
             .OrderBy(filter => filter.Code)
             .ToList();
         }
+
+        // New: Update filter for many values per entry (tags)
+        private List<FilterItem> UpdateFilterMany(List<FilterItem>? currentFilter, Func<LogEntryDbStorable, IEnumerable<string>> selectorMany, Func<string, FilterItem> selector2)
+        {
+            var comparer = StringComparer.OrdinalIgnoreCase;
+            // Собираем все теги по всем сообщениям
+            var distinct = LogEntries
+                .SelectMany(selectorMany)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(comparer)
+                .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            // Сохраняем выбор там, где это применимо
+            var result = new List<FilterItem>(distinct.Count);
+            foreach (var tag in distinct)
+            {
+                result.Add(selector2(tag));
+            }
+            return result;
+        }
+
         private bool GetIsServiceCodeSelected(List<FilterItem>? currentFilter, string code, string nonDisplayedStr)
         {
             //эта функция возвращает, выделен конктетный пункт меню или нет
@@ -127,6 +231,35 @@ namespace BlazorServerWebLogger.Pages
                 //для совсем новых элементов true, т.к. их никто не выключал
                 return true;
             }
+        }
+
+        // New: Regex for tags [text]
+        private static readonly Regex TagRegex = new Regex(@"\[(?<t>[^\]\[]+)\]", RegexOptions.Compiled);
+        private static IEnumerable<string> ExtractTags(LogEntryDbStorable e)
+        {
+            if (e == null || string.IsNullOrEmpty(e.Message))
+                return Enumerable.Empty<string>();
+
+            var matches = TagRegex.Matches(e.Message);
+            if (matches.Count == 0) return Enumerable.Empty<string>();
+
+            return matches.Select(m => m.Groups["t"].Value.Trim()).Where(s => !string.IsNullOrEmpty(s));
+        }
+
+        private bool PassesTagFilter(LogEntryDbStorable entry)
+        {
+            // Если тегов нет в системе — не ограничиваем выборку
+            if (TagFilter == null || TagFilter.Count == 0) return true;
+
+            var selectedTags = TagFilter.Where(f => f.Selected).Select(f => f.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Если есть теги, но ни один не выбран — ничего не показываем
+            if (selectedTags.Count == 0) return false;
+
+            var entryTags = ExtractTags(entry).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Внутри группы — OR: сообщение проходит, если содержит хотя бы один из выбранных тегов
+            return entryTags.Overlaps(selectedTags);
         }
 
         private async Task OnLogGenerationToggle(bool newState)
@@ -175,6 +308,18 @@ namespace BlazorServerWebLogger.Pages
                 value => LoggerMainViewSettings.NonDisplayedMessageTypes = value);
         }
 
+        // New: Метод для сохранения Tags фильтров
+        private async Task SaveTagsFilterAsync(FilterItem tagFilterItem, bool newValue)
+        {
+            await SaveFilterAsync(
+                tagFilterItem,
+                newValue,
+                () => LoggerMainViewSettings.DisplayedTags,
+                value => LoggerMainViewSettings.DisplayedTags = value,
+                () => LoggerMainViewSettings.NonDisplayedTags,
+                value => LoggerMainViewSettings.NonDisplayedTags = value);
+        }
+
         // Универсальный метод для сохранения фильтров
         private async Task SaveFilterAsync(
             FilterItem serviceFilterItem,
@@ -216,8 +361,10 @@ namespace BlazorServerWebLogger.Pages
 
         public void Dispose()
         {
-            // Очищаем таймер при завершении работы компонента
-            _timer?.Dispose();
+            // Останавливаем polling страницы при уничтожении компонента.
+            _refreshLoopCts?.Cancel();
+            _refreshTimer?.Dispose();
+            _refreshLoopCts?.Dispose();
         }
 
         // Вспомогательные классы для фильтров

@@ -1,0 +1,17 @@
+@using BusinessEntity.MiniApps.UserMessagesMiniApp.Contracts
+
+<article class="@CssClass">
+    <div class="user-message-item__header">
+        <span class="user-message-item__title">@Message.Title</span>
+        <time class="user-message-item__time" datetime="@Message.CreatedAt.ToString("O")">
+            @Message.CreatedAt.ToString("HH:mm:ss")
+        </time>
+    </div>
+    <div class="user-message-item__text">@Message.Text</div>
+</article>
+
+@code {
+    [Parameter] public UserMessageRecord Message { get; set; } = default!;
+
+    private string CssClass => $"user-message-item user-message-item--{Message.Level.ToString().ToLowerInvariant()}";
+}

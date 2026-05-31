@@ -4,50 +4,85 @@
 
 .top-row {
     height: 3.5rem;
-    background-color: rgba(0,0,0,0.4);
-}
-
-.navbar-brand {
-    font-size: 1.1rem;
+    background-color: transparent;
+    justify-content: flex-end;
+    padding-right: 1rem;
 }
 
 .oi {
     width: 2rem;
-    font-size: 1.1rem;
-    vertical-align: text-top;
-    top: -2px;
+    font-size: 1.4rem;
+    display: block;
 }
 
-.nav-item {
+/* Узкая боковая панель */
+.sidebar-collapsed .nav-item {
     font-size: 0.9rem;
-    padding-bottom: 0.5rem;
+    padding: 0.25rem 0;
+    text-align: center;
+    margin: 0 4px;
 }
 
-    .nav-item:first-of-type {
-        padding-top: 1rem;
-    }
-
-    .nav-item:last-of-type {
-        padding-bottom: 1rem;
-    }
-
-    .nav-item ::deep a {
-        color: #d7d7d7;
-        border-radius: 4px;
-        height: 3rem;
-        display: flex;
-        align-items: center;
-        line-height: 3rem;
-    }
-
-.nav-item ::deep a.active {
-    background-color: rgba(255,255,255,0.25);
-    color: white;
+.sidebar-collapsed .nav-item:first-of-type {
+    padding-top: 1rem;
 }
 
-.nav-item ::deep a:hover {
-    background-color: rgba(255,255,255,0.1);
+.sidebar-collapsed .nav-item:last-of-type {
+    padding-bottom: 1rem;
+}
+
+.sidebar-collapsed .nav-item ::deep a {
+    color: #d7d7d7;
+    border-radius: 8px;
+    height: 3.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    text-decoration: none;
+    position: relative;
+    transition: all 0.2s ease;
+    background: transparent !important;
+}
+
+.sidebar-collapsed .nav-item ::deep a.active {
     color: white;
+    background: transparent !important;
+}
+
+.sidebar-collapsed .nav-item ::deep a:hover {
+    color: white;
+    background: transparent !important;
+    transform: translateY(-1px);
+}
+
+/* Скрываем текст в узкой панели */
+.sidebar-collapsed .nav-text {
+    display: none;
+}
+
+/* Центрируем иконки */
+.sidebar-collapsed .oi {
+    font-size: 1.6rem;
+    width: auto;
+    height: auto;
+    margin: 0;
+}
+
+/* Убираем все возможные фоны и тени от Bootstrap */
+.sidebar-collapsed .nav-item,
+.sidebar-collapsed .nav-item > *,
+.sidebar-collapsed .nav-item ::deep *,
+.sidebar-collapsed .nav-link,
+.sidebar-collapsed .nav-link:hover,
+.sidebar-collapsed .nav-link:focus,
+.sidebar-collapsed .nav-link.active {
+    background-color: transparent !important;
+    background-image: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
 }
 
 @media (min-width: 641px) {

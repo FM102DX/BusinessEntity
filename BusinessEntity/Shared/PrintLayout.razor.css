@@ -1,0 +1,10 @@
+.print-layout {
+    min-height: 100vh;
+    background: #050505;
+}
+
+@media print {
+    .print-layout {
+        background: #ffffff;
+    }
+}

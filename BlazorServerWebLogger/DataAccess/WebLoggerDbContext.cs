@@ -1,17 +1,12 @@
-﻿using BlazorServerWebLogger.Data;
+using BlazorServerWebLogger.Data;
 using BlazorServerWebLogger.Data.App;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
-using Microsoft.EntityFrameworkCore;
-using SampleOnlineMall.Core;
-using SampleOnlineMall.Core.Models;
-using SampleOnlineMall.DataAccess;
-using SampleOnlineMall.DataAccess.Abstract;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.WebLogger.Models;
 
 using Microsoft.EntityFrameworkCore;
 
-namespace SampleOnlineMall.WebLogger.DataAccess
+namespace BusinessEntity.WebLogger.DataAccess
 {
     /// <summary>
     /// Контекст базы данных для хранения логов.

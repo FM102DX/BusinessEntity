@@ -1,6 +1,6 @@
-﻿using AutoMapper;
-using SampleOnlineMall.Service.WebLogging;
-using SampleOnlineMall.WebLogger.Models;
+using AutoMapper;
+using BusinessEntity.Service.WebLogging;
+using BusinessEntity.WebLogger.Models;
 namespace BlazorServerWebLogger.Data
 {
     public class MappingProfile : Profile

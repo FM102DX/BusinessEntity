@@ -1,29 +1,23 @@
-﻿using System.Collections.ObjectModel;
-using BusinessEntity.Contracts;
-using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Classes;
-using BusinessEntity.Core.Services;
-using BusinessEntity.Data;
-using BusinessEntity.Data.Messages;
-using BusinessEntity.Data.Services;
-using BusinessEntity.Services;
+using BusinessEntity.Core.Contracts;
+using BusinessEntity.Contracts;
 using BusinessEntity.Models;
-using DynamicData;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
+using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
-using ReactiveUI;
-using SampleOnlineMall.WebLogger.Models;
-using System.Security.Claims;
+using BusinessEntity.Core.BaseClasses.Relations;
 
 namespace BusinessEntity.Pages
 {    public partial class Index : ComponentBase
     {
-        [Inject] public IApplicationSideAuthService AuthService { get; set; } = default!;
+        [Inject] public IUserConnector UserConnector { get; set; } = default!;
+        [Inject] public IUserContextService UserContext { get; set; } = default!;
         [Inject] public NavigationManager Navigation { get; set; } = default!;
         [Inject] public ILogger<Index> Logger { get; set; } = default!;
         [Inject] public IPossibleEntityRelationTypesProvider RelationTypesProvider { get; set; } = default!;
-        [Inject] public ISampleDataService SampleDataService { get; set; } = default!;
-        [Inject] public BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
+        [Inject] public BusinessEntity.Core.Services.BusinessEntityHelper BusinessEntityHelper { get; set; } = default!;
+        [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
         
         private string? CurrentUserName { get; set; }
         private string? CurrentUserId { get; set; }
@@ -32,24 +26,26 @@ namespace BusinessEntity.Pages
         private IEnumerable<string> EntityTypeEnums { get; set; } = new List<string>();
         private IEnumerable<string> RelationTypeEnums { get; set; } = new List<string>();
         private List<BusinessEntity.Core.Classes.BusinessEntity> BusinessEntities { get; set; } = new List<BusinessEntity.Core.Classes.BusinessEntity>();
-        private TreeNodeItem? SelectedTreeNode { get; set; }
+        private IReadOnlyList<UserSpaceRecord> AnonymousAccessibleSpaces { get; set; } = Array.Empty<UserSpaceRecord>();
+        private bool IsAnonymousSpacesLoading { get; set; }
+        private UserSpaceRecord? CurrentAnonymousSpace => UserContext.CurrentSpaceId.HasValue
+            ? AnonymousAccessibleSpaces.FirstOrDefault(space => space.Id == UserContext.CurrentSpaceId.Value)
+            : null;
+        
+        // Состояние выбранных узлов дерева через сервис
+        private bool IsMultiSelectActive => TreeSelectionService.IsMultiSelectActive;
 
         protected override async Task OnInitializedAsync()
         {
             try
             {
-                IsAuthenticated = await AuthService.IsUserAuthenticatedAsync();
-                  if (IsAuthenticated)
+                var currentUser = await UserConnector.GetCurrentUserAsync();
+                IsAuthenticated = currentUser?.IsAuthenticated == true;
+
+                if (IsAuthenticated)
                 {
-                    CurrentUserName = await AuthService.GetUserNameAsync();
-                    
-                    // Получаем ID пользователя из клеймов
-                    var currentUser = await AuthService.GetCurrentUserAsync();
-                    if (currentUser?.Identity != null)
-                    {
-                        CurrentUserId = currentUser.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                                       ?? currentUser.FindFirst("sub")?.Value;
-                    }
+                    CurrentUserName = currentUser!.UserName;
+                    CurrentUserId = currentUser.UserId;
                     
                     // Получаем возможные отношения между сущностями
                     PossibleRelations = RelationTypesProvider.GetPossibleRelations();
@@ -60,19 +56,20 @@ namespace BusinessEntity.Pages
                     // Получаем все возможные типы отношений из enum
                     RelationTypeEnums = Enum.GetNames(typeof(BusinessEntityRelationTypeEnum));
                     
-                    // Инициализируем демо-данные
-                    await SampleDataService.InitializeSampleDataAsync();
-                    
                     // Загружаем созданные сущности
                     var entities = await BusinessEntityHelper.GetAllBusinessEntities();
                     BusinessEntities = entities.ToList();
                     
-                    Logger.LogInformation($"User {CurrentUserName} accessed main page");
+                    Logger.LogInformation("User {UserName} accessed main page", CurrentUserName);
                 }
                 else
                 {
+                    await LoadAnonymousEntryAsync();
                     Logger.LogInformation("Anonymous user accessed main page");
                 }
+
+                // Подписываемся на изменения выбора в дереве
+                TreeSelectionService.SelectionChanged += OnTreeSelectionChanged;
             }
             catch (Exception ex)
             {
@@ -80,13 +77,27 @@ namespace BusinessEntity.Pages
             }
         }
 
-        private void RedirectToLogin()
+        private void OnTreeSelectionChanged(List<TreeNodeItemViewModelBase> selectedNodes)
         {
             try
             {
-                var loginUrl = AuthService.GetLoginUrl("/");
-                Logger.LogInformation($"Redirecting user to Authentic login url={loginUrl}");
-                Navigation.NavigateTo(loginUrl, forceLoad: true);
+                Logger.LogInformation("Tree selection changed: {Count} nodes selected", selectedNodes.Count);
+                StateHasChanged(); // Обновляем UI при изменении выбора
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error handling tree selection change");
+            }
+        }
+
+        // Открывает локальную форму входа и возвращает пользователя на главную после авторизации.
+        private void OpenLoginForm()
+        {
+            try
+            {
+                var loginUrl = $"/login?returnUrl={Uri.EscapeDataString("/")}";
+                Logger.LogInformation("Redirecting anonymous user to local login form url={LoginUrl}", loginUrl);
+                Navigation.NavigateTo(loginUrl);
             }
             catch (Exception ex)
             {
@@ -94,22 +105,79 @@ namespace BusinessEntity.Pages
             }
         }
 
-        private void OnTreeNodeSelected(TreeNodeItem selectedNode)
+        // Загружает anonymous-доступные пространства и автоматически выбирает единственное пространство.
+        private async Task LoadAnonymousEntryAsync()
         {
+            IsAnonymousSpacesLoading = true;
             try
             {
-                SelectedTreeNode = selectedNode;
-                Logger.LogInformation($"Tree node selected: {selectedNode?.Title} (Type: {selectedNode?.EntityType})");
-                
-                // Здесь можно добавить дополнительную логику обработки выбранного узла
-                // Например, показать детали сущности в правой панели
-                
-                StateHasChanged();
+                AnonymousAccessibleSpaces = await UserConnector.GetAnonymousAccessibleSpacesAsync();
+                if (AnonymousAccessibleSpaces.Count == 0)
+                {
+                    Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/")}", replace: true);
+                    return;
+                }
+
+                if (UserContext.CurrentSpaceId.HasValue &&
+                    AnonymousAccessibleSpaces.Any(space => space.Id == UserContext.CurrentSpaceId.Value))
+                {
+                    await OpenFirstAnonymousDocumentAsync(UserContext.CurrentSpaceId.Value);
+                    return;
+                }
+
+                if (AnonymousAccessibleSpaces.Count == 1 &&
+                    (!UserContext.CurrentSpaceId.HasValue || UserContext.CurrentSpaceId.Value != AnonymousAccessibleSpaces[0].Id))
+                {
+                    SelectAnonymousSpace(AnonymousAccessibleSpaces[0].Id);
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                Logger.LogError(ex, "Error handling tree node selection");
+                IsAnonymousSpacesLoading = false;
             }
+        }
+
+        // Переводит anonymous-посетителя в выбранное публичное пространство через серверный endpoint.
+        private void SelectAnonymousSpace(Guid spaceId)
+        {
+            Navigation.NavigateTo($"/api/space/select-anonymous/{spaceId}", forceLoad: true);
+        }
+
+        // Открывает первый anonymous-доступный документ текущего пространства.
+        private async Task OpenFirstAnonymousDocumentAsync(Guid spaceId)
+        {
+            var documents = await UserConnector.GetAnonymousAccessibleDocumentsAsync(spaceId);
+            var firstDocument = documents.FirstOrDefault();
+            if (firstDocument == null)
+            {
+                Logger.LogInformation("Anonymous space {SpaceId} has no openable documents", spaceId);
+                return;
+            }
+
+            var route = firstDocument.EntityType switch
+            {
+                BusinessEntityTypeEnum.RichTextDocument => $"/rich-document/{firstDocument.Id}",
+                BusinessEntityTypeEnum.Document => $"/document/{firstDocument.Id}",
+                _ => "/"
+            };
+
+            if (route == "/")
+            {
+                return;
+            }
+
+            Logger.LogInformation(
+                "Opening first anonymous document {DocumentId} of type {EntityType} in space {SpaceId}",
+                firstDocument.Id,
+                firstDocument.EntityType,
+                spaceId);
+            Navigation.NavigateTo(route);
+        }
+
+        // Вспомогательные методы для работы с выбранными узлами
+        private string GetSelectedNodesInfo()
+        {
+            return TreeSelectionService.GetSelectedNodesInfo();
         }
     }
 }

@@ -8,6 +8,22 @@ main {
     flex: 1;
 }
 
+/* New center wrapper that holds the top bar (X) and the horizontal row (B+C+D) */
+.center-area {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Horizontal row that contains B (tree-panel), C (main), D (right-panel) */
+.main-row {
+    display: flex;
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .sidebar {
     background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
 }
@@ -15,6 +31,13 @@ main {
 .tree-panel {
     background-color: #f8f9fa;
     border-right: 1px solid #d6d5d5;
+    display: none;
+}
+
+/* Right side fixed panel (D) */
+.right-panel {
+    background-color: #f8f9fa;
+    border-left: 1px solid #d6d5d5;
     display: none;
 }
 
@@ -34,30 +57,283 @@ main {
     color: #495057;
 }
 
-.tree-content {
-    height: calc(100vh - 56px);
-    overflow-y: auto;
-    padding: 8px;
-}
-
-.top-row {
-    background-color: #f7f7f7;
+.right-header {
+    background-color: #e9ecef;
     border-bottom: 1px solid #d6d5d5;
-    justify-content: flex-end;
+    padding: 12px 16px;
     height: 56px;
     display: flex;
     align-items: center;
 }
 
-    .top-row ::deep a, .top-row .btn-link {
-        white-space: nowrap;
-        margin-left: 24px;
-    }
+.right-header h6 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+}
 
-    .top-row a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+.tree-content {
+    /* viewport minus top-row (56) */
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+.right-content {
+    /* viewport minus top-row (56) minus own header (56) */
+    height: calc(100vh - 112px);
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+.top-row {
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #d6d5d5;
+    height: 56px;
+    display: flex;
+    align-items: center;
+}
+
+.top-row ::deep .app-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-width: 0;
+}
+
+.top-row ::deep .app-header__company {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #4b1f73;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.top-row ::deep .app-header__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 24px;
+    min-width: 0;
+    margin-left: auto;
+}
+
+.top-row ::deep .app-header__space {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.top-row ::deep .app-header__user-menu {
+    position: relative;
+    margin: 0;
+}
+
+.top-row ::deep .app-header__user-menu summary {
+    list-style: none;
+}
+
+.top-row ::deep .app-header__user-menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.top-row ::deep .app-header__avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 0;
+    background: #00897b;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+
+.top-row ::deep .app-header__login {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 16px;
+    border: 1px solid #0d6efd;
+    border-radius: 4px;
+    background: #0d6efd;
+    color: #fff;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.top-row ::deep .app-header__login:hover,
+.top-row ::deep .app-header__login:focus {
+    background: #0b5ed7;
+    border-color: #0a58ca;
+    color: #fff;
+    text-decoration: none;
+}
+
+.top-row ::deep .app-header__link-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 14px;
+    border: 1px solid #b8c5d6;
+    border-radius: 4px;
+    background: #fff;
+    color: #27364a;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.top-row ::deep .app-header__link-button:hover,
+.top-row ::deep .app-header__link-button:focus {
+    border-color: #0d6efd;
+    color: #0d6efd;
+    text-decoration: none;
+}
+
+.top-row ::deep .app-header__dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    min-width: 180px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+    padding: 8px 0;
+    z-index: 20;
+}
+
+.top-row ::deep .app-header__dropdown-item {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 10px 16px;
+    color: #212529;
+    text-decoration: none;
+    text-align: left;
+    white-space: nowrap;
+    font: inherit;
+    cursor: pointer;
+}
+
+.top-row ::deep .app-header__dropdown-item:hover {
+    background: #f5f0ff;
+    color: #4b1f73;
+}
+
+.top-row ::deep .app-header__dropdown-separator {
+    height: 1px;
+    margin: 6px 0;
+    background: #e4e7eb;
+}
+
+.top-row ::deep .app-header__dropdown-submenu {
+    position: relative;
+}
+
+.top-row ::deep .app-header__dropdown-submenu-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.top-row ::deep .app-header__dropdown-submenu-arrow {
+    color: #6c757d;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.top-row ::deep .app-header__submenu {
+    display: none;
+    position: absolute;
+    top: -8px;
+    right: calc(100% - 2px);
+    min-width: 220px;
+    max-width: 320px;
+    max-height: 340px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+    padding: 8px 0;
+    z-index: 21;
+}
+
+.top-row ::deep .app-header__dropdown-submenu:hover .app-header__submenu,
+.top-row ::deep .app-header__dropdown-submenu:focus-within .app-header__submenu {
+    display: block;
+}
+
+.top-row ::deep .app-header__submenu-item,
+.top-row ::deep .app-header__submenu-empty {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 9px 14px;
+    color: #212529;
+    text-decoration: none;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font: inherit;
+}
+
+.top-row ::deep .app-header__submenu-item {
+    cursor: pointer;
+}
+
+.top-row ::deep .app-header__submenu-empty {
+    color: #6c757d;
+    cursor: default;
+}
+
+.top-row ::deep .app-header__submenu-separator {
+    height: 1px;
+    margin: 6px 0;
+    background: #e4e7eb;
+}
+
+.top-row ::deep .app-header__submenu-item:hover,
+.top-row ::deep .app-header__submenu-item:focus {
+    background: #f5f0ff;
+    color: #4b1f73;
+    text-decoration: none;
+}
+
+.top-row ::deep .app-header__submenu-item--current {
+    background: #eef6ff;
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+.top-row ::deep .app-header__submenu-item--all {
+    font-weight: 600;
+}
 
 @media (max-width: 640.98px) {
     .top-row:not(.auth) {
@@ -68,8 +344,16 @@ main {
         justify-content: space-between;
     }
 
-    .top-row a, .top-row .btn-link {
-        margin-left: 0;
+    .top-row ::deep .app-header {
+        justify-content: flex-end;
+    }
+
+    .top-row ::deep .app-header__company {
+        display: none;
+    }
+
+    .top-row ::deep .app-header__actions {
+        gap: 12px;
     }
 }
 
@@ -93,9 +377,21 @@ main {
         width: 280px;
         min-width: 280px;
         max-width: 280px;
-        height: 100vh;
+        height: calc(100vh - 56px);
         position: sticky;
-        top: 0;
+        top: 56px; /* sit under the top-row */
+        overflow: hidden;
+    }
+
+    /* D has same width as B */
+    .right-panel {
+        display: block;
+        width: 280px;
+        min-width: 280px;
+        max-width: 280px;
+        height: calc(100vh - 56px);
+        position: sticky;
+        top: 56px; /* sit under the top-row */
         overflow: hidden;
     }
 

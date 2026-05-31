@@ -1,0 +1,20 @@
+namespace BusinessEntity.Core.RichText
+{
+    // Window of rich-text chunks loaded for virtualized document viewing.
+    public class RichTextDocumentChunkWindow
+    {
+        public Guid BusinessEntityId { get; set; }
+
+        public long StartSortOrder { get; set; }
+
+        public int TotalChunkCount { get; set; }
+
+        public IReadOnlyList<RichTextDocumentChunk> Chunks { get; set; } = Array.Empty<RichTextDocumentChunk>();
+
+        public long EndSortOrder => Chunks.Count == 0 ? StartSortOrder - 1 : Chunks[^1].SortOrder;
+
+        public bool HasPrevious => Chunks.Count > 0 && StartSortOrder > 0;
+
+        public bool HasNext => Chunks.Count > 0 && EndSortOrder < TotalChunkCount - 1;
+    }
+}

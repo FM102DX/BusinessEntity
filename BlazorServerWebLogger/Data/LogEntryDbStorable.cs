@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using BlazorServerWebLogger.Contracts;
 using BlazorServerWebLogger.Data;
 
-namespace SampleOnlineMall.WebLogger.Models
+namespace BusinessEntity.WebLogger.Models
 {
     /// <summary>
     /// Класс для представления лог-сообщения в базе данных.

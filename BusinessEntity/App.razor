@@ -7,7 +7,14 @@
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <RouteView RouteData="@routeData" DefaultLayout="@typeof(BusinessEntity.Shared.MainLayout)" />
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(BusinessEntity.Shared.MainLayout)">
+                <Authorizing>
+                    <AuthentikLoginGate IsCheckingSession="true" />
+                </Authorizing>
+                <NotAuthorized>
+                    <AuthentikLoginGate />
+                </NotAuthorized>
+            </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>
