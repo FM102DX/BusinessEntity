@@ -1,3 +1,7 @@
+## Russian Version
+
+[Русская версия README](README.ru.md)
+
 ## Philosophy and Value
 
 The creator of the project got really fed up with the fact that deploying a local Confluence costs like a Boeing wing, so he gives everyone their own little Confluence for free and forever 😎😎
@@ -39,6 +43,8 @@ Important preview-stage notes:
 ## License
 
 The source code and documentation in this repository are distributed under the MIT License. See [LICENSE](LICENSE).
+
+### Attention!
 
 At the public incubation stage, the current public branch of Business Entity Engine is distributed under the MIT License. After a stable version is released, the project may introduce other licensing options, including more closed commercial editions or distributions. At the same time, the last version published under the MIT License will be fixed as an MIT version and will remain available in that capacity forever.
 

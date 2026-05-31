@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-05-31 08:55:52 +03:00
+
+### MINOR-FEATURES
+
+#### Public project documentation
+- Лицензионная ремарка о MIT-статусе public-incubation версии вынесена в заметный блок `Attention!` / `Внимание!` в русской и английской версиях README.
+- В английский README добавлена ссылка на русскую версию README; команда перевода уточнена с учетом этого исключения.
+
 ## [0.14.0] - 2026-05-31 08:37:51 +03:00
 
 ### MAJOR-FEATURES
