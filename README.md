@@ -1,19 +1,26 @@
-# Business Entity Engine
+## Philosophy and Value
 
-[Russian README](README.ru.md)
+The creator of the project got really fed up with the fact that deploying a local Confluence costs like a Boeing wing, so he gives everyone their own little Confluence for free and forever 😎😎
 
-Business Entity Engine is a self-deployable platform for building knowledge bases and business-object applications, where the core data model is built around a graph of business entities.
+## Business Entity Engine
 
-The current application is an ASP.NET Core / Blazor Server system that includes:
+Business Entity Engine is a self-deployable platform for building knowledge bases on business objects, where the core data model is built around a full graph of business entities.
 
-- spaces as the top-level work context;
-- folders, documents and rich documents as business entities;
-- graph relations between entities;
-- document and rich-document editing;
-- authentication through Authentik;
-- administration of users, roles, groups and access rights;
-- deployment assets for Docker Compose;
-- an experimental mini-app/plugin model direction.
+## Philosophy of Business Objects
+
+This system stores information in something called a business object. Business objects have commutativity, meaning they can be inserted into each other (embed) or form applications that exist inside business entities.
+
+Applications can be part of the build, or they can be delivered inside plugins. The plugin and application mechanism is currently being developed.
+
+## Development Philosophy
+
+The Business Entity Engine development platform is built on Blazor because the author loves Blazor 😎😎, loves full OOP and loves it when the frontend and backend are written in one stack. We may consider other frontend options in the future if we run into performance limits.
+
+## AI Policy
+
+This product is 99% written through AI (windsurf, codex, claude), and the author plans to continue this way. The author is not a vibe coder and understands everything that happens in the code, all technologies and processes.
+
+All instructions used in prompting are located in the Context folder.
 
 ## Project Status
 
@@ -26,6 +33,7 @@ Important preview-stage notes:
 - APIs, storage layout, deployment scripts and migration mechanics may change.
 - This is not yet a polished production distribution.
 - Security, backup, storage and the access-rights model are still being hardened.
+- Plugin and application mechanisms have not yet been developed.
 - Before exposing an instance to the network, carefully review configuration and secrets.
 
 ## License
@@ -36,7 +44,7 @@ At the public incubation stage, the current public branch of Business Entity Eng
 
 The MIT License applies to code and documentation. It does not transfer rights to use the Business Entity name, logo, icons, visual identity, official project status, names of official releases, official domains or official distribution channels in a way that may mislead users.
 
-See [TRADEMARK.md](TRADEMARK.md) for the brand and trademark policy.
+See TRADEMARK.md for the brand and trademark policy.
 
 ## Brand Boundary
 
@@ -91,52 +99,13 @@ Default local endpoints:
 
 The root `docker-compose.yml` is development-oriented. Before public deployment, replace development secrets, review ports, review Authentik settings and use deployment assets from [Deployment](Deployment/README.md).
 
-## Deployment
-
-The target deployment model is a release bundle for a single Windows or Linux host with Docker Compose.
-
-See:
-
-- [Deployment README](Deployment/README.md)
-- [Deployment policy](Context/Policy/deployment-policy.md)
-
-The target operator flow:
-
-```text
-download release bundle
-unpack
-run install.ps1 / install.bat / install.sh
-start Docker Compose stack
-load initial data
-open the application
-```
-
-## Checklist Before Public Publishing
-
-Before publishing the repository, verify that it does not contain:
-
-- real production secrets;
-- private Authentik tokens;
-- private database dumps;
-- local storage with user files;
-- backups;
-- customer or personal data;
-- private logs;
-- machine-specific paths that should not be public.
-
-Any secret that has ever been committed must be rotated before the public repository can be considered safe.
-
-## Security
-
-Do not publish vulnerabilities in open issues if the report contains exploitation details.
-
-Until a separate `SECURITY.md` is created, report security concerns privately to the project maintainers. Where possible, include affected version, deployment mode, steps to reproduce, logs and a minimal proof of concept.
-
-Security-sensitive areas: authentication, authorization, access-right checks, file uploads, HTML handling in rich documents, imports, backups, path handling and plugin boundaries.
-
 ## Contributing
 
-The repository is currently at an early public incubation stage. Practical feedback is especially useful:
+The repository is currently at an early public incubation stage. The main contribution channel is GitHub Issues.
+
+We do not expect people to submit pull requests to this upstream repository. At this stage, the project needs feedback, not an external stream of branches and PRs. Forks for experiments are fine, but they should live as separate unofficial work unless explicitly agreed otherwise.
+
+Issues are especially useful for:
 
 - installation problems;
 - deployment feedback;
@@ -146,8 +115,6 @@ The repository is currently at an early public incubation stage. Practical feedb
 - feedback on the permission model;
 - rich-document editing scenarios;
 - experiments with plugins and mini-apps.
-
-It is better to submit small changes with a clear description of the scenario they improve.
 
 ## Official Status
 
