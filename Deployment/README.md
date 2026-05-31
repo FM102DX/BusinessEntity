@@ -1,6 +1,25 @@
 # BusinessEntity Release Bundle
 
-This folder is copied into a release bundle by `Powershell/Build-ReleaseBundle.ps1`.
+This folder contains the installation template for a packaged Business Entity release.
+
+In simple terms: the application itself lives in the main project folders, but this
+folder describes how to deliver it to another machine. The release builder
+`Powershell/Build-ReleaseBundle.ps1` copies these files into a downloadable archive.
+After that, a user can unpack the archive, run `install.ps1` or `install.bat`, and
+get a local Docker-based Business Entity instance without manually assembling the
+Compose stack.
+
+This folder is useful for deployment and first installation. It is not required for
+day-to-day local development from source.
+
+The folder contains:
+
+- `docker-compose.yml` - the Docker Compose stack used by the release bundle;
+- `.env.example` - a template for local deployment settings and secrets;
+- `install.ps1` / `install.bat` - first-run installer scripts;
+- `deploy.ps1` - helper commands for status, logs, restart and stop;
+- `scripts/bootstrap-initial-data.ps1` - initial data/bootstrap helper;
+- `README.md` - this deployment note.
 
 ## Install
 

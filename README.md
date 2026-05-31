@@ -1,8 +1,4 @@
-## Russian Version
-
-[Русская версия README](README.ru.md)
-
-## Business Entity Engine
+## Business Entity Engine [RUS](README.ru.md)
 
 Business Entity Engine is a self-deployable platform for building knowledge bases on business objects, where the core data model is built around a full graph of business entities.
 

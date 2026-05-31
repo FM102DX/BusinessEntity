@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-05-31 09:31:24 +03:00
+
+### MINOR-FEATURES
+
+#### Public project documentation
+- Языковые ссылки в README сделаны компактными inline-ссылками `RUS` / `EN` в основном заголовке.
+- Deployment README дополнен простым объяснением назначения папки `Deployment` как шаблона установочного Docker-архива.
+
 ## [0.14.2] - 2026-05-31 09:21:54 +03:00
 
 ### MINOR-FEATURES
