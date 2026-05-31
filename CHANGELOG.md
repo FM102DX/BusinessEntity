@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-05-31 09:21:54 +03:00
+
+### MINOR-FEATURES
+
+#### Public project documentation
+- Авторские ремарки о ценности проекта и выборе Blazor вынесены из README в отдельные `AUTHOR_NOTE.md` и `AUTHOR_NOTE.ru.md`.
+- В русскую и английскую версии README добавлен блок дополнительных документов со ссылками на features overview, trademark policy и author note.
+
+#### Repository cleanup
+- Временные SQL-диагностики по чанкам rich-doc перенесены из корня репозитория в `Context/Misc/SqlDiagnostics`.
+
 ## [0.14.1] - 2026-05-31 08:55:52 +03:00
 
 ### MINOR-FEATURES
