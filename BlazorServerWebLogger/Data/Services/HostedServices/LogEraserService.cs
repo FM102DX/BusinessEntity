@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using BlazorServerWebLogger.Contracts;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.WebLogger.Models;
 
 namespace BlazorServerWebLogger.Data.Services.HostedServices
 {

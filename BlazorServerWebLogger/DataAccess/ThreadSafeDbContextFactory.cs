@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using BlazorServerWebLogger.Service.Logger;
 using Microsoft.EntityFrameworkCore;
-using SampleOnlineMall.WebLogger.DataAccess;
+using BusinessEntity.WebLogger.DataAccess;
 
 public class ThreadSafeDbContextFactory
 {

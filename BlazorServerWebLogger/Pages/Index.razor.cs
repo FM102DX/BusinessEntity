@@ -11,7 +11,7 @@ using DynamicData;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using ReactiveUI;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.WebLogger.Models;
 using System.Text.RegularExpressions;
 
 namespace BlazorServerWebLogger.Pages

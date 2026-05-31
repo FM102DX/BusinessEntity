@@ -13,8 +13,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using BusinessEntity.Core;
 using AutoMapper;
-using SampleOnlineMall.WebLogger.DataAccess;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.WebLogger.DataAccess;
+using BusinessEntity.WebLogger.Models;
 
 namespace BlazorServerWebLogger
 {

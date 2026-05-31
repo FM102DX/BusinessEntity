@@ -1,7 +1,7 @@
-﻿using BlazorServerWebLogger.Contracts;
+using BlazorServerWebLogger.Contracts;
 using Newtonsoft.Json;
 using BusinessEntity.Service;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.WebLogger.Models;
 
 
 namespace BlazorServerWebLogger.Data.Services

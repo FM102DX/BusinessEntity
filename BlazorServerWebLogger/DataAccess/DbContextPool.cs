@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using BlazorServerWebLogger.Service.Logger;
 using Microsoft.EntityFrameworkCore;
-using SampleOnlineMall.WebLogger.DataAccess;
+using BusinessEntity.WebLogger.DataAccess;
 
 public class DbContextPool
 {

@@ -7,7 +7,7 @@ using BlazorServerWebLogger.Contracts;
 using BusinessEntity.Service.WebLogging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using SampleOnlineMall.WebLogger.Models;
+using BusinessEntity.WebLogger.Models;
 
 namespace BlazorServerWebLogger.Services
 {

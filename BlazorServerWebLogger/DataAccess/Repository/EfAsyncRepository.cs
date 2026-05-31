@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using SampleOnlineMall.WebLogger.DataAccess;
+using BusinessEntity.WebLogger.DataAccess;
 using BlazorServerWebLogger.Contracts;
 using BusinessEntity.Service;
 using Radzen;

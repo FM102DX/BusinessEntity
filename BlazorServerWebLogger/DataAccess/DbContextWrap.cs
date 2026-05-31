@@ -1,6 +1,6 @@
 using System;
 using System.Threading;
-using SampleOnlineMall.WebLogger.DataAccess;
+using BusinessEntity.WebLogger.DataAccess;
 
 public class DbContextWrap : IDisposable
 {
