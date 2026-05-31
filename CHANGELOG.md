@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-05-31 10:08:32 +03:00
+
+### MINOR-FEATURES
+
+#### Public project documentation
+- Обзор текущих возможностей перенесен из отдельных `FEATURES.md` / `FEATURES.ru.md` прямо в английский и русский README.
+- Из блока дополнительных документов README удалены ссылки на удаленные FEATURES-документы.
+- Команда `readme-translate` обновлена после упразднения отдельных FEATURES-документов.
+
 ## [0.14.3] - 2026-05-31 09:31:24 +03:00
 
 ### MINOR-FEATURES

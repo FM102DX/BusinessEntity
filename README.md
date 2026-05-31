@@ -2,6 +2,18 @@
 
 Business Entity Engine is a self-deployable platform for building knowledge bases on business objects, where the core data model is built around a full graph of business entities.
 
+## Current Features
+
+The current application is an ASP.NET Core / Blazor Server system that includes:
+
+- spaces as the top-level work context;
+- folders, documents and rich documents as business entities;
+- the ability to store infinite texts in rich documents (limited only by your database resources);
+- the ability to upload images, video and audio and embed them into pages;
+- authentication through Authentik;
+- administration of users, roles, groups and access rights at the space level;
+- deployment assets for Docker Compose;
+
 ## Philosophy of Business Objects
 
 This system stores information in something called a business object. Business objects have commutativity, meaning they can be inserted into each other (embed) or form applications that exist inside business entities.
@@ -118,6 +130,5 @@ Forks and community builds must clearly identify themselves as unofficial.
 
 ## Additional Documents
 
-- [FEATURES.md](FEATURES.md) - current feature overview.
 - [TRADEMARK.md](TRADEMARK.md) - brand and trademark policy.
 - [AUTHOR_NOTE.md](AUTHOR_NOTE.md) - author's note on project philosophy and development choices.
