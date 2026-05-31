@@ -2,10 +2,6 @@
 
 [Русская версия README](README.ru.md)
 
-## Philosophy and Value
-
-The creator of the project got really fed up with the fact that deploying a local Confluence costs like a Boeing wing, so he gives everyone their own little Confluence for free and forever 😎😎
-
 ## Business Entity Engine
 
 Business Entity Engine is a self-deployable platform for building knowledge bases on business objects, where the core data model is built around a full graph of business entities.
@@ -15,10 +11,6 @@ Business Entity Engine is a self-deployable platform for building knowledge base
 This system stores information in something called a business object. Business objects have commutativity, meaning they can be inserted into each other (embed) or form applications that exist inside business entities.
 
 Applications can be part of the build, or they can be delivered inside plugins. The plugin and application mechanism is currently being developed.
-
-## Development Philosophy
-
-The Business Entity Engine development platform is built on Blazor because the author loves Blazor 😎😎, loves full OOP and loves it when the frontend and backend are written in one stack. We may consider other frontend options in the future if we run into performance limits.
 
 ## AI Policy
 
@@ -127,3 +119,9 @@ Issues are especially useful for:
 Only repositories, releases, packages, websites and services explicitly published by the Business Entity maintainers are considered official Business Entity distributions.
 
 Forks and community builds must clearly identify themselves as unofficial.
+
+## Additional Documents
+
+- [FEATURES.md](FEATURES.md) - current feature overview.
+- [TRADEMARK.md](TRADEMARK.md) - brand and trademark policy.
+- [AUTHOR_NOTE.md](AUTHOR_NOTE.md) - author's note on project philosophy and development choices.
