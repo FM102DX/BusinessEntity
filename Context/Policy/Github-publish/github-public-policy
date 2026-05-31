@@ -1,0 +1,424 @@
+Да, тогда я бы вообще **не трогал защиту от хостинга на первом этапе**. На MIT-этапе тебе нужна не “лицензионная оборона”, а **брендовая рамка**:
+
+> Кодом делайте что хотите.
+> Но “Business Entity” — это официальный проект, официальный бренд, официальный репозиторий, официальный сайт, официальные сборки и официальная линия развития.
+
+Это хороший и очень понятный договор для первого года.
+
+---
+
+## Главное разделение
+
+```text
+Код Business Entity Engine        → MIT, делайте что хотите
+Название Business Entity          → не MIT, контролируется владельцем бренда
+Логотип / иконка / стиль           → не MIT, контролируется владельцем бренда
+Официальные сборки                 → только твои
+Официальный сайт / GitHub / docs   → только твои
+```
+
+Это нормально: open-source лицензия на код сама по себе не обязана отдавать права на товарный знак или бренд. MIT-лицензия даёт широкие права на использование, копирование, модификацию, распространение и продажу **software and documentation**, при сохранении copyright notice и текста лицензии; но бренд лучше отдельно вынести в trademark/branding policy. ([Open Source Initiative][1])
+
+---
+
+# Что я бы сделал прямо сейчас
+
+## 1. Оставить код под MIT
+
+На первом году:
+
+```text
+Business Entity Engine
+License: MIT
+Status: Public Preview / Incubation
+Goal: real-world feedback, security reports, plugins, experiments
+```
+
+И прямо сказать:
+
+> “На этапе инкубации мы намеренно разрешаем широкое использование, форки, эксперименты и внедрения. Нам важно, чтобы движок попробовали в реальных условиях.”
+
+Это будет восприниматься хорошо.
+
+---
+
+## 2. Защитить название и визуальный бренд
+
+Тут два уровня.
+
+### Уровень А — мягкая защита через документы проекта
+
+В репозитории:
+
+```text
+LICENSE
+TRADEMARK.md
+BRANDING.md
+SECURITY.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+GOVERNANCE.md
+```
+
+Самое важное — `TRADEMARK.md`.
+
+В нём надо написать:
+
+```text
+Business Entity, Business Entity Engine, логотип, иконки и визуальная айдентика
+являются брендом официального проекта.
+
+MIT License applies to source code.
+It does not grant rights to use the Business Entity name, logo or visual identity
+in a way that implies official status, endorsement or affiliation.
+```
+
+То есть форкать можно, но нельзя сделать:
+
+```text
+business-entity-cloud.com
+“Official Business Entity Hosting”
+```
+
+если это не твой сервис.
+
+---
+
+### Уровень Б — настоящая регистрация товарного знака
+
+Если название тебе реально нравится и ты видишь в нём будущий продукт, я бы начал проверку и регистрацию.
+
+Для софта обычно смотрят классы Ниццкой классификации. WIPO описывает Nice Classification как международную классификацию товаров и услуг для регистрации знаков. ([Всемирная организация ИС][2]) Для твоего случая наиболее вероятны:
+
+| Класс        | Зачем                                                         |
+| ------------ | ------------------------------------------------------------- |
+| **Class 9**  | скачиваемое ПО, desktop/server software, installable packages |
+| **Class 42** | SaaS, PaaS, software development, cloud/hosting/IT services   |
+
+Class 42 у WIPO включает, в частности, design and development of computer hardware and software. ([nclpub.wipo.int][3]) А Class 9 покрывает информационно-технологическое оборудование и связанные software goods. ([Всемирная организация ИС][4])
+
+В России этим занимается Роспатент; у него есть публичные сервисы и классификации, включая Nice Classification. ([rospatent.gov.ru][5])
+
+---
+
+# Какой общественный договор написать
+
+Я бы сделал очень простую и симпатичную позицию:
+
+```text
+Business Entity Engine is MIT-licensed during the incubation stage.
+
+For the first year, we intentionally keep the engine permissive:
+you can install it, fork it, modify it, break it, test it, deploy it,
+write plugins, build prototypes and explore weird use cases.
+
+We want real-world feedback, security reports, plugin experiments,
+and practical criticism.
+
+The code is MIT.
+The Business Entity name, logo and official identity are not.
+
+Forks and derived projects are welcome, but they must not present themselves
+as the official Business Entity project unless explicitly authorized.
+```
+
+По-русски:
+
+```text
+Business Entity Engine распространяется под MIT на этапе инкубации.
+
+Мы намеренно разрешаем широкое использование: ставьте, форкайте,
+ломайте, дорабатывайте, пишите плагины, проверяйте безопасность,
+используйте в реальных сценариях и присылайте замечания.
+
+Код открыт под MIT.
+Название Business Entity, логотип и официальная айдентика не передаются
+по MIT-лицензии.
+
+Форки и производные проекты приветствуются, но они не должны выдавать себя
+за официальный Business Entity или создавать впечатление официальной поддержки,
+одобрения или аффилированности.
+```
+
+Это ровно то, что тебе нужно.
+
+---
+
+# Что разрешить, а что запретить брендом
+
+| Сценарий                                                      |      Разрешить? | Комментарий                                |
+| ------------------------------------------------------------- | --------------: | ------------------------------------------ |
+| Поставить Business Entity себе                                |              Да | Главная цель первого года                  |
+| Форкнуть код                                                  |              Да | MIT                                        |
+| Переписать половину движка                                    |              Да | Пусть ломают                               |
+| Сделать плагин                                                |              Да | Нужно для экосистемы                       |
+| Сделать свою сборку для внутреннего использования             |              Да | Полезно                                    |
+| Написать “based on Business Entity Engine”                    |              Да | Нормально                                  |
+| Назвать форк “Business Entity Pro”                            |             Нет | Похоже на официальную версию               |
+| Использовать официальный логотип для форка                    |             Нет | Путает пользователей                       |
+| Сделать сайт “Official Business Entity Hosting”               |             Нет | Это уже захват бренда                      |
+| Продавать консалтинг “we support Business Entity deployments” | Да, с оговоркой | Если не притворяются официальным партнёром |
+| Написать “Unofficial plugin for Business Entity”              |              Да | Хороший формат                             |
+| Сделать “Business Entity-compatible module”                   |              Да | Совместимость можно упоминать              |
+| Создать “Business Entity Foundation” без тебя                 |             Нет | Захват governance/бренда                   |
+
+---
+
+# Названия для форков и производных работ
+
+В `TRADEMARK.md` я бы разрешил такие формулировки:
+
+```text
+Allowed:
+- "Fork of Business Entity Engine"
+- "Powered by Business Entity Engine"
+- "Compatible with Business Entity"
+- "Unofficial plugin for Business Entity"
+- "Built on Business Entity Engine"
+```
+
+И запретил такие:
+
+```text
+Not allowed:
+- "Official Business Entity"
+- "Business Entity Cloud"
+- "Business Entity Pro"
+- "Business Entity Enterprise"
+- "Business Entity Hosting"
+- "Business Entity Certified"
+- использование логотипа без разрешения
+- домены, создающие впечатление официальности
+```
+
+То есть не надо душить людей. Надо просто не дать им украсть “официальность”.
+
+---
+
+# Брендовая архитектура
+
+Я бы сразу закрепил такие имена:
+
+```text
+Business Entity Engine     — бесплатное MIT-ядро
+Business Entity Platform   — будущая официальная платформа
+Business Entity Cloud      — будущий официальный хостинг, если будет
+Business Entity Enterprise — будущая корпоративная поставка
+Business Entity Plugins    — экосистема расширений
+```
+
+И желательно забрать домены/аккаунты:
+
+```text
+businessentity.dev
+businessentity.io
+businessentity.org
+GitHub org: business-entity или businessentity
+NuGet namespace: BusinessEntity.*
+Docker Hub / GHCR namespace
+YouTube / Telegram / Discord / X / LinkedIn, если нужно
+```
+
+Даже если пока там пусто — это дешёвая защита от хаоса.
+
+---
+
+# Очень важный момент про логотип
+
+Не клади исходники логотипа в репозиторий просто как обычный MIT-файл, если хочешь контролировать бренд.
+
+Лучше:
+
+```text
+/assets/brand/logo.svg
+```
+
+И рядом:
+
+```text
+/assets/brand/LICENSE.txt
+```
+
+Где написано:
+
+```text
+The Business Entity name, logo, icon and visual identity are trademarks
+and are not licensed under the MIT License.
+
+You may use them only to refer to the official project,
+unless you have written permission.
+```
+
+Или вообще держать брендовые исходники отдельно от code repo.
+
+---
+
+# Какой README нужен для первого года
+
+README должен быть не “продажным”, а **живым и приглашающим**:
+
+```text
+Business Entity Engine
+MIT-licensed engine for building self-hosted knowledge bases and business-object applications.
+
+This project is in public incubation.
+We are looking for:
+- real-world installations
+- bug reports
+- security reports
+- plugin experiments
+- feedback on storage model
+- feedback on permissions
+- feedback on document editing
+- migration scenarios
+```
+
+И дальше:
+
+```text
+What you can do:
+- install it
+- fork it
+- modify it
+- build plugins
+- test it in teams
+- report security issues
+- build prototypes on top of it
+
+What you should not do:
+- present a fork as the official Business Entity project
+- use the official logo/name in a misleading way
+```
+
+Вот это будет хорошая рамка.
+
+---
+
+# Security feedback: надо сразу сделать нормально
+
+Если ты прямо хочешь, чтобы люди нашли security issues, нужен `SECURITY.md`.
+
+В нём:
+
+```text
+Supported versions:
+- 0.x public preview: best-effort security fixes
+
+How to report:
+- email
+- GitHub private vulnerability reporting, если включишь
+- что приложить: version, steps, logs, PoC
+
+Scope:
+- XSS
+- auth bypass
+- file upload issues
+- path traversal
+- SSRF, если есть загрузка внешних ресурсов
+- plugin sandbox escapes
+- permission bypass
+```
+
+GitHub поддерживает security policies и private vulnerability reporting для репозиториев; это лучше, чем просить людей кидать уязвимости публично в issues. GitHub также имеет отдельную trademark policy для случаев, когда чужой знак используется так, что может вводить в заблуждение относительно продукта или сервиса. ([GitHub Docs][6])
+
+---
+
+# Практический набор документов в репозитории
+
+Я бы сделал так:
+
+```text
+/LICENSE
+  MIT
+
+/NOTICE
+  Copyright, third-party notices
+
+/TRADEMARK.md
+  Business Entity name/logo policy
+
+/BRANDING.md
+  как можно/нельзя использовать логотип, цвета, имя
+
+/SECURITY.md
+  как сообщать уязвимости
+
+/CONTRIBUTING.md
+  как присылать PR, issue, plugin ideas
+
+/CODE_OF_CONDUCT.md
+  чтобы комьюнити не превратилось в помойку
+
+/ROADMAP.md
+  что пилится в первый год
+
+/GOVERNANCE.md
+  кто принимает решения, что является official release
+
+/docs/public-incubation.md
+  философия первого года
+```
+
+---
+
+# Минимальная стратегия на первый год
+
+## Фаза 1 — “Движок открыт, бренд защищён”
+
+```text
+License: MIT
+Trademark: controlled
+Goal: adoption and feedback
+Commercial restrictions: none
+Brand restrictions: yes
+```
+
+## Фаза 2 — “Официальная экосистема”
+
+Когда появятся первые люди:
+
+```text
+official plugin registry
+official docs
+official examples
+community showcase
+security acknowledgements
+contributors page
+```
+
+## Фаза 3 — “Платный верхний слой”
+
+Потом уже:
+
+```text
+Enterprise modules
+official hosting
+migration tools
+support subscription
+vertical apps
+```
+
+Но не сейчас.
+
+---
+
+# Самая короткая формула
+
+Я бы прямо так и зафиксировал:
+
+> **Первый год Business Entity Engine живёт под MIT.
+> Люди могут делать с кодом почти всё: ставить, ломать, форкать, экспериментировать, писать плагины и бизнес-приложения.
+> Ограничение одно: нельзя использовать название, логотип и официальный стиль так, чтобы выдавать форк, сервис или сборку за официальный Business Entity.**
+
+Это отличная стратегия для твоей текущей стадии.
+
+И самое важное: она честная. Ты не обещаешь того, чего ещё нет. Ты говоришь:
+
+> “Вот движок. Он сырой, но живой. Помогите его обкатать. Код свободный. Бренд официальный.”
+
+[1]: https://opensource.org/license/mit?utm_source=chatgpt.com "The MIT License"
+[2]: https://www.wipo.int/en/web/classification-nice?utm_source=chatgpt.com "Nice Classification"
+[3]: https://nclpub.wipo.int/enfr/?class_number=42&lang=en&menulang=en&mode=flat&notion=modifications&version=20200101&utm_source=chatgpt.com "Class 42"
+[4]: https://www.wipo.int/classifications/nice/nclpub/en/fr/?basic_numbers=show&class_number=9&explanatory_notes=show&lang=en&menulang=en&mode=flat%C2%ACion%3D&pagination=no&version=20230101&utm_source=chatgpt.com "Class 9"
+[5]: https://rospatent.gov.ru/en/activities/public_services?utm_source=chatgpt.com "List of public services of Rospatent"
+[6]: https://docs.github.com/en/site-policy/content-removal-policies/github-trademark-policy?utm_source=chatgpt.com "GitHub Trademark Policy"
