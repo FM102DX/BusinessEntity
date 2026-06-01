@@ -183,7 +183,6 @@ function createRichTextViewportRuntime() {
             suppressScrollNotificationsUntil: 0
         });
         window.addEventListener("resize", requestSync, { passive: true });
-        window.addEventListener("scroll", requestSync, { passive: true });
         window.addEventListener("mouseup", handleMouseUp);
         sync();
         measureChunks(viewportElementId);
@@ -204,7 +203,6 @@ function createRichTextViewportRuntime() {
         }
 
         window.removeEventListener("resize", entry.requestSync);
-        window.removeEventListener("scroll", entry.requestSync);
         window.removeEventListener("mouseup", entry.handleMouseUp);
         registry.delete(viewportElementId);
         hideImageViewer();

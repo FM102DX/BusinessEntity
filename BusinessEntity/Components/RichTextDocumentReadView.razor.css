@@ -27,8 +27,6 @@
 }
 
 .rich-text-document-layout__outline {
-    position: sticky;
-    top: 0.5rem;
     align-self: start;
 }
 
@@ -38,8 +36,6 @@
 }
 
 .rich-text-document-layout__widgets {
-    position: sticky;
-    top: 0.5rem;
     align-self: start;
     min-width: 0;
 }

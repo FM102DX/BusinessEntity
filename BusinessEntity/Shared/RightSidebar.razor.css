@@ -4,9 +4,7 @@
   width: 280px;
   min-width: 280px;
   max-width: 280px;
-  height: calc(100vh - 56px);
-  position: sticky;
-  top: 56px; /* under the global top bar */
+  min-height: calc(100vh - 56px);
   overflow: hidden;
 }
 
@@ -27,8 +25,7 @@
 }
 
 .right-content {
-  height: calc(100vh - 112px); /* minus right-header and global top bar */
-  overflow-y: auto;
+  min-height: calc(100vh - 112px);
   padding: 12px;
 }
 

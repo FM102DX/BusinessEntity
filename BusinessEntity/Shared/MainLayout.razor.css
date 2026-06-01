@@ -74,18 +74,14 @@ main {
 }
 
 .tree-content {
-    /* viewport minus top-row (56) */
-    height: calc(100vh - 56px);
-    overflow-y: auto;
+    min-height: calc(100vh - 56px);
     padding: 8px;
     display: flex;
     flex-direction: column;
 }
 
 .right-content {
-    /* viewport minus top-row (56) minus own header (56) */
-    height: calc(100vh - 112px);
-    overflow-y: auto;
+    min-height: calc(100vh - 112px);
     padding: 8px;
     display: flex;
     flex-direction: column;
@@ -366,9 +362,7 @@ main {
         width: 65px;
         min-width: 65px;
         max-width: 65px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
+        min-height: 100vh;
         overflow: hidden;
     }
 
@@ -377,9 +371,7 @@ main {
         width: 280px;
         min-width: 280px;
         max-width: 280px;
-        height: calc(100vh - 56px);
-        position: sticky;
-        top: 56px; /* sit under the top-row */
+        min-height: calc(100vh - 56px);
         overflow: hidden;
     }
 
@@ -389,16 +381,8 @@ main {
         width: 280px;
         min-width: 280px;
         max-width: 280px;
-        height: calc(100vh - 56px);
-        position: sticky;
-        top: 56px; /* sit under the top-row */
+        min-height: calc(100vh - 56px);
         overflow: hidden;
-    }
-
-    .top-row {
-        position: sticky;
-        top: 0;
-        z-index: 1;
     }
 
     .top-row, article {
