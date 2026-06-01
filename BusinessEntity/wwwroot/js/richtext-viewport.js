@@ -3,6 +3,11 @@ function createRichTextViewportRuntime() {
     const blockSelector = "h1,h2,h3,h4,h5,h6,p,blockquote,pre,ul,ol,table,hr";
     let activeImageViewer = null;
 
+    function getViewportBottomReservePx(viewport) {
+        const reserve = Number(viewport?.dataset.richTextBottomReservePx || 0);
+        return Number.isFinite(reserve) && reserve > 0 ? reserve : 0;
+    }
+
     function syncViewportSize(viewportElementId) {
         const viewport = document.getElementById(viewportElementId);
         if (!viewport) {
@@ -16,7 +21,7 @@ function createRichTextViewportRuntime() {
         }
 
         const viewportRect = viewport.getBoundingClientRect();
-        const bottomGap = 16;
+        const bottomGap = 16 + getViewportBottomReservePx(viewport);
         const minHeight = 240;
         const availableHeight = Math.max(window.innerHeight - viewportRect.top - bottomGap, minHeight);
         viewport.style.maxHeight = `${availableHeight}px`;

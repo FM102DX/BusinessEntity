@@ -2,7 +2,7 @@
 @using Microsoft.AspNetCore.Components
 @implements IAsyncDisposable
 
-<div id="@ViewportElementId" class="rich-text-document-viewport" tabindex="0">
+<div id="@ViewportElementId" class="rich-text-document-viewport" data-rich-text-bottom-reserve-px="@BottomReserveAttributeValue" tabindex="0">
     @if (IsInitialContentLoading && LoadedChunks.Count == 0)
     {
         <div class="rich-text-document-viewport__loading">Загрузка текста...</div>

@@ -36,6 +36,7 @@ namespace BusinessEntity.Components
         [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode> OutlineNodes { get; set; } = Array.Empty<RichTextDocumentOutlineNode>();
         [Parameter] public bool IsInitialContentLoading { get; set; }
+        [Parameter] public int BottomReservePx { get; set; }
 
         [Inject] public IJSRuntime JS { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
@@ -49,6 +50,7 @@ namespace BusinessEntity.Components
         private double BottomSpacerPx { get; set; }
         private string TopSpacerStyle => $"height: {Math.Max(TopSpacerPx, 0):0.##}px;";
         private string BottomSpacerStyle => $"height: {Math.Max(BottomSpacerPx, 0):0.##}px;";
+        private string BottomReserveAttributeValue => Math.Max(BottomReservePx, 0).ToString();
 
         protected override async Task OnInitializedAsync()
         {

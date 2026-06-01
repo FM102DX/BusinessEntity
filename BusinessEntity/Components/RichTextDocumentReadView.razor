@@ -75,7 +75,8 @@
                                           OutlineNodes="@LocalOutlineNodes"
                                           IsInitialContentLoading="@IsInitialContentLoading"
                                           InitialTargetPosition="@InitialTargetPosition"
-                                          InitialWindow="@InitialChunkWindow" />
+                                          InitialWindow="@InitialChunkWindow"
+                                          BottomReservePx="260" />
             </div>
             <div class="rich-text-document-layout__widgets">
                 <RichTextDocumentWidgets BusinessEntityId="@BusinessEntityId"
@@ -100,9 +101,7 @@
     {
         <div class="rich-text-document-comments">
             <BusinessEntityCommentsSection BusinessEntityId="@BusinessEntityId"
-                                           CanWrite="true"
-                                           UseOwnScroll="true"
-                                           ScrollMaxHeightPx="260" />
+                                           CanWrite="true" />
         </div>
     }
 </div>

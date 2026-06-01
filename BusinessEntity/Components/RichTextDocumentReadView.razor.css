@@ -48,7 +48,10 @@
     display: grid;
     gap: 1.25rem;
     grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(240px, 320px);
+    margin-top: 0.75rem;
+    min-height: 220px;
     min-width: 0;
+    padding-bottom: 1.25rem;
 }
 
 .rich-text-document-comments ::deep .be-comments-section {
