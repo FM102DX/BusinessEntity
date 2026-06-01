@@ -9,6 +9,8 @@ namespace BusinessEntity.Components
 {
     public partial class RichTextDocumentReadView : ComponentBase, IAsyncDisposable
     {
+        private const int CommentsBottomReservePx = 260;
+
         private readonly string ViewportElementId = $"rich-text-read-viewport-{Guid.NewGuid():N}";
         private readonly string OutlineTreeElementId = $"rich-text-read-outline-tree-{Guid.NewGuid():N}";
         private bool _outlineTreeRegistered;

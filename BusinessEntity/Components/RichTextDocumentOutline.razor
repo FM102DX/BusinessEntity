@@ -30,7 +30,10 @@
 
     @if (Nodes != null && Nodes.Count > 0)
     {
-        <div id="@TreeElementId" class="@TreeClass" tabindex="0">
+        <div id="@TreeElementId"
+             class="@TreeClass"
+             data-rich-text-bottom-reserve-px="@BottomReserveAttributeValue"
+             tabindex="0">
             @foreach (var node in Nodes)
             {
                 <RichTextDocumentOutlineItem Node="node" OnHeadingSelected="OnHeadingSelected" />
@@ -54,9 +57,12 @@
     [Parameter] public bool IsRebuilding { get; set; }
     [Parameter] public bool CanRebuild { get; set; } = true;
     [Parameter] public bool HideScrollbar { get; set; } = true;
+    [Parameter] public int BottomReservePx { get; set; }
     [Parameter] public EventCallback<RichTextDocumentOutlineNode> OnHeadingSelected { get; set; }
     [Parameter] public EventCallback<int> OnDisplayLevelCountChanged { get; set; }
     [Parameter] public EventCallback OnRebuildRequested { get; set; }
+
+    private string BottomReserveAttributeValue => Math.Max(BottomReservePx, 0).ToString();
 
     private string TreeClass =>
         HideScrollbar

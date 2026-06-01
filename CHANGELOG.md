@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.7] - 2026-06-01 20:41:22 +03:00
+
+### MINOR-FEATURES
+
+#### Rich-document comments layout
+- В read-mode rich-документа содержание ограничено тем же нижним reserve, что и viewport текста, чтобы длинное содержание не сдвигало секцию комментариев вниз.
+- Нижний отступ перед секцией комментариев уменьшен, чтобы комментарии располагались ближе к нижней границе viewport rich-текста.
+
 ## [0.14.6] - 2026-06-01 20:24:01 +03:00
 
 ### MINOR-FEATURES

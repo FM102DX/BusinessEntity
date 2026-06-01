@@ -63,6 +63,7 @@
                                          IsRebuilding="@IsRebuildingTableOfContents"
                                          CanRebuild="@CanEdit"
                                          HideScrollbar="@HideTableOfContentsScrollbar"
+                                         BottomReservePx="@CommentsBottomReservePx"
                                          OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
                                          OnRebuildRequested="HandleRebuildTableOfContentsAsync"
                                          OnHeadingSelected="HandleHeadingSelectedAsync" />
@@ -76,7 +77,7 @@
                                           IsInitialContentLoading="@IsInitialContentLoading"
                                           InitialTargetPosition="@InitialTargetPosition"
                                           InitialWindow="@InitialChunkWindow"
-                                          BottomReservePx="260" />
+                                          BottomReservePx="@CommentsBottomReservePx" />
             </div>
             <div class="rich-text-document-layout__widgets">
                 <RichTextDocumentWidgets BusinessEntityId="@BusinessEntityId"
