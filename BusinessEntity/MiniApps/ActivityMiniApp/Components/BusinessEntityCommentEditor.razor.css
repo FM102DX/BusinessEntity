@@ -1,0 +1,20 @@
+.be-comment-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.be-comment-editor__input {
+    min-height: 4.5rem;
+    resize: vertical;
+}
+
+.be-comment-editor__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.be-comment-editor__error {
+    color: #9f1239;
+    font-size: 0.86rem;
+}

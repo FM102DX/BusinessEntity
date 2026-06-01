@@ -28,6 +28,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Registration
             services.AddSingleton<IAsyncRepository<BusinessEntityDataPropertyDto>, BusinessEntityDataPropertyDtoEfPostgresRepository>();
             services.AddSingleton<IAsyncRepository<BusinessEntityDataChunkPropertyDto>, BusinessEntityDataChunkPropertyDtoEfPostgresRepository>();
             services.AddSingleton<IAsyncRepository<BusinessEntityRelationDto>, BusinessEntityRelationDtoEfPostgresRepository>();
+            services.AddSingleton<IAsyncRepository<BusinessEntityCommentDto>, BusinessEntityCommentDtoEfPostgresRepository>();
             // Регистрируем поэкземплярные payload-конвертеры для всех поддерживаемых typed business-data объектов.
             services.AddSingleton<IEntityDataStorageConverter, DocumentEntityDataStorageConverter>();
             services.AddSingleton<IEntityDataStorageConverter, FolderEntityDataStorageConverter>();

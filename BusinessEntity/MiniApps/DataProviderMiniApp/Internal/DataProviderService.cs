@@ -24,6 +24,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
         private readonly IAsyncRepository<BusinessEntityPropertyDto> _businessEntityPropertyRepository;
         private readonly IAsyncRepository<BusinessEntityDataPropertyDto> _businessEntityDataPropertyRepository;
         private readonly IAsyncRepository<BusinessEntityDataChunkPropertyDto> _businessEntityDataChunkPropertyRepository;
+        private readonly IAsyncRepository<BusinessEntityCommentDto> _businessEntityCommentRepository;
         private readonly EntityDataStorageCodec _entityDataStorageCodec;
         private readonly RichTextDocumentFileStorageService _richTextDocumentFileStorageService;
         private readonly IWebLoggerService? _webLogger;
@@ -37,6 +38,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             IAsyncRepository<BusinessEntityPropertyDto> businessEntityPropertyRepository,
             IAsyncRepository<BusinessEntityDataPropertyDto> businessEntityDataPropertyRepository,
             IAsyncRepository<BusinessEntityDataChunkPropertyDto> businessEntityDataChunkPropertyRepository,
+            IAsyncRepository<BusinessEntityCommentDto> businessEntityCommentRepository,
             EntityDataStorageCodec entityDataStorageCodec,
             RichTextDocumentFileStorageService richTextDocumentFileStorageService,
             IWebLoggerService? webLogger)
@@ -48,6 +50,7 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             _businessEntityPropertyRepository = businessEntityPropertyRepository;
             _businessEntityDataPropertyRepository = businessEntityDataPropertyRepository;
             _businessEntityDataChunkPropertyRepository = businessEntityDataChunkPropertyRepository;
+            _businessEntityCommentRepository = businessEntityCommentRepository;
             _entityDataStorageCodec = entityDataStorageCodec;
             _richTextDocumentFileStorageService = richTextDocumentFileStorageService;
             _webLogger = webLogger;
@@ -290,12 +293,14 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
             }
 
             await DeletePropertiesAsync(_businessEntityPropertyRepository, id, cancellationToken);
+            await DeleteCommentsAsync(id, cancellationToken);
             await _businessEntityRepository.DeleteAsync(id, cancellationToken);
         }
 
         // Полностью очищает все DTO-таблицы mini-app для debug re-seed сценария.
         public async Task ClearAllAsync(CancellationToken cancellationToken = default)
         {
+            await _businessEntityCommentRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityDataChunkPropertyRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityDataPropertyRepository.DeleteAllAsync(cancellationToken);
             await _businessEntityPropertyRepository.DeleteAllAsync(cancellationToken);
@@ -501,6 +506,18 @@ namespace BusinessEntity.MiniApps.DataProviderMiniApp.Internal
                     await DeletePropertiesAsync(_businessEntityDataChunkPropertyRepository, chunkDto.Id, cancellationToken);
                     await _businessEntityDataChunkRepository.DeleteAsync(chunkDto.Id, cancellationToken);
                 }
+            }
+        }
+
+        // Удаляет комментарии, которые привязаны к удаляемой бизнес-сущности.
+        private async Task DeleteCommentsAsync(Guid businessEntityId, CancellationToken cancellationToken)
+        {
+            var comments = await _businessEntityCommentRepository.GetAllAsync(
+                comment => comment.BusinessEntityId == businessEntityId,
+                ct: cancellationToken);
+            foreach (var comment in comments)
+            {
+                await _businessEntityCommentRepository.DeleteAsync(comment.Id, cancellationToken);
             }
         }
 

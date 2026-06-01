@@ -19,6 +19,7 @@ public class KmsBusinessEntityDbContext : DbContext
     public DbSet<BusinessEntityPropertyDto> BusinessEntityProperties => Set<BusinessEntityPropertyDto>();
     public DbSet<BusinessEntityDataPropertyDto> BusinessEntityDataProperties => Set<BusinessEntityDataPropertyDto>();
     public DbSet<BusinessEntityDataChunkPropertyDto> BusinessEntityDataChunkProperties => Set<BusinessEntityDataChunkPropertyDto>();
+    public DbSet<BusinessEntityCommentDto> BusinessEntityComments => Set<BusinessEntityCommentDto>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +52,10 @@ public class KmsBusinessEntityDbContext : DbContext
         modelBuilder.Entity<BusinessEntityDataChunkPropertyDto>().Property(x => x.Metadata).HasColumnType("text");
         modelBuilder.Entity<BusinessEntityDataChunkPropertyDto>().HasIndex(x => x.ParentEntityId);
         modelBuilder.Entity<BusinessEntityDataChunkPropertyDto>().HasIndex(x => new { x.ParentEntityId, x.PropertyType });
+        modelBuilder.Entity<BusinessEntityCommentDto>().ToTable("BusinessEntityComments");
+        modelBuilder.Entity<BusinessEntityCommentDto>().Property(x => x.Data).HasColumnType("text");
+        modelBuilder.Entity<BusinessEntityCommentDto>().HasIndex(x => new { x.BusinessEntityId, x.CreatedDate });
+        modelBuilder.Entity<BusinessEntityCommentDto>().HasIndex(x => x.ParentId);
 
         // Явно фиксируем имена таблиц, чтобы shared Postgres-база не зависела от EF-конвенций.
     }

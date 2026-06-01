@@ -1,0 +1,45 @@
+@using BusinessEntity.MiniApps.ActivityMiniApp.Contracts
+@using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Connectors
+
+<section class="@SectionClass">
+    <div class="be-comments-section__header">
+        <h5 class="be-comments-section__title">Комментарии</h5>
+        @if (Comments.Count > 0)
+        {
+            <span class="be-comments-section__count">@Comments.Count</span>
+        }
+    </div>
+
+    @if (CanWriteEffective)
+    {
+        <BusinessEntityCommentEditor BusinessEntityId="@BusinessEntityId"
+                                     IsEnabled="true"
+                                     Placeholder="Написать комментарий"
+                                     OnSubmitted="ReloadAsync" />
+    }
+    else if (CanWrite)
+    {
+        <div class="be-comments-section__status">Войдите в систему, чтобы оставить комментарий.</div>
+    }
+
+    @if (IsLoading)
+    {
+        <div class="be-comments-section__status">Загрузка комментариев...</div>
+    }
+    else if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="be-comments-section__error">@Error</div>
+    }
+    else if (Comments.Count > 0)
+    {
+        <div class="be-comments-section__list" style="@ListStyle">
+            @foreach (var comment in Comments)
+            {
+                <BusinessEntityCommentItem @key="comment.Id"
+                                           Record="@comment"
+                                           CanReply="@CanWriteEffective"
+                                           OnReplySubmitted="ReloadAsync" />
+            }
+        </div>
+    }
+</section>

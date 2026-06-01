@@ -1,0 +1,28 @@
+@using BusinessEntity.MiniApps.ActivityMiniApp.Contracts
+
+<article class="be-comment-item" style="@IndentStyle">
+    <div class="be-comment-item__meta">
+        <span class="be-comment-item__author">@Record.AuthorDisplayName</span>
+        <span class="be-comment-item__date">@FormattedDate</span>
+        @if (CanReply)
+        {
+            <button type="button"
+                    class="btn btn-sm btn-link be-comment-item__reply"
+                    @onclick="ToggleReply">
+                Ответить
+            </button>
+        }
+    </div>
+    <div class="be-comment-item__text">@Record.Text</div>
+    @if (IsReplying)
+    {
+        <div class="be-comment-item__editor">
+            <BusinessEntityCommentEditor BusinessEntityId="@Record.BusinessEntityId"
+                                         ParentId="@Record.Id"
+                                         Rows="2"
+                                         Placeholder="Написать ответ"
+                                         IsEnabled="@CanReply"
+                                         OnSubmitted="HandleReplySubmittedAsync" />
+        </div>
+    }
+</article>

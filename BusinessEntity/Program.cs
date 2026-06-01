@@ -2,6 +2,8 @@ using BusinessEntity.Contracts;
 using BusinessEntity.Core.Contracts;
 using BusinessEntity.Core.Services;
 using BusinessEntity.DataAccess.Classes;
+using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
+using BusinessEntity.MiniApps.ActivityMiniApp.Registration;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Registration;
 using BusinessEntity.MiniApps.MediaServerMiniApp.Contracts;
@@ -127,6 +129,7 @@ namespace BusinessEntity
 
             // Регистрирует mini-app модули приложения в DI.
             builder.Services.AddDataProviderMiniApp();
+            builder.Services.AddActivityMiniApp();
             builder.Services.AddMediaServerMiniApp();
             builder.Services.AddSampleDataMiniApp();
             builder.Services.AddTreeMiniApp();
@@ -191,6 +194,13 @@ namespace BusinessEntity
             {
                 var dataProviderMiniApp = scope.ServiceProvider.GetRequiredService<IDataProviderMiniApp>();
                 dataProviderMiniApp.EnsureInitialized();
+            }
+
+            // Явно поднимает ActivityMiniApp при старте приложения.
+            using (var scope = app.Services.CreateScope())
+            {
+                var activityMiniApp = scope.ServiceProvider.GetRequiredService<IActivityMiniApp>();
+                activityMiniApp.EnsureInitialized();
             }
 
             // Явно поднимает UserMiniApp при старте приложения.
@@ -468,6 +478,16 @@ namespace BusinessEntity
                     CONSTRAINT ""PK_BusinessEntityDataChunkProperties"" PRIMARY KEY (""Id"")
                 );
 
+                CREATE TABLE IF NOT EXISTS ""BusinessEntityComments"" (
+                    ""Id"" uuid NOT NULL,
+                    ""CreatedDate"" timestamp with time zone NOT NULL,
+                    ""LastModifiedDate"" timestamp with time zone NOT NULL,
+                    ""BusinessEntityId"" uuid NOT NULL,
+                    ""ParentId"" uuid NULL,
+                    ""Data"" text NOT NULL,
+                    CONSTRAINT ""PK_BusinessEntityComments"" PRIMARY KEY (""Id"")
+                );
+
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectAId"" ON ""BusinessEntityRelations"" (""ObjectAId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityRelations_ObjectBId"" ON ""BusinessEntityRelations"" (""ObjectBId"");
                 ALTER TABLE ""BusinessEntities"" ADD COLUMN IF NOT EXISTS ""CreatedByUserId"" uuid NULL;
@@ -504,6 +524,8 @@ namespace BusinessEntity
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataProperties_ParentEntityId_PropertyType"" ON ""BusinessEntityDataProperties"" (""ParentEntityId"", ""PropertyType"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunkProperties_ParentEntityId"" ON ""BusinessEntityDataChunkProperties"" (""ParentEntityId"");
                 CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityDataChunkProperties_ParentEntityId_PropertyType"" ON ""BusinessEntityDataChunkProperties"" (""ParentEntityId"", ""PropertyType"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityComments_BusinessEntityId_CreatedDate"" ON ""BusinessEntityComments"" (""BusinessEntityId"", ""CreatedDate"");
+                CREATE INDEX IF NOT EXISTS ""IX_BusinessEntityComments_ParentId"" ON ""BusinessEntityComments"" (""ParentId"");
                 ");
         }
 	}

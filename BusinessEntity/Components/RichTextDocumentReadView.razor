@@ -95,4 +95,14 @@
             </div>
         </div>
     }
+
+    @if (!IsBusy)
+    {
+        <div class="rich-text-document-comments">
+            <BusinessEntityCommentsSection BusinessEntityId="@BusinessEntityId"
+                                           CanWrite="true"
+                                           UseOwnScroll="true"
+                                           ScrollMaxHeightPx="260" />
+        </div>
+    }
 </div>

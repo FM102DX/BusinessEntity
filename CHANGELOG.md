@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-06-01 15:51:48 +03:00
+
+### MAJOR-FEATURES
+
+#### ActivityMiniApp and comments
+- Добавлен `ActivityMiniApp` для базовых комментариев к любым `BusinessEntity` без включения комментариев в дерево и `BusinessEntityRelation`.
+- В `DataProviderMiniApp` добавлена таблица `BusinessEntityComments`, DTO, EF/Postgres-репозиторий, schema bootstrap и индексы по целевой сущности и parent-комментарию.
+- Реализованы Razor-компоненты секции комментариев, отображения комментария и inline-редактора ответа с ограничением отображаемой вложенности до 3 уровней.
+
+#### Document and rich-document comments UI
+- На страницу обычного документа добавлена секция комментариев под содержимым документа.
+- В read-mode rich-документа добавлена нижняя секция комментариев с отдельным scroll-контейнером, чтобы прокрутка комментариев не смешивалась с viewport rich-документа.
+
+### MINOR-FEATURES
+
+#### Comments policy
+- Политика комментариев переписана под MVP с отдельным `ActivityMiniApp`, таблицей `BusinessEntityComments`, plain-text payload, без лайков и attachments.
+- В стартовый контекст добавлена ссылка на policy comments.
+
 ## [0.14.4] - 2026-05-31 10:08:32 +03:00
 
 ### MINOR-FEATURES

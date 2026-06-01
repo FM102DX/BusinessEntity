@@ -44,6 +44,17 @@
     min-width: 0;
 }
 
+.rich-text-document-comments {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(240px, 320px);
+    min-width: 0;
+}
+
+.rich-text-document-comments ::deep .be-comments-section {
+    grid-column: 2;
+}
+
 ::deep .rich-text-outline {
     background: #ffffff;
     padding: 0;
@@ -261,6 +272,14 @@
 
     .rich-text-document-layout__widgets {
         position: static;
+    }
+
+    .rich-text-document-comments {
+        grid-template-columns: 1fr;
+    }
+
+    .rich-text-document-comments ::deep .be-comments-section {
+        grid-column: 1;
     }
 
     ::deep .rich-text-outline__tree {

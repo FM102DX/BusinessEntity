@@ -73,3 +73,9 @@
         </div>
     }
 </div>
+
+@if (Entity != null && !IsEditing)
+{
+    <BusinessEntityCommentsSection BusinessEntityId="@Entity.Id"
+                                   CanWrite="true" />
+}

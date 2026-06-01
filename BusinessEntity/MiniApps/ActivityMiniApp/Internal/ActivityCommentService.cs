@@ -1,0 +1,314 @@
+using BusinessEntity.MiniApps.ActivityMiniApp.Contracts;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts;
+using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Dtos;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
+using System.Text.Json;
+
+namespace BusinessEntity.MiniApps.ActivityMiniApp.Internal;
+
+/// <summary>
+/// Внутренний сервис ActivityMiniApp для чтения и создания комментариев.
+/// </summary>
+internal sealed class ActivityCommentService
+{
+    private const int MaxCommentTextLength = 5000;
+    private const int MaxDisplayDepth = 3;
+    private static readonly Guid RootParentKey = Guid.Empty;
+    private readonly IAsyncRepository<BusinessEntityCommentDto> _commentRepository;
+    private readonly IUserConnector _userConnector;
+
+    // Сохраняет зависимости storage и user mini-app для операций с комментариями.
+    public ActivityCommentService(
+        IAsyncRepository<BusinessEntityCommentDto> commentRepository,
+        IUserConnector userConnector)
+    {
+        _commentRepository = commentRepository;
+        _userConnector = userConnector;
+    }
+
+    // Возвращает плоский список комментариев в порядке отображения дерева.
+    public async Task<IReadOnlyList<BusinessEntityCommentRecord>> GetCommentsAsync(
+        Guid businessEntityId,
+        CancellationToken cancellationToken = default)
+    {
+        if (businessEntityId == Guid.Empty)
+        {
+            return Array.Empty<BusinessEntityCommentRecord>();
+        }
+
+        var comments = await _commentRepository.GetAllAsync(
+            comment => comment.BusinessEntityId == businessEntityId,
+            ct: cancellationToken);
+
+        var records = comments
+            .OrderBy(comment => comment.CreatedDate)
+            .ThenBy(comment => comment.Id)
+            .Select(MapToRecord)
+            .ToList();
+
+        return BuildDisplayOrder(records);
+    }
+
+    // Создает комментарий и возвращает его в UI-модели.
+    public async Task<BusinessEntityCommentRecord> CreateCommentAsync(
+        BusinessEntityCommentCreateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.BusinessEntityId == Guid.Empty)
+        {
+            throw new ArgumentException("BusinessEntityId is required.", nameof(request));
+        }
+
+        var text = NormalizeCommentText(request.Text);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new InvalidOperationException("Комментарий не может быть пустым.");
+        }
+
+        var currentUser = await _userConnector.EnsureCurrentUserAsync(cancellationToken);
+        if (currentUser == null)
+        {
+            throw new InvalidOperationException("Для отправки комментария нужно войти в систему.");
+        }
+
+        var normalizedParentId = await NormalizeParentIdAsync(
+            request.BusinessEntityId,
+            request.ParentId,
+            cancellationToken);
+        var now = DateTime.UtcNow;
+        var payload = new BusinessEntityCommentPayload
+        {
+            Text = text,
+            AuthorUserId = currentUser.Id,
+            AuthorDisplayName = ResolveAuthorDisplayName(currentUser)
+        };
+        var dto = new BusinessEntityCommentDto
+        {
+            Id = Guid.NewGuid(),
+            CreatedDate = now,
+            LastModifiedDate = now,
+            BusinessEntityId = request.BusinessEntityId,
+            ParentId = normalizedParentId,
+            Data = JsonSerializer.Serialize(payload, ActivityJsonOptions.Default)
+        };
+
+        var saved = await _commentRepository.AddAsync(dto, cancellationToken);
+        return MapToRecord(saved);
+    }
+
+    // Нормализует родителя так, чтобы новый комментарий не уходил глубже третьего уровня.
+    private async Task<Guid?> NormalizeParentIdAsync(
+        Guid businessEntityId,
+        Guid? requestedParentId,
+        CancellationToken cancellationToken)
+    {
+        if (!requestedParentId.HasValue)
+        {
+            return null;
+        }
+
+        var comments = await _commentRepository.GetAllAsync(
+            comment => comment.BusinessEntityId == businessEntityId,
+            ct: cancellationToken);
+        var byId = comments.ToDictionary(comment => comment.Id);
+
+        if (!byId.TryGetValue(requestedParentId.Value, out var parent))
+        {
+            return null;
+        }
+
+        while (GetDepth(parent, byId) >= MaxDisplayDepth && parent.ParentId.HasValue)
+        {
+            if (!byId.TryGetValue(parent.ParentId.Value, out var parentOfParent))
+            {
+                break;
+            }
+
+            parent = parentOfParent;
+        }
+
+        return parent.Id;
+    }
+
+    // Считает глубину комментария по цепочке родителей с защитой от циклов.
+    private static int GetDepth(
+        BusinessEntityCommentDto comment,
+        IReadOnlyDictionary<Guid, BusinessEntityCommentDto> byId)
+    {
+        var depth = 0;
+        var current = comment;
+        var visited = new HashSet<Guid> { comment.Id };
+
+        while (current.ParentId.HasValue &&
+               byId.TryGetValue(current.ParentId.Value, out var parent) &&
+               visited.Add(parent.Id))
+        {
+            depth++;
+            current = parent;
+        }
+
+        return depth;
+    }
+
+    // Преобразует DTO в UI-запись с безопасным чтением JSON payload.
+    private static BusinessEntityCommentRecord MapToRecord(BusinessEntityCommentDto dto)
+    {
+        var payload = ReadPayload(dto.Data);
+        return new BusinessEntityCommentRecord
+        {
+            Id = dto.Id,
+            BusinessEntityId = dto.BusinessEntityId,
+            ParentId = dto.ParentId,
+            Text = payload.Text,
+            AuthorUserId = payload.AuthorUserId,
+            AuthorDisplayName = string.IsNullOrWhiteSpace(payload.AuthorDisplayName)
+                ? "Пользователь"
+                : payload.AuthorDisplayName,
+            CreatedDate = dto.CreatedDate,
+            LastModifiedDate = dto.LastModifiedDate,
+            DisplayDepth = 0
+        };
+    }
+
+    // Читает payload комментария и поддерживает fallback для некорректного JSON.
+    private static BusinessEntityCommentPayload ReadPayload(string? data)
+    {
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            return new BusinessEntityCommentPayload();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<BusinessEntityCommentPayload>(data, ActivityJsonOptions.Default)
+                ?? new BusinessEntityCommentPayload();
+        }
+        catch
+        {
+            return new BusinessEntityCommentPayload
+            {
+                Text = data
+            };
+        }
+    }
+
+    // Собирает плоский порядок отображения по дереву комментариев.
+    private static IReadOnlyList<BusinessEntityCommentRecord> BuildDisplayOrder(
+        IReadOnlyList<BusinessEntityCommentRecord> source)
+    {
+        if (source.Count == 0)
+        {
+            return Array.Empty<BusinessEntityCommentRecord>();
+        }
+
+        var byId = source.ToDictionary(comment => comment.Id);
+        var children = new Dictionary<Guid, List<BusinessEntityCommentRecord>>();
+
+        foreach (var comment in source)
+        {
+            var parentId = comment.ParentId.HasValue &&
+                           comment.ParentId.Value != comment.Id &&
+                           byId.ContainsKey(comment.ParentId.Value)
+                ? comment.ParentId
+                : null;
+            var parentKey = parentId ?? RootParentKey;
+
+            if (!children.TryGetValue(parentKey, out var bucket))
+            {
+                bucket = new List<BusinessEntityCommentRecord>();
+                children[parentKey] = bucket;
+            }
+
+            bucket.Add(comment.WithDisplay(parentId, 0));
+        }
+
+        foreach (var bucket in children.Values)
+        {
+            bucket.Sort(CompareByDate);
+        }
+
+        var result = new List<BusinessEntityCommentRecord>();
+        AppendChildren(RootParentKey, 0, children, result, new HashSet<Guid>());
+        return result;
+    }
+
+    // Рекурсивно добавляет детей комментария в итоговый плоский список.
+    private static void AppendChildren(
+        Guid parentKey,
+        int depth,
+        IReadOnlyDictionary<Guid, List<BusinessEntityCommentRecord>> children,
+        ICollection<BusinessEntityCommentRecord> result,
+        ISet<Guid> path)
+    {
+        if (!children.TryGetValue(parentKey, out var bucket))
+        {
+            return;
+        }
+
+        foreach (var comment in bucket)
+        {
+            if (!path.Add(comment.Id))
+            {
+                continue;
+            }
+
+            result.Add(comment.WithDisplay(comment.ParentId, depth));
+            AppendChildren(comment.Id, depth + 1, children, result, path);
+            path.Remove(comment.Id);
+        }
+    }
+
+    // Сравнивает комментарии по дате создания и идентификатору для стабильной сортировки.
+    private static int CompareByDate(BusinessEntityCommentRecord left, BusinessEntityCommentRecord right)
+    {
+        var dateCompare = left.CreatedDate.CompareTo(right.CreatedDate);
+        return dateCompare != 0
+            ? dateCompare
+            : left.Id.CompareTo(right.Id);
+    }
+
+    // Подготавливает текст комментария к сохранению.
+    private static string NormalizeCommentText(string? text)
+    {
+        var normalized = (text ?? string.Empty).Replace("\r\n", "\n").Trim();
+        return normalized.Length <= MaxCommentTextLength
+            ? normalized
+            : normalized[..MaxCommentTextLength];
+    }
+
+    // Возвращает отображаемое имя автора из локального user payload.
+    private static string ResolveAuthorDisplayName(UserDto user)
+    {
+        if (string.IsNullOrWhiteSpace(user.Payload))
+        {
+            return user.ExternalId;
+        }
+
+        try
+        {
+            var userData = JsonSerializer.Deserialize<UserData>(user.Payload, ActivityJsonOptions.Default);
+            return FirstNonEmpty(userData?.DisplayedName, userData?.AuthentikLogin, userData?.ExtId, user.ExternalId);
+        }
+        catch
+        {
+            return user.ExternalId;
+        }
+    }
+
+    // Возвращает первое непустое значение из списка.
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return "Пользователь";
+    }
+}
