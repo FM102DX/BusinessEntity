@@ -13,7 +13,7 @@ public partial class BusinessEntityCommentEditor : ComponentBase
     [Parameter] public Guid? ParentId { get; set; }
     [Parameter] public bool IsEnabled { get; set; } = true;
     [Parameter] public string Placeholder { get; set; } = "Написать комментарий";
-    [Parameter] public int Rows { get; set; } = 3;
+    [Parameter] public int Rows { get; set; } = 2;
     [Parameter] public EventCallback OnSubmitted { get; set; }
 
     [Inject] public IActivityConnector ActivityConnector { get; set; } = default!;

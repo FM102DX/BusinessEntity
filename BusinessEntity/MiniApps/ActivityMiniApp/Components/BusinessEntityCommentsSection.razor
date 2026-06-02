@@ -2,14 +2,6 @@
 @using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Connectors
 
 <section class="@SectionClass">
-    <div class="be-comments-section__header">
-        <h5 class="be-comments-section__title">Комментарии</h5>
-        @if (Comments.Count > 0)
-        {
-            <span class="be-comments-section__count">@Comments.Count</span>
-        }
-    </div>
-
     @if (CanWriteEffective)
     {
         <BusinessEntityCommentEditor BusinessEntityId="@BusinessEntityId"

@@ -6,18 +6,20 @@
     {
         <div class="be-comment-editor__error">@Error</div>
     }
-    <textarea class="form-control be-comment-editor__input"
-              rows="@Rows"
-              placeholder="@Placeholder"
-              disabled="@(!IsEnabled || IsSubmitting)"
-              @bind="Text"
-              @bind:event="oninput"></textarea>
-    <div class="be-comment-editor__actions">
-        <button type="button"
-                class="btn btn-sm btn-primary"
-                disabled="@(!CanSubmit)"
-                @onclick="SubmitAsync">
-            @(IsSubmitting ? "Отправка..." : "Отправить")
-        </button>
+    <div class="be-comment-editor__body">
+        <textarea class="form-control be-comment-editor__input"
+                  rows="@Rows"
+                  placeholder="@Placeholder"
+                  disabled="@(!IsEnabled || IsSubmitting)"
+                  @bind="Text"
+                  @bind:event="oninput"></textarea>
+        <div class="be-comment-editor__actions">
+            <button type="button"
+                    class="btn btn-sm btn-primary be-comment-editor__submit"
+                    disabled="@(!CanSubmit)"
+                    @onclick="SubmitAsync">
+                @(IsSubmitting ? "Отправка..." : "Отправить")
+            </button>
+        </div>
     </div>
 </div>
