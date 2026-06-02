@@ -63,7 +63,6 @@
                                          IsRebuilding="@IsRebuildingTableOfContents"
                                          CanRebuild="@CanEdit"
                                          HideScrollbar="@HideTableOfContentsScrollbar"
-                                         BottomReservePx="@CommentsBottomReservePx"
                                          OnDisplayLevelCountChanged="HandleDisplayLevelCountChangedAsync"
                                          OnRebuildRequested="HandleRebuildTableOfContentsAsync"
                                          OnHeadingSelected="HandleHeadingSelectedAsync" />
@@ -76,8 +75,7 @@
                                           OutlineNodes="@LocalOutlineNodes"
                                           IsInitialContentLoading="@IsInitialContentLoading"
                                           InitialTargetPosition="@InitialTargetPosition"
-                                          InitialWindow="@InitialChunkWindow"
-                                          BottomReservePx="@CommentsBottomReservePx" />
+                                          InitialWindow="@InitialChunkWindow" />
             </div>
             <div class="rich-text-document-layout__widgets">
                 <RichTextDocumentWidgets BusinessEntityId="@BusinessEntityId"
@@ -95,14 +93,6 @@
                                          OnBookmarkDeleted="HandleBookmarkDeletedAsync"
                                          OnVersionSelected="HandleVersionSelectedAsync" />
             </div>
-        </div>
-    }
-
-    @if (!IsBusy)
-    {
-        <div class="rich-text-document-comments">
-            <BusinessEntityCommentsSection BusinessEntityId="@BusinessEntityId"
-                                           CanWrite="true" />
         </div>
     }
 </div>

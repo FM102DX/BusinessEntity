@@ -14,7 +14,7 @@
 
 .rich-text-document-tabs__list {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     border-bottom: 1px solid #d8e1ec;
     background: #f7f9fc;
 }
@@ -32,7 +32,7 @@
     font-size: 0.74rem;
     font-weight: 700;
     line-height: 1.2;
-    padding: 0.55rem 0.35rem;
+    padding: 0.55rem 0.25rem;
     white-space: nowrap;
 }
 
@@ -250,6 +250,20 @@
 
 .rich-text-document-versions__error {
     color: #a52834;
+}
+
+.rich-text-document-comments-widget ::deep .be-comments-section {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+.rich-text-document-comments-widget ::deep .be-comments-section__list {
+    margin-top: 0.5rem;
+}
+
+.rich-text-document-comments-widget ::deep .be-comment-item {
+    padding: 0.45rem 0;
 }
 
 .rich-text-document-statistics__header {

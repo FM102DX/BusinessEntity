@@ -381,7 +381,8 @@ namespace BusinessEntity.Components
             Search,
             Bookmarks,
             Versions,
-            Statistics
+            Statistics,
+            Comments
         }
     }
 }

@@ -15,7 +15,7 @@
                   @bind:event="oninput"></textarea>
         <div class="be-comment-editor__actions">
             <button type="button"
-                    class="btn btn-sm btn-primary be-comment-editor__submit"
+                    class="be-comment-editor__submit-link"
                     disabled="@(!CanSubmit)"
                     @onclick="SubmitAsync">
                 @(IsSubmitting ? "Отправка..." : "Отправить")

@@ -15,7 +15,7 @@
                     role="tab"
                     aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Bookmarks)"
                     @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Bookmarks))">
-                Закладки
+                Закл.
                 <span class="rich-text-document-tabs__badge">@Bookmarks.Count</span>
             </button>
             <button type="button"
@@ -23,7 +23,7 @@
                     role="tab"
                     aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Versions)"
                     @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Versions))">
-                Версии
+                Верс.
                 <span class="rich-text-document-tabs__badge">@Versions.Count</span>
             </button>
             <button type="button"
@@ -32,6 +32,13 @@
                     aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Statistics)"
                     @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Statistics))">
                 Стат.
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(RichTextDocumentWidgetTab.Comments)"
+                    role="tab"
+                    aria-selected="@(ActiveTab == RichTextDocumentWidgetTab.Comments)"
+                    @onclick="@(() => SetActiveTab(RichTextDocumentWidgetTab.Comments))">
+                Комм.
             </button>
         </div>
 
@@ -188,6 +195,16 @@
                         </table>
                     </div>
                 }
+            }
+            else if (ActiveTab == RichTextDocumentWidgetTab.Comments)
+            {
+                <div class="rich-text-document-comments-widget">
+                    <BusinessEntityCommentsSection BusinessEntityId="@BusinessEntityId"
+                                                   CanWrite="true"
+                                                   UseOwnScroll="true"
+                                                   ScrollMaxHeightPx="420"
+                                                   CssClass="rich-text-document-comments-widget__section" />
+                </div>
             }
             else
             {

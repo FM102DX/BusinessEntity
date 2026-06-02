@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Components;
 namespace BusinessEntity.MiniApps.ActivityMiniApp.Components;
 
 /// <summary>
-/// Поле ввода комментария или ответа с кнопкой отправки.
+/// Поле ввода комментария или ответа с действием отправки.
 /// </summary>
 public partial class BusinessEntityCommentEditor : ComponentBase
 {
