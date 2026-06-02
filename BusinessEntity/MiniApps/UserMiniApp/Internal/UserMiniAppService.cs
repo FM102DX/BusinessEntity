@@ -1219,6 +1219,55 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 cancellationToken);
         }
 
+        public async Task<TreeExpansionStateProperty> GetTreeExpansionStateAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            if (spaceId == Guid.Empty)
+            {
+                return new TreeExpansionStateProperty();
+            }
+
+            var user = await EnsureCurrentUserAsync(cancellationToken);
+            if (user == null)
+            {
+                return new TreeExpansionStateProperty { SpaceId = spaceId };
+            }
+
+            var property = await ReadTreeExpansionStatePropertyAsync(user.Id, spaceId, cancellationToken);
+            return NormalizeTreeExpansionStateProperty(
+                property ?? new TreeExpansionStateProperty { SpaceId = spaceId },
+                spaceId);
+        }
+
+        public async Task SaveTreeExpansionStateAsync(
+            Guid spaceId,
+            IReadOnlyCollection<Guid> collapsedFolderIds,
+            CancellationToken cancellationToken = default)
+        {
+            if (spaceId == Guid.Empty)
+            {
+                return;
+            }
+
+            var user = await EnsureCurrentUserAsync(cancellationToken);
+            if (user == null)
+            {
+                return;
+            }
+
+            await UpsertTreeExpansionStatePropertyAsync(
+                user.Id,
+                NormalizeTreeExpansionStateProperty(
+                    new TreeExpansionStateProperty
+                    {
+                        SpaceId = spaceId,
+                        CollapsedFolderIds = collapsedFolderIds?.ToList() ?? new List<Guid>()
+                    },
+                    spaceId),
+                cancellationToken);
+        }
+
         // Возвращает коллекцию пользовательских пресетов печати документов.
         public async Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default)
         {
@@ -2409,6 +2458,30 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             return null;
         }
 
+        private async Task<TreeExpansionStateProperty?> ReadTreeExpansionStatePropertyAsync(
+            Guid userId,
+            Guid spaceId,
+            CancellationToken cancellationToken)
+        {
+            var properties = (await _userPropertyRepository.GetAllAsync(
+                    x => x.ParentEntityId == userId &&
+                         x.PropertyType == (int)UserPropertyTypeEnum.TreeExpansionState,
+                    cancellationToken))
+                .OrderByDescending(x => x.DateLastModified)
+                .ToList();
+
+            foreach (var property in properties)
+            {
+                var payload = TryReadTreeExpansionStateProperty(property.Data);
+                if (payload?.SpaceId == spaceId)
+                {
+                    return NormalizeTreeExpansionStateProperty(payload, spaceId);
+                }
+            }
+
+            return null;
+        }
+
         private async Task UpsertBookmarksPayloadAsync(
             Guid userId,
             RichTextDocumentBookmarksPayload payload,
@@ -2576,6 +2649,65 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             }
         }
 
+        private async Task UpsertTreeExpansionStatePropertyAsync(
+            Guid userId,
+            TreeExpansionStateProperty payload,
+            CancellationToken cancellationToken)
+        {
+            payload = NormalizeTreeExpansionStateProperty(payload, payload.SpaceId);
+
+            var properties = (await _userPropertyRepository.GetAllAsync(
+                    x => x.ParentEntityId == userId &&
+                         x.PropertyType == (int)UserPropertyTypeEnum.TreeExpansionState,
+                    cancellationToken))
+                .OrderByDescending(x => x.DateLastModified)
+                .ToList();
+
+            var matchingProperties = properties
+                .Where(property => TryReadTreeExpansionStateProperty(property.Data)?.SpaceId == payload.SpaceId)
+                .ToList();
+
+            var now = DateTime.UtcNow;
+            var data = JsonSerializer.Serialize(payload, UserMiniAppJsonOptions.Default);
+            var metadata = JsonSerializer.Serialize(
+                new
+                {
+                    schemaVersion = 1,
+                    kind = "TreeExpansionStateMetadata",
+                    spaceId = payload.SpaceId,
+                    collapsedFolderCount = payload.CollapsedFolderIds.Count
+                },
+                UserMiniAppJsonOptions.Default);
+
+            var property = matchingProperties.FirstOrDefault();
+            if (property == null)
+            {
+                await _userPropertyRepository.AddAsync(
+                    new UserPropertyDto
+                    {
+                        Id = Guid.NewGuid(),
+                        DateCreated = now,
+                        DateLastModified = now,
+                        ParentEntityId = userId,
+                        PropertyType = (int)UserPropertyTypeEnum.TreeExpansionState,
+                        Data = data,
+                        Metadata = metadata
+                    },
+                    cancellationToken);
+                return;
+            }
+
+            property.DateLastModified = now;
+            property.Data = data;
+            property.Metadata = metadata;
+            await _userPropertyRepository.UpdateAsync(property, cancellationToken);
+
+            foreach (var duplicate in matchingProperties.Skip(1))
+            {
+                await _userPropertyRepository.DeleteAsync(duplicate.Id, cancellationToken);
+            }
+        }
+
         private static RichDocDisplayedLevelProperty? TryReadDisplayedLevelProperty(string? data)
         {
             if (string.IsNullOrWhiteSpace(data))
@@ -2602,6 +2734,49 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             }
 
             return null;
+        }
+
+        private static TreeExpansionStateProperty? TryReadTreeExpansionStateProperty(string? data)
+        {
+            if (string.IsNullOrWhiteSpace(data))
+            {
+                return null;
+            }
+
+            try
+            {
+                var payload = JsonSerializer.Deserialize<TreeExpansionStateProperty>(
+                    data,
+                    UserMiniAppJsonOptions.Default);
+
+                if (payload?.SchemaVersion == 1 &&
+                    string.Equals(payload.Kind, nameof(TreeExpansionStateProperty), StringComparison.Ordinal))
+                {
+                    return NormalizeTreeExpansionStateProperty(payload, payload.SpaceId);
+                }
+            }
+            catch (JsonException)
+            {
+                // Invalid user property payload is ignored.
+            }
+
+            return null;
+        }
+
+        private static TreeExpansionStateProperty NormalizeTreeExpansionStateProperty(
+            TreeExpansionStateProperty payload,
+            Guid spaceId)
+        {
+            return new TreeExpansionStateProperty
+            {
+                Kind = nameof(TreeExpansionStateProperty),
+                SchemaVersion = 1,
+                SpaceId = spaceId,
+                CollapsedFolderIds = (payload.CollapsedFolderIds ?? new List<Guid>())
+                    .Where(id => id != Guid.Empty)
+                    .Distinct()
+                    .ToList()
+            };
         }
 
         // Нормализует collection payload пресетов печати после чтения или перед записью.

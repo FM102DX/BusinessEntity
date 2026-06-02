@@ -26,6 +26,31 @@
         flex: 0 0 auto;
     }
 
+    .tree-node-icon {
+        align-items: center;
+        display: inline-flex;
+        flex: 0 0 24px;
+        height: 24px;
+        justify-content: center;
+        margin-right: 3px;
+        width: 24px;
+    }
+
+    .tree-node-icon .rz-icon {
+        font-size: 18px !important;
+        line-height: 1;
+    }
+
+    .tree-node-icon--toggle {
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .tree-node-icon--toggle:hover {
+        background: #f4eeff;
+        color: #a100ff;
+    }
+
     .tree-node-title {
         display: inline-block;
         flex: 1 1 auto;
@@ -269,9 +294,15 @@
                                       @ondrop="async (e) => await OnDrop(e, node)"
                                       @ondragenter="(e) => OnDragEnter(e, node)"
                                       @ondragleave="(e) => OnDragLeave(e, node)">
-                                    @if (!string.IsNullOrEmpty(node?.Icon))
+                                    @if (node != null && !string.IsNullOrEmpty(GetNodeIcon(node)))
                                     {
-                                        <RadzenIcon Icon="@node.Icon" Style="font-size:16px; margin-right:4px;" />
+                                        <span class="tree-node-icon @(CanToggleNodeExpansion(node) ? "tree-node-icon--toggle" : "")"
+                                              title="@(CanToggleNodeExpansion(node) ? (node.Expanded ? "Закрыть папку" : "Открыть папку") : null)"
+                                              @onclick="async () => await ToggleFolderExpandedAsync(node)"
+                                              @onclick:stopPropagation="@CanToggleNodeExpansion(node)"
+                                              @onclick:preventDefault="@CanToggleNodeExpansion(node)">
+                                            <RadzenIcon Icon="@GetNodeIcon(node)" />
+                                        </span>
                                     }
                                     <span class="tree-node-title">@node?.Title</span>
                                 </span>

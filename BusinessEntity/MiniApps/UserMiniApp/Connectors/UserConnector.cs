@@ -230,6 +230,21 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Connectors
             return _userMiniApp.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
         }
 
+        public Task<TreeExpansionStateProperty> GetTreeExpansionStateAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.GetTreeExpansionStateAsync(spaceId, cancellationToken);
+        }
+
+        public Task SaveTreeExpansionStateAsync(
+            Guid spaceId,
+            IReadOnlyCollection<Guid> collapsedFolderIds,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniApp.SaveTreeExpansionStateAsync(spaceId, collapsedFolderIds, cancellationToken);
+        }
+
         // Возвращает пользовательские пресеты печати через публичный контракт user mini-app.
         public Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default)
         {

@@ -240,6 +240,21 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Facade
             return _userMiniAppService.SaveRichDocDisplayedLevelAsync(documentId, displayLevelCount, cancellationToken);
         }
 
+        public Task<TreeExpansionStateProperty> GetTreeExpansionStateAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.GetTreeExpansionStateAsync(spaceId, cancellationToken);
+        }
+
+        public Task SaveTreeExpansionStateAsync(
+            Guid spaceId,
+            IReadOnlyCollection<Guid> collapsedFolderIds,
+            CancellationToken cancellationToken = default)
+        {
+            return _userMiniAppService.SaveTreeExpansionStateAsync(spaceId, collapsedFolderIds, cancellationToken);
+        }
+
         // Делегирует чтение пресетов печати во внутренний сервис mini-app.
         public Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default)
         {

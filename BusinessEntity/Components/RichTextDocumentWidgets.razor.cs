@@ -1,5 +1,6 @@
 using BusinessEntity.Core.Classes;
 using BusinessEntity.Core.RichText;
+using BusinessEntity.MiniApps.ActivityMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
@@ -28,12 +29,14 @@ namespace BusinessEntity.Components
         [Parameter] public EventCallback<string> OnVersionDescriptionChanged { get; set; }
 
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
+        [Inject] public IActivityConnector ActivityConnector { get; set; } = default!;
         [Inject] public RichTextDocumentHelper RichTextDocumentHelper { get; set; } = default!;
 
         private string SearchQuery { get; set; } = string.Empty;
         private Guid? SelectedBookmarkId { get; set; }
         private RichTextDocumentWidgetTab ActiveTab { get; set; } = RichTextDocumentWidgetTab.Search;
         private IReadOnlyList<BusinessEntityDataVersionInfo> Versions { get; set; } = Array.Empty<BusinessEntityDataVersionInfo>();
+        private int CommentsCount { get; set; }
         private RichTextDocumentChunkStatistics? Statistics { get; set; }
         private bool IsVersionsLoading { get; set; }
         private bool IsStatisticsLoading { get; set; }
@@ -41,6 +44,8 @@ namespace BusinessEntity.Components
         private string? StatisticsError { get; set; }
         private Guid _versionsLoadedForEntityId;
         private int _versionsLoadedForRefreshToken = -1;
+        private Guid _commentsCountLoadedForEntityId;
+        private long _commentsCountRequestId;
         private Guid _statisticsLoadedForEntityId;
         private int _statisticsLoadedForViewedVersion = -1;
         private int _statisticsLoadedForRefreshToken = -1;
@@ -70,6 +75,8 @@ namespace BusinessEntity.Components
             {
                 Versions = Array.Empty<BusinessEntityDataVersionInfo>();
                 _versionsLoadedForEntityId = Guid.Empty;
+                CommentsCount = 0;
+                _commentsCountLoadedForEntityId = Guid.Empty;
                 ResetStatistics();
                 return;
             }
@@ -80,6 +87,11 @@ namespace BusinessEntity.Components
                 VersionsRefreshToken != _versionsLoadedForRefreshToken)
             {
                 await LoadVersionsAsync();
+            }
+
+            if (BusinessEntityId != _commentsCountLoadedForEntityId)
+            {
+                await LoadCommentsCountAsync();
             }
         }
 
@@ -202,6 +214,39 @@ namespace BusinessEntity.Components
             {
                 IsVersionsLoading = false;
             }
+        }
+
+        private async Task LoadCommentsCountAsync()
+        {
+            var entityId = BusinessEntityId;
+            var requestId = ++_commentsCountRequestId;
+
+            try
+            {
+                var comments = await ActivityConnector.GetCommentsAsync(entityId);
+                if (BusinessEntityId != entityId || requestId != _commentsCountRequestId)
+                {
+                    return;
+                }
+
+                CommentsCount = comments.Count;
+                _commentsCountLoadedForEntityId = entityId;
+            }
+            catch
+            {
+                if (BusinessEntityId == entityId && requestId == _commentsCountRequestId)
+                {
+                    CommentsCount = 0;
+                    _commentsCountLoadedForEntityId = entityId;
+                }
+            }
+        }
+
+        private Task HandleCommentsCountChangedAsync(int count)
+        {
+            CommentsCount = Math.Max(0, count);
+            _commentsCountLoadedForEntityId = BusinessEntityId;
+            return Task.CompletedTask;
         }
 
         private void QueueStatisticsLoad()

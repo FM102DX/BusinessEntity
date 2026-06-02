@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.10] - 2026-06-02 21:04:35 +03:00
+
+### MINOR-FEATURES
+
+#### Tree folder expansion
+- Папки основного дерева теперь раскрываются и закрываются кликом по иконке, с отдельными иконками `folder_open` / `folder`.
+- Состояние закрытых папок сохраняется в `UserProperties` отдельным payload на пользователя и пространство.
+- Иконка узла дерева получила увеличенную click-target область, чтобы по папкам было проще попадать мышью.
+
+#### Comments tab counter
+- Во вкладке `Комм.` правого tab-control rich-документа добавлен счетчик комментариев и ответов.
+
 ## [0.14.9] - 2026-06-02 17:04:15 +03:00
 
 ### MINOR-FEATURES

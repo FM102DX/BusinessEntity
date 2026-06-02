@@ -102,6 +102,17 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
             int displayLevelCount,
             CancellationToken cancellationToken = default);
 
+        // Возвращает пользовательское состояние раскрытия папок дерева для пространства.
+        Task<TreeExpansionStateProperty> GetTreeExpansionStateAsync(
+            Guid spaceId,
+            CancellationToken cancellationToken = default);
+
+        // Сохраняет пользовательское состояние закрытых папок дерева для пространства.
+        Task SaveTreeExpansionStateAsync(
+            Guid spaceId,
+            IReadOnlyCollection<Guid> collapsedFolderIds,
+            CancellationToken cancellationToken = default);
+
         // Возвращает пользовательскую коллекцию пресетов печати документов.
         Task<DocPrintSettingsPresetCollection> GetDocPrintPresetsAsync(CancellationToken cancellationToken = default);
 

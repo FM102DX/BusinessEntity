@@ -10,6 +10,7 @@ using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.TreeMiniApp.Internal;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using Radzen;
 using Radzen.Blazor;
 using Microsoft.AspNetCore.Components.Web;
@@ -29,6 +30,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] public NavigationManager NavigationManager { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
+        [Inject] public IUserConnector UserConnector { get; set; } = default!;
 
         [Parameter] public EventCallback<TreeNodeItemViewModelBase> OnNodeSelected { get; set; }
         [Parameter] public EventCallback<List<TreeNodeItemViewModelBase>> OnMultipleNodesSelected { get; set; }
@@ -47,6 +49,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private bool IsMultiSelectMode { get; set; } = false;
         private bool IsCtrlGroupSelectionActive { get; set; } = false;
         private bool IsAuthenticated { get; set; }
+        private HashSet<Guid> CollapsedFolderIds { get; set; } = new();
+        private Guid TreeExpansionStateSpaceId { get; set; }
         
         // Состояние inline-редактирования
         private TreeNodeItemViewModelBase? EditingNode { get; set; } = null;
@@ -174,14 +178,20 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
         private async Task DrawTreeForCurrentSpace()
         {
-            if (UserContextService.CurrentSpaceId == null)
+            var currentSpaceId = UserContextService.CurrentSpaceId;
+            if (currentSpaceId == null)
             {
                 TreeData = new List<TreeNodeItemViewModelBase>();
                 Visible = false;
+                CollapsedFolderIds = new HashSet<Guid>();
+                TreeExpansionStateSpaceId = Guid.Empty;
                 return;
             }
 
-            var snapshot = await TreeMiniAppService.GetTreeForSpaceAsync(UserContextService.CurrentSpaceId.Value);
+            var spaceId = currentSpaceId.Value;
+            await LoadTreeExpansionStateAsync(spaceId);
+
+            var snapshot = await TreeMiniAppService.GetTreeForSpaceAsync(spaceId);
             if (snapshot == null)
             {
                 TreeData = new List<TreeNodeItemViewModelBase>();
@@ -258,7 +268,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 treeNodeVm.EntityType = entityData.EntityType.ToString();
             }
             treeNodeVm.Icon = icon;
-            treeNodeVm.Expanded = true;
+            treeNodeVm.Expanded = ResolveInitialExpandedState(entityData);
             // Индексируем узел
             _nodeById[entityData.Id] = treeNodeVm;
 
@@ -303,12 +313,38 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             };
         }
 
+        private string GetNodeIcon(TreeNodeItemViewModelBase? node)
+        {
+            if (node?.Entity?.EntityType == BusinessEntityTypeEnum.Folder)
+            {
+                return node.Expanded ? "folder_open" : "folder";
+            }
+
+            return node?.Entity == null
+                ? "insert_drive_file"
+                : GetEntityIcon(node.Entity.EntityType);
+        }
+
+        private bool CanToggleNodeExpansion(TreeNodeItemViewModelBase? node)
+        {
+            return node?.Entity?.EntityType == BusinessEntityTypeEnum.Folder;
+        }
+
+        private bool ResolveInitialExpandedState(BusinessEntity.Core.Classes.BusinessEntity entity)
+        {
+            return entity.EntityType switch
+            {
+                BusinessEntityTypeEnum.Space => true,
+                BusinessEntityTypeEnum.Folder => !CollapsedFolderIds.Contains(entity.Id),
+                _ => true
+            };
+        }
+
         private string GetNodeText(object data)
         {
             if (data is TreeNodeItemViewModelBase node)
             {
-                var entityType = node.Entity?.EntityType.ToString() ?? "Space";
-                var icon = GetEntityIcon(entityType);
+                var icon = GetNodeIcon(node);
                 // Убираем галочку, оставляем только иконку и название
                 return $"{icon} {node.Title}";
             }
@@ -322,6 +358,85 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 return node.Children?.Any() == true;
             }
             return false;
+        }
+
+        private async Task LoadTreeExpansionStateAsync(Guid spaceId)
+        {
+            TreeExpansionStateSpaceId = spaceId;
+
+            try
+            {
+                var state = await UserConnector.GetTreeExpansionStateAsync(spaceId);
+                CollapsedFolderIds = state.CollapsedFolderIds
+                    .Where(id => id != Guid.Empty)
+                    .ToHashSet();
+            }
+            catch (Exception ex)
+            {
+                CollapsedFolderIds = new HashSet<Guid>();
+                WebLogger?.Warning($"Cannot load tree expansion state: {ex.Message}");
+            }
+        }
+
+        private async Task ToggleFolderExpandedAsync(TreeNodeItemViewModelBase? node)
+        {
+            if (!CanToggleNodeExpansion(node) || node?.Entity == null)
+            {
+                return;
+            }
+
+            node.Expanded = !node.Expanded;
+            UpdateCollapsedFolderState(node);
+            await InvokeAsync(StateHasChanged);
+            await SaveTreeExpansionStateAsync();
+        }
+
+        private async Task SetFolderExpandedAsync(TreeNodeItemViewModelBase? node, bool expanded)
+        {
+            if (!CanToggleNodeExpansion(node) || node?.Entity == null)
+            {
+                return;
+            }
+
+            node.Expanded = expanded;
+            UpdateCollapsedFolderState(node);
+            await SaveTreeExpansionStateAsync();
+        }
+
+        private void UpdateCollapsedFolderState(TreeNodeItemViewModelBase node)
+        {
+            if (node.Entity == null)
+            {
+                return;
+            }
+
+            if (node.Expanded)
+            {
+                CollapsedFolderIds.Remove(node.Entity.Id);
+            }
+            else
+            {
+                CollapsedFolderIds.Add(node.Entity.Id);
+            }
+        }
+
+        private async Task SaveTreeExpansionStateAsync()
+        {
+            if (TreeExpansionStateSpaceId == Guid.Empty)
+            {
+                return;
+            }
+
+            try
+            {
+                await UserConnector.SaveTreeExpansionStateAsync(
+                    TreeExpansionStateSpaceId,
+                    CollapsedFolderIds.ToList());
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Warning($"Cannot save tree expansion state: {ex.Message}");
+            }
         }
 
         // Публичный метод для обработки кликов по узлам (вызывается из razor)
@@ -751,7 +866,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                         var childNode = new FolderTreeNodeItemViewModel(newEntity, WebLogger)
                         {
                             Icon = GetEntityIcon(newEntity.EntityType),
-                            Expanded = false,
+                            Expanded = true,
                             Parent = parentNode,
                             OnEntityCreateRequested = OnEntityCreateRequestedAsync, // Устанавливаем колбэк для новой папки
                             OnEntityDeleteRequested = OnEntityDeleteRequestedAsync, // Устанавливаем колбэк для удаления новой папки
@@ -760,7 +875,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                         
                         // Добавляем новую ноду в дерево
                         parentNode.Children.Add(childNode);
-                        parentNode.Expanded = true; // Разворачиваем родительскую ноду
+                        await SetFolderExpandedAsync(parentNode, true);
                         // Индексируем новую ноду
                         _nodeById[newEntity.Id] = childNode;
                         
@@ -788,7 +903,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
                             // Добавляем в дерево и разворачиваем родителя
                             parentNode.Children.Add(docNode);
-                            parentNode.Expanded = true;
+                            await SetFolderExpandedAsync(parentNode, true);
                             // Индексируем новую ноду
                             _nodeById[newDoc.Id] = docNode;
 
@@ -814,7 +929,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                             };
 
                             parentNode.Children.Add(richDocNode);
-                            parentNode.Expanded = true;
+                            await SetFolderExpandedAsync(parentNode, true);
                             _nodeById[newRichDocument.Id] = richDocNode;
 
                             WebLogger?.Information($"Successfully created rich-text document '{newRichDocument.Name}' under '{parentNode.Entity.Name}'");

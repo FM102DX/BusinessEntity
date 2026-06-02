@@ -15,6 +15,7 @@ public partial class BusinessEntityCommentsSection : ComponentBase
     [Parameter] public bool UseOwnScroll { get; set; }
     [Parameter] public int ScrollMaxHeightPx { get; set; } = 280;
     [Parameter] public string? CssClass { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
 
     [Inject] public IActivityConnector ActivityConnector { get; set; } = default!;
     [Inject] public IUserConnector UserConnector { get; set; } = default!;
@@ -58,6 +59,7 @@ public partial class BusinessEntityCommentsSection : ComponentBase
             Comments = Array.Empty<BusinessEntityCommentRecord>();
             LoadedBusinessEntityId = Guid.Empty;
             HasLoaded = true;
+            await NotifyCountChangedAsync();
             return;
         }
 
@@ -69,6 +71,7 @@ public partial class BusinessEntityCommentsSection : ComponentBase
             Comments = await ActivityConnector.GetCommentsAsync(BusinessEntityId);
             LoadedBusinessEntityId = BusinessEntityId;
             HasLoaded = true;
+            await NotifyCountChangedAsync();
         }
         catch (Exception ex)
         {
@@ -78,6 +81,13 @@ public partial class BusinessEntityCommentsSection : ComponentBase
         {
             IsLoading = false;
         }
+    }
+
+    private Task NotifyCountChangedAsync()
+    {
+        return OnCountChanged.HasDelegate
+            ? OnCountChanged.InvokeAsync(Comments.Count)
+            : Task.CompletedTask;
     }
 
     // Проверяет, можно ли текущему пользователю показывать активный editor комментария.
