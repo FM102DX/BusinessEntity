@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-06-07 22:27:43 +03:00
+
+### MINOR-FEATURES
+
+#### Release versioning
+- Версия приложения поднята до `0.15.0` для выделения текущего набора изменений в минорный релиз.
+
 ## [0.14.11] - 2026-06-07 22:21:49 +03:00
 
 ### MAJOR-FEATURES
