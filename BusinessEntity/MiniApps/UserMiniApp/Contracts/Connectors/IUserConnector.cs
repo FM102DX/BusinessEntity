@@ -102,15 +102,22 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors
             int displayLevelCount,
             CancellationToken cancellationToken = default);
 
-        // Возвращает пользовательское состояние раскрытия папок дерева для пространства.
-        Task<TreeExpansionStateProperty> GetTreeExpansionStateAsync(
-            Guid spaceId,
+        // Возвращает технические свойства текущего пользователя по типу.
+        Task<IReadOnlyList<UserPropertyDto>> GetCurrentUserPropertiesAsync(
+            int propertyType,
             CancellationToken cancellationToken = default);
 
-        // Сохраняет пользовательское состояние закрытых папок дерева для пространства.
-        Task SaveTreeExpansionStateAsync(
-            Guid spaceId,
-            IReadOnlyCollection<Guid> collapsedFolderIds,
+        // Создает или обновляет техническое свойство текущего пользователя.
+        Task<UserPropertyDto?> UpsertCurrentUserPropertyAsync(
+            Guid? propertyId,
+            int propertyType,
+            string data,
+            string metadata,
+            CancellationToken cancellationToken = default);
+
+        // Удаляет техническое свойство текущего пользователя.
+        Task<bool> DeleteCurrentUserPropertyAsync(
+            Guid propertyId,
             CancellationToken cancellationToken = default);
 
         // Возвращает пользовательскую коллекцию пресетов печати документов.

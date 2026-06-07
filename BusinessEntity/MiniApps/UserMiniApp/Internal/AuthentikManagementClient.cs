@@ -11,6 +11,7 @@ internal sealed class AuthentikManagementClient
 {
     private const string HttpClientName = "AuthentikAuth";
     private const string DefaultApplicationUsersGroupName = "GeoUsers";
+    private const string DefaultGeneralAdminsGroupName = "BusinessEntityAdmins";
     private const string DefaultManagedUsernamePrefix = "user-";
     private const int DefaultGeneratedUsernameCodeLength = 5;
     private const int PageSize = 100;
@@ -20,6 +21,7 @@ internal sealed class AuthentikManagementClient
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly string _apiToken;
     private readonly string _applicationUsersGroupName;
+    private readonly string _generalAdminsGroupName;
     private readonly string _managedUsernamePrefix;
     private readonly int _generatedUsernameCodeLength;
 
@@ -37,12 +39,24 @@ internal sealed class AuthentikManagementClient
         _applicationUsersGroupName = Environment.GetEnvironmentVariable("AUTHENTIK_APPLICATION_USERS_GROUP")
                                      ?? section["ApplicationUsersGroupName"]
                                      ?? DefaultApplicationUsersGroupName;
+        _generalAdminsGroupName = Environment.GetEnvironmentVariable("AUTHENTIK_GENERAL_ADMINS_GROUP")
+                                   ?? section["GeneralAdminsGroupName"]
+                                   ?? DefaultGeneralAdminsGroupName;
         _managedUsernamePrefix = section["ManagedUsernamePrefix"] ?? DefaultManagedUsernamePrefix;
         _generatedUsernameCodeLength = Math.Clamp(
             ReadConfiguredInt(section["GeneratedUsernameCodeLength"], DefaultGeneratedUsernameCodeLength),
             1,
             16);
     }
+
+    // Возвращает true, если для Authentik Admin API настроен bearer token.
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiToken);
+
+    // Возвращает configured group пользователей приложения.
+    public string ApplicationUsersGroupName => _applicationUsersGroupName;
+
+    // Возвращает configured group общего административного доступа.
+    public string GeneralAdminsGroupName => _generalAdminsGroupName;
 
     // Возвращает пользователей Authentik, допущенных к приложению через configured group.
     public async Task<IReadOnlyList<AuthentikUserRecord>> GetApplicationUsersAsync(CancellationToken cancellationToken)
@@ -59,6 +73,50 @@ internal sealed class AuthentikManagementClient
         }
 
         return await ReadPagedUsersAsync("/api/v3/core/users/" + QueryHelpers.AddQueryString(string.Empty, query), cancellationToken);
+    }
+
+    // Создает или чинит внутреннего пользователя Authentik с нужными группами.
+    public async Task<AuthentikUserRecord> EnsureInternalUserAsync(
+        string username,
+        string password,
+        IEnumerable<string> groupNames,
+        CancellationToken cancellationToken)
+    {
+        username = NormalizeRequiredText(username, nameof(username));
+        var normalizedPassword = NormalizeRequiredText(password, nameof(password));
+        var groups = new List<AuthentikGroupRecord>();
+        foreach (var groupName in groupNames
+                     .Where(groupName => !string.IsNullOrWhiteSpace(groupName))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            groups.Add(await EnsureGroupAsync(groupName, cancellationToken));
+        }
+
+        var user = await FindInternalUserByUsernameAsync(username, cancellationToken);
+        if (user == null)
+        {
+            user = await CreateInternalUserAsync(username, groups, cancellationToken);
+            await SetPasswordAsync(user.Pk, normalizedPassword, cancellationToken);
+            return await GetUserAsync(user.Pk, cancellationToken);
+        }
+
+        if (!user.IsActive || !string.Equals(user.Name, username, StringComparison.Ordinal))
+        {
+            user = await UpdateUserBasicsAsync(user, username, cancellationToken);
+        }
+
+        foreach (var group in groups)
+        {
+            await AddUserToGroupAsync(group.Pk, user.Pk, cancellationToken);
+        }
+
+        if (!HasPasswordConfigured(user))
+        {
+            await SetPasswordAsync(user.Pk, normalizedPassword, cancellationToken);
+            user = await GetUserAsync(user.Pk, cancellationToken);
+        }
+
+        return user;
     }
 
     // Создает Authentik-пользователя приложения с системным username user-[5 букв].
@@ -113,6 +171,71 @@ internal sealed class AuthentikManagementClient
         }
 
         throw new InvalidOperationException("Не удалось подобрать свободный логин Authentik для нового пользователя.");
+    }
+
+    // Ищет внутреннего пользователя Authentik по точному username.
+    public async Task<AuthentikUserRecord?> FindInternalUserByUsernameAsync(
+        string username,
+        CancellationToken cancellationToken)
+    {
+        username = NormalizeRequiredText(username, nameof(username));
+        var query = new Dictionary<string, string?>
+        {
+            ["page_size"] = PageSize.ToString(),
+            ["type"] = "internal",
+            ["username"] = username
+        };
+
+        var users = await ReadPagedUsersAsync("/api/v3/core/users/" + QueryHelpers.AddQueryString(string.Empty, query), cancellationToken);
+        return users.FirstOrDefault(user => string.Equals(user.Username, username, StringComparison.Ordinal));
+    }
+
+    // Возвращает пользователя Authentik по числовому pk.
+    public async Task<AuthentikUserRecord> GetUserAsync(int authentikUserPk, CancellationToken cancellationToken)
+    {
+        if (authentikUserPk <= 0)
+        {
+            throw new InvalidOperationException("У пользователя нет идентификатора Authentik.");
+        }
+
+        using var request = CreateRequest(HttpMethod.Get, $"/api/v3/core/users/{authentikUserPk}/");
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        EnsureSuccess(response, body, "получить пользователя из Authentik");
+
+        using var document = JsonDocument.Parse(body);
+        return ReadUser(document.RootElement);
+    }
+
+    // Создает или возвращает существующую группу Authentik по имени.
+    public async Task<AuthentikGroupRecord> EnsureGroupAsync(
+        string groupName,
+        CancellationToken cancellationToken)
+    {
+        groupName = NormalizeRequiredText(groupName, nameof(groupName));
+        var existingGroup = await FindGroupByNameAsync(groupName, cancellationToken);
+        if (existingGroup != null)
+        {
+            return existingGroup;
+        }
+
+        var payload = new
+        {
+            name = groupName,
+            is_superuser = false,
+            parents = Array.Empty<string>(),
+            users = Array.Empty<int>(),
+            attributes = new { },
+            roles = Array.Empty<string>()
+        };
+
+        using var request = CreateJsonRequest(HttpMethod.Post, "/api/v3/core/groups/", payload);
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        EnsureSuccess(response, body, "создать группу в Authentik");
+
+        using var document = JsonDocument.Parse(body);
+        return ReadGroup(document.RootElement);
     }
 
     // Меняет username пользователя в Authentik и возвращает обновленную запись.
@@ -174,6 +297,108 @@ internal sealed class AuthentikManagementClient
         using var response = await SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         EnsureSuccess(response, body, "удалить пользователя из Authentik");
+    }
+
+    // Создает внутреннего Authentik-пользователя без пароля, пароль ставится отдельным endpoint.
+    private async Task<AuthentikUserRecord> CreateInternalUserAsync(
+        string username,
+        IReadOnlyList<AuthentikGroupRecord> groups,
+        CancellationToken cancellationToken)
+    {
+        var payload = new
+        {
+            username,
+            name = username,
+            is_active = true,
+            groups = groups.Select(group => group.Pk).ToList(),
+            email = string.Empty,
+            path = "users",
+            type = "internal",
+            attributes = new { }
+        };
+
+        using var request = CreateJsonRequest(HttpMethod.Post, "/api/v3/core/users/", payload);
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        EnsureSuccess(response, body, $"создать пользователя '{username}' в Authentik");
+
+        using var document = JsonDocument.Parse(body);
+        return ReadUser(document.RootElement);
+    }
+
+    // Чинит базовые поля пользователя, не меняя username и пароль.
+    private async Task<AuthentikUserRecord> UpdateUserBasicsAsync(
+        AuthentikUserRecord user,
+        string displayName,
+        CancellationToken cancellationToken)
+    {
+        var payload = new
+        {
+            name = displayName,
+            is_active = true
+        };
+
+        using var request = CreateJsonRequest(new HttpMethod("PATCH"), $"/api/v3/core/users/{user.Pk}/", payload);
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        EnsureSuccess(response, body, "обновить базовые поля пользователя в Authentik");
+
+        using var document = JsonDocument.Parse(body);
+        return ReadUser(document.RootElement);
+    }
+
+    // Ищет группу Authentik по точному имени.
+    private async Task<AuthentikGroupRecord?> FindGroupByNameAsync(
+        string groupName,
+        CancellationToken cancellationToken)
+    {
+        var query = QueryHelpers.AddQueryString(
+            "/api/v3/core/groups/",
+            new Dictionary<string, string?>
+            {
+                ["name"] = groupName,
+                ["page_size"] = PageSize.ToString()
+            });
+
+        using var request = CreateRequest(HttpMethod.Get, query);
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        EnsureSuccess(response, body, "получить группы из Authentik");
+
+        using var document = JsonDocument.Parse(body);
+        foreach (var group in document.RootElement.GetProperty("results").EnumerateArray())
+        {
+            var record = ReadGroup(group);
+            if (string.Equals(record.Name, groupName, StringComparison.Ordinal))
+            {
+                return record;
+            }
+        }
+
+        return null;
+    }
+
+    // Добавляет пользователя в группу Authentik идемпотентно.
+    private async Task AddUserToGroupAsync(
+        string groupPk,
+        int userPk,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(groupPk) || userPk <= 0)
+        {
+            return;
+        }
+
+        var payload = new { pk = userPk };
+        using var request = CreateJsonRequest(HttpMethod.Post, $"/api/v3/core/groups/{groupPk}/add_user/", payload);
+        using var response = await SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (response.IsSuccessStatusCode || IsAlreadyInGroup(response, body))
+        {
+            return;
+        }
+
+        EnsureSuccess(response, body, "добавить пользователя в группу Authentik");
     }
 
     private async Task<string?> TryGetApplicationGroupPkAsync(CancellationToken cancellationToken)
@@ -249,6 +474,20 @@ internal sealed class AuthentikManagementClient
                body.Contains("username", StringComparison.OrdinalIgnoreCase);
     }
 
+    // Определяет, что Authentik отказал в добавлении пользователя, потому что связь уже есть.
+    private static bool IsAlreadyInGroup(HttpResponseMessage response, string body)
+    {
+        return (int)response.StatusCode == 400 &&
+               (body.Contains("already", StringComparison.OrdinalIgnoreCase) ||
+                body.Contains("exists", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Проверяет, что у пользователя уже есть зафиксированная дата изменения пароля.
+    private static bool HasPasswordConfigured(AuthentikUserRecord user)
+    {
+        return !string.IsNullOrWhiteSpace(user.PasswordChangeDate);
+    }
+
     private HttpRequestMessage CreateJsonRequest(HttpMethod method, string requestUri, object payload)
     {
         var request = CreateRequest(method, requestUri);
@@ -303,7 +542,17 @@ internal sealed class AuthentikManagementClient
             ReadString(user, "uuid"),
             ReadBool(user, "is_active"),
             ReadString(user, "email"),
-            ReadString(user, "type"));
+            ReadString(user, "type"),
+            ReadString(user, "password_change_date"));
+    }
+
+    // Читает минимальную Authentik group DTO из API JSON.
+    private static AuthentikGroupRecord ReadGroup(JsonElement group)
+    {
+        return new AuthentikGroupRecord(
+            ReadString(group, "pk"),
+            ReadString(group, "name"),
+            ReadBool(group, "is_superuser"));
     }
 
     private static string ReplacePage(string uri, int page)
@@ -348,6 +597,17 @@ internal sealed class AuthentikManagementClient
     {
         return int.TryParse(value, out var parsed) ? parsed : defaultValue;
     }
+
+    // Нормализует обязательный текстовый параметр Authentik API.
+    private static string NormalizeRequiredText(string? value, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException("Значение не может быть пустым.", parameterName);
+        }
+
+        return value.Trim();
+    }
 }
 
 internal sealed record AuthentikUserRecord(
@@ -358,4 +618,10 @@ internal sealed record AuthentikUserRecord(
     string Uuid,
     bool IsActive,
     string Email,
-    string Type);
+    string Type,
+    string PasswordChangeDate);
+
+internal sealed record AuthentikGroupRecord(
+    string Pk,
+    string Name,
+    bool IsSuperuser);

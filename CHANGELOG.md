@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.11] - 2026-06-07 22:21:49 +03:00
+
+### MAJOR-FEATURES
+
+#### UserMiniApp startup admins
+- Добавлен идемпотентный startup-bootstrap администраторов `akadmin` и `admin`: пользователи создаются/синхронизируются в Authentik, материализуются в локальной базе, а `admin` получает группу `BusinessEntityAdmins` и роль `Админ` на `[ВсеПространства]`.
+- `AuthentikManagementClient` расширен управлением internal users, группами и паролями, а startup-логика вынесена в отдельный helper внутри `UserMiniApp`.
+- Описана отдельная политика админских пользователей и связь Authentik-группы `BusinessEntityAdmins` с локальной моделью прав.
+
+#### Tree user properties
+- Состояние раскрытия папок дерева перенесено из специализированного контракта `UserMiniApp` на общий API технических `UserProperties`, чтобы `TreeMiniApp` владел собственным payload.
+- `TreeMiniApp` теперь сам сериализует состояние закрытых папок, хранит id текущего свойства и чистит дубликаты для пространства.
+
+### MINOR-FEATURES
+
+#### Development routines
+- Добавлена локальная команда `cmmtp3_rstt`, объединяющая `CMMTP 3` и последующий `RSTT`.
+
 ## [0.14.10] - 2026-06-02 21:04:35 +03:00
 
 ### MINOR-FEATURES

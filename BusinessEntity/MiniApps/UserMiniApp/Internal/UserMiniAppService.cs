@@ -30,6 +30,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         private readonly BusinessEntityUserFactory _userFactory;
         private readonly AuthentikManagementClient _authentikManagementClient;
         private readonly AuthentikSessionManager _authentikSessionManager;
+        private readonly UserMiniAppStartupAdminBootstrapper _startupAdminBootstrapper;
         private readonly IUserMiniAppRepository<UserDto> _userRepository;
         private readonly IUserMiniAppRepository<UserPropertyDto> _userPropertyRepository;
         private readonly IUserMiniAppRepository<UserRoleDto> _roleRepository;
@@ -46,6 +47,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             BusinessEntityUserFactory userFactory,
             AuthentikManagementClient authentikManagementClient,
             AuthentikSessionManager authentikSessionManager,
+            UserMiniAppStartupAdminBootstrapper startupAdminBootstrapper,
             IUserMiniAppRepository<UserDto> userRepository,
             IUserMiniAppRepository<UserPropertyDto> userPropertyRepository,
             IUserMiniAppRepository<UserRoleDto> roleRepository,
@@ -60,6 +62,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             _userFactory = userFactory;
             _authentikManagementClient = authentikManagementClient;
             _authentikSessionManager = authentikSessionManager;
+            _startupAdminBootstrapper = startupAdminBootstrapper;
             _userRepository = userRepository;
             _userPropertyRepository = userPropertyRepository;
             _roleRepository = roleRepository;
@@ -89,6 +92,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
         {
             await EnsureSystemRolesAsync(cancellationToken);
             await EnsureSystemUsersAsync(cancellationToken);
+            await _startupAdminBootstrapper.EnsureAsync(cancellationToken);
         }
 
         // Гарантирует наличие базовых ролей матрицы доступа.
@@ -1219,53 +1223,113 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 cancellationToken);
         }
 
-        public async Task<TreeExpansionStateProperty> GetTreeExpansionStateAsync(
-            Guid spaceId,
+        public async Task<IReadOnlyList<UserPropertyDto>> GetCurrentUserPropertiesAsync(
+            int propertyType,
             CancellationToken cancellationToken = default)
         {
-            if (spaceId == Guid.Empty)
+            if (propertyType <= (int)UserPropertyTypeEnum.Undefined)
             {
-                return new TreeExpansionStateProperty();
+                return Array.Empty<UserPropertyDto>();
             }
 
             var user = await EnsureCurrentUserAsync(cancellationToken);
             if (user == null)
             {
-                return new TreeExpansionStateProperty { SpaceId = spaceId };
+                return Array.Empty<UserPropertyDto>();
             }
 
-            var property = await ReadTreeExpansionStatePropertyAsync(user.Id, spaceId, cancellationToken);
-            return NormalizeTreeExpansionStateProperty(
-                property ?? new TreeExpansionStateProperty { SpaceId = spaceId },
-                spaceId);
+            return (await _userPropertyRepository.GetAllAsync(
+                    x => x.ParentEntityId == user.Id && x.PropertyType == propertyType,
+                    cancellationToken))
+                .OrderByDescending(x => x.DateLastModified)
+                .Select(CloneUserProperty)
+                .ToList();
         }
 
-        public async Task SaveTreeExpansionStateAsync(
-            Guid spaceId,
-            IReadOnlyCollection<Guid> collapsedFolderIds,
+        public async Task<UserPropertyDto?> UpsertCurrentUserPropertyAsync(
+            Guid? propertyId,
+            int propertyType,
+            string data,
+            string metadata,
             CancellationToken cancellationToken = default)
         {
-            if (spaceId == Guid.Empty)
+            if (propertyType <= (int)UserPropertyTypeEnum.Undefined)
             {
-                return;
+                throw new ArgumentOutOfRangeException(nameof(propertyType), "Тип пользовательского свойства должен быть положительным.");
             }
 
             var user = await EnsureCurrentUserAsync(cancellationToken);
             if (user == null)
             {
-                return;
+                return null;
             }
 
-            await UpsertTreeExpansionStatePropertyAsync(
-                user.Id,
-                NormalizeTreeExpansionStateProperty(
-                    new TreeExpansionStateProperty
-                    {
-                        SpaceId = spaceId,
-                        CollapsedFolderIds = collapsedFolderIds?.ToList() ?? new List<Guid>()
-                    },
-                    spaceId),
-                cancellationToken);
+            var now = DateTime.UtcNow;
+            UserPropertyDto? property = null;
+            if (propertyId.HasValue && propertyId.Value != Guid.Empty)
+            {
+                property = (await _userPropertyRepository.GetAllAsync(
+                        x => x.Id == propertyId.Value && x.ParentEntityId == user.Id,
+                        cancellationToken))
+                    .FirstOrDefault();
+
+                if (property != null && property.PropertyType != propertyType)
+                {
+                    throw new InvalidOperationException("Нельзя обновить пользовательское свойство другим типом.");
+                }
+            }
+
+            if (property == null)
+            {
+                property = new UserPropertyDto
+                {
+                    Id = Guid.NewGuid(),
+                    DateCreated = now,
+                    DateLastModified = now,
+                    ParentEntityId = user.Id,
+                    PropertyType = propertyType,
+                    Data = data ?? string.Empty,
+                    Metadata = metadata ?? string.Empty
+                };
+
+                await _userPropertyRepository.AddAsync(property, cancellationToken);
+                return CloneUserProperty(property);
+            }
+
+            property.DateLastModified = now;
+            property.Data = data ?? string.Empty;
+            property.Metadata = metadata ?? string.Empty;
+            await _userPropertyRepository.UpdateAsync(property, cancellationToken);
+            return CloneUserProperty(property);
+        }
+
+        public async Task<bool> DeleteCurrentUserPropertyAsync(
+            Guid propertyId,
+            CancellationToken cancellationToken = default)
+        {
+            if (propertyId == Guid.Empty)
+            {
+                return false;
+            }
+
+            var user = await EnsureCurrentUserAsync(cancellationToken);
+            if (user == null)
+            {
+                return false;
+            }
+
+            var property = (await _userPropertyRepository.GetAllAsync(
+                    x => x.Id == propertyId && x.ParentEntityId == user.Id,
+                    cancellationToken))
+                .FirstOrDefault();
+
+            if (property == null)
+            {
+                return false;
+            }
+
+            await _userPropertyRepository.DeleteAsync(property.Id, cancellationToken);
+            return true;
         }
 
         // Возвращает коллекцию пользовательских пресетов печати документов.
@@ -1583,7 +1647,8 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 NormalizeOptionalText(userData.AuthentikUserUuid),
                 true,
                 string.Empty,
-                "internal");
+                "internal",
+                string.Empty);
         }
 
         // Формирует DTO административного UI из Authentik user и локального payload.
@@ -2362,6 +2427,20 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             return int.TryParse(value, out var authentikUserPk) ? authentikUserPk : 0;
         }
 
+        private static UserPropertyDto CloneUserProperty(UserPropertyDto property)
+        {
+            return new UserPropertyDto
+            {
+                Id = property.Id,
+                DateCreated = property.DateCreated,
+                DateLastModified = property.DateLastModified,
+                ParentEntityId = property.ParentEntityId,
+                PropertyType = property.PropertyType,
+                Data = property.Data,
+                Metadata = property.Metadata
+            };
+        }
+
         private async Task<RichTextDocumentBookmarksPayload> ReadBookmarksPayloadAsync(Guid userId, CancellationToken cancellationToken)
         {
             var property = (await _userPropertyRepository.GetAllAsync(
@@ -2452,30 +2531,6 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
                 if (payload?.DocumentId == documentId)
                 {
                     return payload;
-                }
-            }
-
-            return null;
-        }
-
-        private async Task<TreeExpansionStateProperty?> ReadTreeExpansionStatePropertyAsync(
-            Guid userId,
-            Guid spaceId,
-            CancellationToken cancellationToken)
-        {
-            var properties = (await _userPropertyRepository.GetAllAsync(
-                    x => x.ParentEntityId == userId &&
-                         x.PropertyType == (int)UserPropertyTypeEnum.TreeExpansionState,
-                    cancellationToken))
-                .OrderByDescending(x => x.DateLastModified)
-                .ToList();
-
-            foreach (var property in properties)
-            {
-                var payload = TryReadTreeExpansionStateProperty(property.Data);
-                if (payload?.SpaceId == spaceId)
-                {
-                    return NormalizeTreeExpansionStateProperty(payload, spaceId);
                 }
             }
 
@@ -2649,65 +2704,6 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             }
         }
 
-        private async Task UpsertTreeExpansionStatePropertyAsync(
-            Guid userId,
-            TreeExpansionStateProperty payload,
-            CancellationToken cancellationToken)
-        {
-            payload = NormalizeTreeExpansionStateProperty(payload, payload.SpaceId);
-
-            var properties = (await _userPropertyRepository.GetAllAsync(
-                    x => x.ParentEntityId == userId &&
-                         x.PropertyType == (int)UserPropertyTypeEnum.TreeExpansionState,
-                    cancellationToken))
-                .OrderByDescending(x => x.DateLastModified)
-                .ToList();
-
-            var matchingProperties = properties
-                .Where(property => TryReadTreeExpansionStateProperty(property.Data)?.SpaceId == payload.SpaceId)
-                .ToList();
-
-            var now = DateTime.UtcNow;
-            var data = JsonSerializer.Serialize(payload, UserMiniAppJsonOptions.Default);
-            var metadata = JsonSerializer.Serialize(
-                new
-                {
-                    schemaVersion = 1,
-                    kind = "TreeExpansionStateMetadata",
-                    spaceId = payload.SpaceId,
-                    collapsedFolderCount = payload.CollapsedFolderIds.Count
-                },
-                UserMiniAppJsonOptions.Default);
-
-            var property = matchingProperties.FirstOrDefault();
-            if (property == null)
-            {
-                await _userPropertyRepository.AddAsync(
-                    new UserPropertyDto
-                    {
-                        Id = Guid.NewGuid(),
-                        DateCreated = now,
-                        DateLastModified = now,
-                        ParentEntityId = userId,
-                        PropertyType = (int)UserPropertyTypeEnum.TreeExpansionState,
-                        Data = data,
-                        Metadata = metadata
-                    },
-                    cancellationToken);
-                return;
-            }
-
-            property.DateLastModified = now;
-            property.Data = data;
-            property.Metadata = metadata;
-            await _userPropertyRepository.UpdateAsync(property, cancellationToken);
-
-            foreach (var duplicate in matchingProperties.Skip(1))
-            {
-                await _userPropertyRepository.DeleteAsync(duplicate.Id, cancellationToken);
-            }
-        }
-
         private static RichDocDisplayedLevelProperty? TryReadDisplayedLevelProperty(string? data)
         {
             if (string.IsNullOrWhiteSpace(data))
@@ -2734,49 +2730,6 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Internal
             }
 
             return null;
-        }
-
-        private static TreeExpansionStateProperty? TryReadTreeExpansionStateProperty(string? data)
-        {
-            if (string.IsNullOrWhiteSpace(data))
-            {
-                return null;
-            }
-
-            try
-            {
-                var payload = JsonSerializer.Deserialize<TreeExpansionStateProperty>(
-                    data,
-                    UserMiniAppJsonOptions.Default);
-
-                if (payload?.SchemaVersion == 1 &&
-                    string.Equals(payload.Kind, nameof(TreeExpansionStateProperty), StringComparison.Ordinal))
-                {
-                    return NormalizeTreeExpansionStateProperty(payload, payload.SpaceId);
-                }
-            }
-            catch (JsonException)
-            {
-                // Invalid user property payload is ignored.
-            }
-
-            return null;
-        }
-
-        private static TreeExpansionStateProperty NormalizeTreeExpansionStateProperty(
-            TreeExpansionStateProperty payload,
-            Guid spaceId)
-        {
-            return new TreeExpansionStateProperty
-            {
-                Kind = nameof(TreeExpansionStateProperty),
-                SchemaVersion = 1,
-                SpaceId = spaceId,
-                CollapsedFolderIds = (payload.CollapsedFolderIds ?? new List<Guid>())
-                    .Where(id => id != Guid.Empty)
-                    .Distinct()
-                    .ToList()
-            };
         }
 
         // Нормализует collection payload пресетов печати после чтения или перед записью.

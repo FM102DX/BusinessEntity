@@ -384,6 +384,7 @@ IUserConnector
 Новая модель ролей приложения для доступа к контенту описана отдельно:
 
 - `Context/Policy/Users/content-access-rights-policy.md`
+- `Context/Policy/Users/admin-users-policy.md`
 
 Эта модель не меняет источник identity: `Authentik` остается владельцем логина, пароля и внешнего пользователя, а `UserMiniApp` становится владельцем application authorization для контента.
 

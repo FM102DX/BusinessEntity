@@ -11,12 +11,14 @@ using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.TreeMiniApp.Contracts.Messages;
 using BusinessEntity.MiniApps.TreeMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using Radzen;
 using Radzen.Blazor;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.JSInterop;
 using ReactiveUI;
+using System.Text.Json;
 
 namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 {
@@ -51,6 +53,8 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private bool IsAuthenticated { get; set; }
         private HashSet<Guid> CollapsedFolderIds { get; set; } = new();
         private Guid TreeExpansionStateSpaceId { get; set; }
+        private Guid? TreeExpansionStatePropertyId { get; set; }
+        private const int TreeExpansionStateUserPropertyType = 300;
         
         // Состояние inline-редактирования
         private TreeNodeItemViewModelBase? EditingNode { get; set; } = null;
@@ -185,6 +189,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 Visible = false;
                 CollapsedFolderIds = new HashSet<Guid>();
                 TreeExpansionStateSpaceId = Guid.Empty;
+                TreeExpansionStatePropertyId = null;
                 return;
             }
 
@@ -363,17 +368,41 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private async Task LoadTreeExpansionStateAsync(Guid spaceId)
         {
             TreeExpansionStateSpaceId = spaceId;
+            TreeExpansionStatePropertyId = null;
 
             try
             {
-                var state = await UserConnector.GetTreeExpansionStateAsync(spaceId);
-                CollapsedFolderIds = state.CollapsedFolderIds
-                    .Where(id => id != Guid.Empty)
-                    .ToHashSet();
+                var properties = await UserConnector.GetCurrentUserPropertiesAsync(TreeExpansionStateUserPropertyType);
+                var matchingProperties = new List<(UserPropertyDto Property, TreeExpansionStateProperty Payload)>();
+
+                foreach (var property in properties)
+                {
+                    var payload = TryReadTreeExpansionStateProperty(property.Data);
+                    if (payload?.SpaceId == spaceId)
+                    {
+                        matchingProperties.Add((property, NormalizeTreeExpansionStateProperty(payload, spaceId)));
+                    }
+                }
+
+                var currentProperty = matchingProperties.FirstOrDefault();
+                if (currentProperty.Property == null)
+                {
+                    CollapsedFolderIds = new HashSet<Guid>();
+                    return;
+                }
+
+                TreeExpansionStatePropertyId = currentProperty.Property.Id;
+                CollapsedFolderIds = currentProperty.Payload.CollapsedFolderIds.ToHashSet();
+
+                foreach (var duplicate in matchingProperties.Skip(1))
+                {
+                    await UserConnector.DeleteCurrentUserPropertyAsync(duplicate.Property.Id);
+                }
             }
             catch (Exception ex)
             {
                 CollapsedFolderIds = new HashSet<Guid>();
+                TreeExpansionStatePropertyId = null;
                 WebLogger?.Warning($"Cannot load tree expansion state: {ex.Message}");
             }
         }
@@ -429,14 +458,80 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
             try
             {
-                await UserConnector.SaveTreeExpansionStateAsync(
-                    TreeExpansionStateSpaceId,
-                    CollapsedFolderIds.ToList());
+                var payload = NormalizeTreeExpansionStateProperty(
+                    new TreeExpansionStateProperty
+                    {
+                        SpaceId = TreeExpansionStateSpaceId,
+                        CollapsedFolderIds = CollapsedFolderIds.ToList()
+                    },
+                    TreeExpansionStateSpaceId);
+
+                var data = JsonSerializer.Serialize(payload, TreeMiniAppJsonOptions.Default);
+                var metadata = JsonSerializer.Serialize(
+                    new
+                    {
+                        schemaVersion = 1,
+                        kind = "TreeExpansionStateMetadata",
+                        spaceId = payload.SpaceId,
+                        collapsedFolderCount = payload.CollapsedFolderIds.Count
+                    },
+                    TreeMiniAppJsonOptions.Default);
+
+                var property = await UserConnector.UpsertCurrentUserPropertyAsync(
+                    TreeExpansionStatePropertyId,
+                    TreeExpansionStateUserPropertyType,
+                    data,
+                    metadata);
+
+                TreeExpansionStatePropertyId = property?.Id ?? TreeExpansionStatePropertyId;
             }
             catch (Exception ex)
             {
                 WebLogger?.Warning($"Cannot save tree expansion state: {ex.Message}");
             }
+        }
+
+        private static TreeExpansionStateProperty? TryReadTreeExpansionStateProperty(string? data)
+        {
+            if (string.IsNullOrWhiteSpace(data))
+            {
+                return null;
+            }
+
+            try
+            {
+                var payload = JsonSerializer.Deserialize<TreeExpansionStateProperty>(
+                    data,
+                    TreeMiniAppJsonOptions.Default);
+
+                if (payload?.SchemaVersion == 1 &&
+                    string.Equals(payload.Kind, nameof(TreeExpansionStateProperty), StringComparison.Ordinal))
+                {
+                    return NormalizeTreeExpansionStateProperty(payload, payload.SpaceId);
+                }
+            }
+            catch (JsonException)
+            {
+                // Invalid user property payload is ignored.
+            }
+
+            return null;
+        }
+
+        private static TreeExpansionStateProperty NormalizeTreeExpansionStateProperty(
+            TreeExpansionStateProperty payload,
+            Guid spaceId)
+        {
+            return new TreeExpansionStateProperty
+            {
+                Kind = nameof(TreeExpansionStateProperty),
+                SchemaVersion = 1,
+                SpaceId = spaceId,
+                CollapsedFolderIds = (payload.CollapsedFolderIds ?? new List<Guid>())
+                    .Where(id => id != Guid.Empty)
+                    .Distinct()
+                    .ToList()
+            };
         }
 
         // Публичный метод для обработки кликов по узлам (вызывается из razor)

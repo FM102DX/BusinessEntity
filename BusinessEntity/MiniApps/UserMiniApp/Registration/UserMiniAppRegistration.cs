@@ -25,6 +25,7 @@ namespace BusinessEntity.MiniApps.UserMiniApp.Registration
             services.AddScoped<IUserMiniAppRepository<UserGroupMemberDto>, UserGroupMemberDtoEfRepository>();
             services.AddScoped<IUserMiniAppRepository<UserRoleAssignmentDto>, UserRoleAssignmentDtoEfRepository>();
             services.AddScoped<UserSpaceContentAccessHelper>();
+            services.AddScoped<UserMiniAppStartupAdminBootstrapper>();
             services.AddScoped<UserMiniAppService>();
             services.AddScoped<UserMiniAppMessageHandler>();
             services.AddScoped<IUserMiniApp, Facade.UserMiniApp>();
