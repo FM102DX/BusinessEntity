@@ -58,19 +58,20 @@ internal sealed class UserMiniAppStartupAdminBootstrapper
         {
             var applicationGroupNames = BuildApplicationGroupNames();
             var adminMarkerGroupName = ResolveAdminMarkerGroupName();
+            var adminMarkerGroup = await _authentikManagementClient.EnsureGroupAsync(
+                adminMarkerGroupName,
+                cancellationToken);
             var akadmin = await _authentikManagementClient.EnsureInternalUserAsync(
                 StartupAkadminUserName,
                 StartupAkadminPassword,
                 applicationGroupNames,
                 cancellationToken);
-            var admin = await _authentikManagementClient.EnsureInternalUserAsync(
-                StartupAdminUserName,
-                StartupAdminPassword,
-                applicationGroupNames.Append(adminMarkerGroupName),
+            var admin = await EnsureStartupAdminAsync(
+                applicationGroupNames,
+                adminMarkerGroup,
                 cancellationToken);
 
             await EnsureAuthentikBootstrapPasswordAsync(akadmin, StartupAkadminPassword, cancellationToken);
-            await EnsureAuthentikBootstrapPasswordAsync(admin, StartupAdminPassword, cancellationToken);
 
             var localUsers = (await _userRepository.GetAllAsync(null, cancellationToken)).ToList();
             await UpsertLocalUserFromAuthentikAsync(akadmin, localUsers, cancellationToken);
@@ -84,6 +85,39 @@ internal sealed class UserMiniAppStartupAdminBootstrapper
         {
             _logger.LogError(ex, "Startup admin users bootstrap failed.");
         }
+    }
+
+    // Возвращает startup-admin, создавая его только при отсутствии или добавляя в Authentik admin-group.
+    private async Task<AuthentikUserRecord> EnsureStartupAdminAsync(
+        IReadOnlyList<string> applicationGroupNames,
+        AuthentikGroupRecord adminMarkerGroup,
+        CancellationToken cancellationToken)
+    {
+        var admin = await _authentikManagementClient.FindInternalUserByUsernameAsync(
+            StartupAdminUserName,
+            cancellationToken);
+        if (admin == null)
+        {
+            return await _authentikManagementClient.EnsureInternalUserAsync(
+                StartupAdminUserName,
+                StartupAdminPassword,
+                applicationGroupNames.Append(adminMarkerGroup.Name),
+                cancellationToken);
+        }
+
+        if (await _authentikManagementClient.IsInternalUserInGroupAsync(
+                StartupAdminUserName,
+                adminMarkerGroup.Name,
+                cancellationToken))
+        {
+            return admin;
+        }
+
+        await _authentikManagementClient.EnsureUserInGroupAsync(
+            adminMarkerGroup.Pk,
+            admin.Pk,
+            cancellationToken);
+        return admin;
     }
 
     // Проверяет startup-пароль через Authentik password-flow и ставит его, если он не проходит.

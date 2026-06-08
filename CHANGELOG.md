@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-06-08 19:35:03 +03:00
+
+### MAJOR-FEATURES
+
+#### UserMiniApp startup admins
+- Startup-bootstrap больше не проверяет и не сбрасывает пароль существующего Authentik-пользователя `admin`, если он уже состоит в `BusinessEntityAdmins`.
+- Для существующего `admin` без `BusinessEntityAdmins` bootstrap теперь ограничивается добавлением этой Authentik-группы, не меняя пароль и базовые поля.
+- `AuthentikManagementClient` получил проверку членства internal user в Authentik-группе через `groups_by_name`.
+
+### MINOR-FEATURES
+
+#### Login error handling
+- Ошибка локального password-login теперь возвращает пользователя на `/login` с исходным `returnUrl` и `loginError=1`, чтобы сообщение об ошибке было видно даже при возврате с главной anonymous-страницы.
+
+#### Admin users policy
+- Политика админских пользователей уточнена правилом неприкосновенности существующего `admin` в Authentik.
+
 ## [0.15.0] - 2026-06-07 22:27:43 +03:00
 
 ### MINOR-FEATURES

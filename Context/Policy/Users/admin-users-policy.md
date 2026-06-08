@@ -21,9 +21,10 @@
 - задает `akadmin` пароль `akadmin`, если этот пароль не проходит через Authentik password-flow;
 - материализует `akadmin` в локальной таблице `Users`;
 - проверяет/создает Authentik-пользователя `admin`;
-- задает `admin` пароль `admin`, если этот пароль не проходит через Authentik password-flow;
 - создает Authentik-группу `BusinessEntityAdmins`;
-- добавляет `admin` в `BusinessEntityAdmins`;
+- если `admin` отсутствует, создает его с паролем `admin` и добавляет в `BusinessEntityAdmins`;
+- если `admin` уже есть, но не состоит в `BusinessEntityAdmins`, добавляет его в эту группу;
+- если `admin` уже есть и состоит в `BusinessEntityAdmins`, не меняет его пароль и базовые поля в Authentik;
 - материализует `admin` в локальной таблице `Users`;
 - создает локальную группу `BusinessEntityAdmins`;
 - добавляет локального пользователя `admin` в эту группу;
@@ -46,6 +47,26 @@ Group BusinessEntityAdmins -> Role Админ -> [ВсеПространства
 ## 4. Эксплуатационные правила
 
 Bootstrap должен быть безопасен для повторного запуска.
+
+### 4.1. Неприкосновенность существующего `admin`
+
+Если Authentik-пользователь `admin` уже существует и уже состоит в Authentik-группе `BusinessEntityAdmins`, startup-bootstrap не должен менять его Authentik-состояние:
+
+- не сбрасывает и не проверяет пароль `admin`;
+- не обновляет display name, active flag и другие базовые поля Authentik;
+- не удаляет и не пересоздает пользователя;
+- не пересобирает его Authentik-группы сверх проверки наличия `BusinessEntityAdmins`.
+
+В этом случае bootstrap продолжает только локальную идемпотентную часть:
+
+- материализацию `admin` в локальной таблице `Users`;
+- наличие локальной группы `BusinessEntityAdmins`;
+- членство локального `admin` в этой группе;
+- назначение группе роли `Админ` на `[ВсеПространства]`.
+
+Если `admin` существует, но не состоит в `BusinessEntityAdmins`, bootstrap имеет право только добавить его в эту Authentik-группу. Пароль и прочие поля существующего `admin` при этом не меняются.
+
+Если `admin` отсутствует в Authentik, bootstrap создает его с начальным паролем `admin`, добавляет в группы приложения и материализует локально.
 
 Если Authentik Admin API token не настроен, bootstrap не меняет пользователей и пишет предупреждение в лог.
 

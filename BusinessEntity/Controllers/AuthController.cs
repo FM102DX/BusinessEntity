@@ -150,7 +150,13 @@ namespace BusinessEntity.Controllers
 
         private static string BuildLoginErrorReturnUrl(string returnUrl)
         {
-            return QueryHelpers.AddQueryString(returnUrl, "loginError", "1");
+            return QueryHelpers.AddQueryString(
+                "/login",
+                new Dictionary<string, string?>
+                {
+                    ["returnUrl"] = returnUrl,
+                    ["loginError"] = "1"
+                });
         }
 
         // Публикует команду очистки пользовательских сообщений при новом входе.

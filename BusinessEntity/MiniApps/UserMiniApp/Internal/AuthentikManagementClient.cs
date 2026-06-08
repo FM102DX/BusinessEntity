@@ -238,6 +238,35 @@ internal sealed class AuthentikManagementClient
         return ReadGroup(document.RootElement);
     }
 
+    // Проверяет, состоит ли внутренний пользователь Authentik в группе с заданным именем.
+    public async Task<bool> IsInternalUserInGroupAsync(
+        string username,
+        string groupName,
+        CancellationToken cancellationToken)
+    {
+        username = NormalizeRequiredText(username, nameof(username));
+        groupName = NormalizeRequiredText(groupName, nameof(groupName));
+        var query = new Dictionary<string, string?>
+        {
+            ["page_size"] = PageSize.ToString(),
+            ["type"] = "internal",
+            ["username"] = username,
+            ["groups_by_name"] = groupName
+        };
+
+        var users = await ReadPagedUsersAsync("/api/v3/core/users/" + QueryHelpers.AddQueryString(string.Empty, query), cancellationToken);
+        return users.Any(user => string.Equals(user.Username, username, StringComparison.Ordinal));
+    }
+
+    // Добавляет пользователя в группу Authentik идемпотентно.
+    public async Task EnsureUserInGroupAsync(
+        string groupPk,
+        int userPk,
+        CancellationToken cancellationToken)
+    {
+        await AddUserToGroupAsync(groupPk, userPk, cancellationToken);
+    }
+
     // Меняет username пользователя в Authentik и возвращает обновленную запись.
     public async Task<AuthentikUserRecord> UpdateUsernameAsync(
         int authentikUserPk,
