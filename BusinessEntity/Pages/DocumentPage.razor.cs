@@ -18,6 +18,7 @@ namespace BusinessEntity.Pages
         [Parameter]
         public Guid Id { get; set; }
 
+        [Parameter]
         [SupplyParameterFromQuery(Name = "edit")]
         public string? EditQuery { get; set; }
 

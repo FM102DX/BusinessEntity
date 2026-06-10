@@ -125,7 +125,7 @@ namespace BusinessEntity.Components
 
         private async Task HandleReadModeAsync(RichTextDocumentViewportPosition? visiblePosition)
         {
-            if (await SaveEditorChangesAsync())
+            if (await SaveEditorChangesAsync(refreshReadWindow: true, viewportPosition: visiblePosition))
             {
                 ReadInitialPosition = visiblePosition;
                 IsEditMode = false;
@@ -135,7 +135,9 @@ namespace BusinessEntity.Components
             }
         }
 
-        private async Task<bool> SaveEditorChangesAsync()
+        private async Task<bool> SaveEditorChangesAsync(
+            bool refreshReadWindow = false,
+            RichTextDocumentViewportPosition? viewportPosition = null)
         {
             if (IsSaving || EditView == null)
             {
@@ -163,7 +165,9 @@ namespace BusinessEntity.Components
                 {
                     SavedChunkCount = savedCount,
                     Title = EditableEntityName,
-                    VersionDescription = versionDescription
+                    VersionDescription = versionDescription,
+                    RefreshReadWindow = refreshReadWindow,
+                    ViewportPosition = viewportPosition
                 });
                 EditView.ClearVersionDescription();
 

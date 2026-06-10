@@ -886,6 +886,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                     var actionValue = item?.Value?.ToString();
                     if (!string.IsNullOrEmpty(actionValue))
                     {
+                        CancelPendingOpenEntityOpen();
                         await selectedNode.HandleMenuActionAsync(actionValue);
                     }
                 }
@@ -1029,6 +1030,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
 
                             WebLogger?.Information($"Successfully created rich-text document '{newRichDocument.Name}' under '{parentNode.Entity.Name}'");
                             await SelectSingleNodeAsync(richDocNode);
+                            CancelPendingOpenEntityOpen();
                             OpenEntityPage(newRichDocument.Id, newRichDocument.EntityType, editMode: true);
                         }
                         break;

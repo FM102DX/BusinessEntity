@@ -16,6 +16,7 @@ namespace BusinessEntity.Pages
     public partial class RichTextDocumentPage : IDisposable
     {
         [Parameter] public Guid Id { get; set; }
+        [Parameter]
         [SupplyParameterFromQuery(Name = "edit")]
         public string? EditQuery { get; set; }
 
@@ -403,6 +404,10 @@ namespace BusinessEntity.Pages
                 }
 
                 ViewedVersion = LatestVersion;
+                if (request.RefreshReadWindow)
+                {
+                    await RefreshInitialChunkWindowForReadModeAsync(request.ViewportPosition);
+                }
 
                 IsOutlineLoading = true;
                 await foreach (var tableOfContents in RichTextDocumentHelper.GetTableOfContentsBatchesAsync(
@@ -422,6 +427,29 @@ namespace BusinessEntity.Pages
             finally
             {
                 IsOutlineLoading = false;
+            }
+        }
+
+        private async Task RefreshInitialChunkWindowForReadModeAsync(RichTextDocumentViewportPosition? targetPosition)
+        {
+            IsInitialContentLoading = true;
+
+            try
+            {
+                var settings = await RichTextDocumentSettingsService.GetSettingsAsync();
+                var take = Math.Max(settings.GetInitialChunkCount(), 1);
+                InitialChunkWindow = targetPosition == null
+                    ? await RichTextDocumentHelper.GetChunkWindowAsync(Id, 0, take, ViewedVersion)
+                    : await RichTextDocumentHelper.GetChunkWindowAroundAsync(
+                        Id,
+                        Math.Max(targetPosition.ChunkSortOrder, 0),
+                        take / 2,
+                        Math.Max(take - (take / 2) - 1, 0),
+                        ViewedVersion);
+            }
+            finally
+            {
+                IsInitialContentLoading = false;
             }
         }
 
