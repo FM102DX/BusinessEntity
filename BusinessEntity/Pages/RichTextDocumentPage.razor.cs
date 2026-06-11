@@ -407,6 +407,7 @@ namespace BusinessEntity.Pages
                 if (request.RefreshReadWindow)
                 {
                     await RefreshInitialChunkWindowForReadModeAsync(request.ViewportPosition);
+                    await InvokeAsync(StateHasChanged);
                 }
 
                 IsOutlineLoading = true;

@@ -19,6 +19,10 @@ namespace BusinessEntity.Components
         private DotNetObjectReference<RichTextDocumentViewport>? _dotNetReference;
         private RichTextDocumentChunkWindow? _appliedInitialWindow;
         private RichTextDocumentSettings _settings = new();
+        private Guid _appliedBusinessEntityId;
+        private int? _appliedDocumentVersion;
+        private long? _appliedInitialTargetChunkSortOrder;
+        private int? _appliedInitialTargetBlockIndex;
         private bool _viewportRegistered;
         private bool _isLoadingWindow;
         private bool _pendingLoadedChunksLog;
@@ -59,13 +63,63 @@ namespace BusinessEntity.Components
 
         protected override void OnParametersSet()
         {
-            if (ReferenceEquals(InitialWindow, _appliedInitialWindow))
+            var contextChanged = BusinessEntityId != _appliedBusinessEntityId ||
+                                 DocumentVersion != _appliedDocumentVersion;
+            if (contextChanged)
+            {
+                ResetViewportStateForContext();
+            }
+
+            if (contextChanged || !IsSameInitialTargetPosition(InitialTargetPosition))
+            {
+                StoreAppliedInitialTargetPosition(InitialTargetPosition);
+                _initialTargetPositionChecked = false;
+            }
+
+            if (!contextChanged && ReferenceEquals(InitialWindow, _appliedInitialWindow))
             {
                 return;
             }
 
             _appliedInitialWindow = InitialWindow;
             ApplyWindow(InitialWindow);
+        }
+
+        // Сбрасывает локальное окно и фоновые операции при смене документа или версии.
+        private void ResetViewportStateForContext()
+        {
+            _appliedBusinessEntityId = BusinessEntityId;
+            _appliedDocumentVersion = DocumentVersion;
+            _appliedInitialWindow = null;
+            _chunkHeights.Clear();
+            EstimatedChunkHeight = DefaultEstimatedChunkHeight;
+            _isLoadingWindow = false;
+            _pendingLoadedChunksLog = false;
+            _pendingAnchor = null;
+            _pendingVisibleChunkSortOrder = null;
+            _pendingViewportPosition = null;
+            _lastScrollTop = null;
+            _loadVersion++;
+        }
+
+        // Проверяет, совпадает ли новая целевая позиция с уже примененной.
+        private bool IsSameInitialTargetPosition(RichTextDocumentViewportPosition? position)
+        {
+            if (position == null)
+            {
+                return !_appliedInitialTargetChunkSortOrder.HasValue &&
+                       !_appliedInitialTargetBlockIndex.HasValue;
+            }
+
+            return _appliedInitialTargetChunkSortOrder == position.ChunkSortOrder &&
+                   _appliedInitialTargetBlockIndex == position.BlockIndex;
+        }
+
+        // Запоминает позицию, чтобы не выполнять программную прокрутку на каждом render.
+        private void StoreAppliedInitialTargetPosition(RichTextDocumentViewportPosition? position)
+        {
+            _appliedInitialTargetChunkSortOrder = position?.ChunkSortOrder;
+            _appliedInitialTargetBlockIndex = position?.BlockIndex;
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)

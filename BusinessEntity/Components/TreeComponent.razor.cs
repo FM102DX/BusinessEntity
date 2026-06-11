@@ -727,7 +727,15 @@ namespace BusinessEntity.Components
                             _nodeById[newRichDocument.Id] = richDocNode;
 
                             WebLogger?.Information($"Successfully created rich-text document '{newRichDocument.Name}' under '{parentNode.Entity.Name}'");
-                            await SelectSingleNodeAsync(richDocNode);
+                            try
+                            {
+                                await SelectSingleNodeAsync(richDocNode);
+                            }
+                            catch (Exception selectEx)
+                            {
+                                WebLogger?.Warning($"Rich-text document was created, but tree selection refresh failed: {selectEx.Message}");
+                            }
+
                             OpenEntityPage(newRichDocument.Id, newRichDocument.EntityType, editMode: true);
                         }
                         break;

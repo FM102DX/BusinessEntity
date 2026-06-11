@@ -41,6 +41,7 @@ namespace BusinessEntity.Components
         private RichTextDocumentViewportPosition? EditInitialPosition { get; set; }
         private RichTextDocumentViewportPosition? ReadInitialPosition { get; set; }
         private Guid? StartInEditModeAppliedFor { get; set; }
+        private string ReadViewInstanceKey => $"{BusinessEntityId:D}:{ViewedVersion:D}";
 
         protected override void OnParametersSet()
         {

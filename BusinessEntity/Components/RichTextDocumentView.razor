@@ -34,7 +34,8 @@
 }
 else
 {
-    <RichTextDocumentReadView EntityName="@EntityName"
+    <RichTextDocumentReadView @key="ReadViewInstanceKey"
+                              EntityName="@EntityName"
                               BusinessEntityId="@BusinessEntityId"
                               InitialChunkWindow="@InitialChunkWindow"
                               OutlineNodes="@OutlineNodes"

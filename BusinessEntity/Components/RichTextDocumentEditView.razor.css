@@ -179,7 +179,7 @@
 ::deep .rich-text-outline__tree {
     display: flex;
     flex-direction: column;
-    gap: 0.04rem;
+    gap: 0.12rem;
     border-right: 1px solid #dbe5f0;
     padding-right: 0.55rem;
     overflow-y: auto;
@@ -246,7 +246,10 @@
 }
 
 ::deep .rich-text-outline__toggle--placeholder {
-    display: inline-block;
+    display: none;
+    height: 0;
+    min-width: 0;
+    width: 0;
 }
 
 ::deep .rich-text-outline__link {
@@ -258,8 +261,8 @@
     text-transform: uppercase;
     color: #2b6fd6;
     font-size: 0.78rem;
-    line-height: 1.28;
-    padding: 0.08rem 0;
+    line-height: 1.32;
+    padding: 0.1rem 0;
     border-radius: 0;
     width: 100%;
     display: block;
@@ -272,7 +275,10 @@
 }
 
 ::deep .rich-text-outline__children {
-    margin-top: 0.04rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+    margin-top: 0.08rem;
 }
 
 @media (max-width: 1100px) {
