@@ -12,13 +12,20 @@
     align-items: center;
 }
 
-.rich-text-document-header__actions {
+.rich-text-document-toolbar {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 0.5rem;
+    min-height: 2.35rem;
     min-width: 0;
+    padding: 0.2rem 0;
     white-space: nowrap;
+}
+
+.rich-text-document-toolbar .material-icons {
+    font-size: 1rem;
+    line-height: 1;
 }
 
 .rich-text-document-title {
@@ -259,7 +266,7 @@
         display: none;
     }
 
-    .rich-text-document-header__actions {
+    .rich-text-document-toolbar {
         justify-content: flex-start;
         flex-wrap: wrap;
         white-space: normal;

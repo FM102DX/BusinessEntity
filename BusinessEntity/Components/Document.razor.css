@@ -1,0 +1,40 @@
+.document-shell {
+    min-height: 120px;
+}
+
+.document-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    min-height: 2.35rem;
+    margin-bottom: 0.5rem;
+    padding: 0.2rem 0;
+    white-space: nowrap;
+}
+
+.document-toolbar .material-icons {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.document-toolbar__edit-button {
+    background: #9c27b0;
+    border-color: #9c27b0;
+    color: #ffffff;
+}
+
+.document-toolbar__edit-button:hover,
+.document-toolbar__edit-button:focus {
+    background: #822096;
+    border-color: #822096;
+    color: #ffffff;
+}
+
+@media (max-width: 720px) {
+    .document-toolbar {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        white-space: normal;
+    }
+}

@@ -1,7 +1,7 @@
-<div class="position-relative" style="min-height: 120px;">
-    @if (!IsEditing)
-    {
-        <div class="position-absolute d-flex align-items-center gap-2" style="top:8px; right:8px;">
+<div class="document-shell">
+    <div class="document-toolbar" role="toolbar" aria-label="Действия документа">
+        @if (!IsEditing)
+        {
             @if (CanChangePublicFlag)
             {
                 <label class="form-check form-check-inline mb-0">
@@ -17,20 +17,41 @@
                 <a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
                    title="Печать"
                    href="@($"/print/{Entity.Id}")">
-                    <span class="material-icons" aria-hidden="true" style="font-size: 1rem; line-height: 1;">print</span>
+                    <span class="material-icons" aria-hidden="true">print</span>
                     <span>Печать</span>
                 </a>
             }
             @if (CanEdit)
             {
-                <button class="btn btn-sm" title="Edit"
-                        style="background:#9c27b0; color:white; border-color:#9c27b0;"
+                <button class="btn btn-sm document-toolbar__edit-button"
+                        title="Edit"
                         @onclick="EnterEditMode">
                     Edit
                 </button>
             }
-        </div>
+        }
+        else
+        {
+            @if (CanChangePublicFlag)
+            {
+                <label class="form-check form-check-inline mb-0">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           checked="@IsPublic"
+                           @onchange="HandlePublicChangedAsync"
+                           disabled="@IsSaving" />
+                    <span class="form-check-label">Общий</span>
+                </label>
+            }
+            <button class="btn btn-sm btn-primary" disabled="@IsSaving" @onclick="SaveAsync">
+                @(IsSaving ? "Сохранение..." : "Сохранить")
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" disabled="@IsSaving" @onclick="CancelEdit">Отмена</button>
+        }
+    </div>
 
+    @if (!IsEditing)
+    {
         <div class="py-2">
             <h4 class="mb-3">@Entity?.Name</h4>
             @if (string.IsNullOrWhiteSpace(ViewText))
@@ -52,24 +73,6 @@
 
             <textarea class="form-control" rows="16" placeholder="Текст документа"
                       @bind="EditBody" @bind:event="oninput"></textarea>
-
-            <div class="mt-2 d-flex gap-2">
-                @if (CanChangePublicFlag)
-                {
-                    <label class="form-check form-check-inline mb-0 align-self-center">
-                        <input class="form-check-input"
-                               type="checkbox"
-                               checked="@IsPublic"
-                               @onchange="HandlePublicChangedAsync"
-                               disabled="@IsSaving" />
-                        <span class="form-check-label">Общий</span>
-                    </label>
-                }
-                <button class="btn btn-primary" disabled="@IsSaving" @onclick="SaveAsync">
-                    @(IsSaving ? "Сохранение..." : "Сохранить")
-                </button>
-                <button class="btn btn-outline-secondary" disabled="@IsSaving" @onclick="CancelEdit">Отмена</button>
-            </div>
         </div>
     }
 </div>
