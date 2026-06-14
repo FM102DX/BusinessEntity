@@ -8,8 +8,12 @@ using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.Services;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.TreeMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
+using BusinessEntity.Services;
+using Microsoft.JSInterop;
+using ReactiveUI;
 
 namespace BusinessEntity.Pages
 {
@@ -34,11 +38,17 @@ namespace BusinessEntity.Pages
         private bool HasFullDocumentAccess { get; set; }
         private bool CanViewPublishedDocument { get; set; }
         private bool CanEditDocument { get; set; }
+        private bool CanDeleteDocument { get; set; }
         private bool CanChangePublicFlag { get; set; }
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
+        [Inject] private TreeMiniAppService TreeMiniAppService { get; set; } = default!;
+        [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
+        [Inject] public IMessageBus MessageBus { get; set; } = default!;
+        [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
+        [Inject] public NavigationManager NavigationManager { get; set; } = default!;
 
         protected override async Task OnParametersSetAsync()
         {
@@ -89,6 +99,8 @@ namespace BusinessEntity.Pages
                 {
                     DataText = null;
                 }
+
+                TreeSelectionService.RequestEntitySelection(Entity.Id);
             }
             catch (Exception ex)
             {
@@ -116,6 +128,7 @@ namespace BusinessEntity.Pages
             HasFullDocumentAccess = false;
             CanViewPublishedDocument = false;
             CanEditDocument = false;
+            CanDeleteDocument = false;
             CanChangePublicFlag = false;
             if (Entity == null)
             {
@@ -137,6 +150,12 @@ namespace BusinessEntity.Pages
             CanViewPublishedDocument = access.CanViewPublished;
             CanEditDocument = access.CanEditDraft;
             CanChangePublicFlag = access.CanChangeCommonFlag;
+
+            var permissions = await UserConnector.GetCurrentUserPermissionsForEntityAsync(Entity.Id);
+            CanDeleteDocument = access.IsAccessAdmin ||
+                                permissions.CanAdminItems ||
+                                permissions.CanAdminSpace ||
+                                permissions.CanGlobalAdmin;
         }
 
         private async Task HandlePublicChangedAsync(bool value)
@@ -149,6 +168,34 @@ namespace BusinessEntity.Pages
             Entity.IsPublic = value;
             Entity.LastModifiedDate = DateTime.UtcNow;
             await DataProviderConnector.UpdateAsync(Entity);
+        }
+
+        private async Task HandleDeleteRequestedAsync()
+        {
+            if (Entity == null || !CanDeleteDocument)
+            {
+                return;
+            }
+
+            var entityId = Entity.Id;
+            var entityName = Entity.Name;
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Удалить документ \"{entityName}\"?");
+            if (!confirmed)
+            {
+                return;
+            }
+
+            try
+            {
+                await TreeMiniAppService.DeleteEntitiesAsync(new[] { entityId });
+                MessageBus.SendMessage(new EntityDeletedMessage(entityId));
+                TreeSelectionService.RequestEntitySelection(null);
+                NavigationManager.NavigateTo("/", replace: true);
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+            }
         }
     }
 }

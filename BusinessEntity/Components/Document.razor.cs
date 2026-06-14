@@ -16,9 +16,11 @@ namespace BusinessEntity.Components
         [Parameter] public IReadOnlyList<global::BusinessEntity.Core.Classes.BusinessEntityData>? DataList { get; set; }
         [Parameter] public bool StartInEditMode { get; set; }
         [Parameter] public bool CanEdit { get; set; } = true;
+        [Parameter] public bool CanDelete { get; set; }
         [Parameter] public bool CanChangePublicFlag { get; set; }
         [Parameter] public bool IsPublic { get; set; }
         [Parameter] public EventCallback<bool> OnPublicChanged { get; set; }
+        [Parameter] public EventCallback OnDeleteRequested { get; set; }
 
         [Inject] public BusinessEntityHelper Helper { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
@@ -149,6 +151,13 @@ namespace BusinessEntity.Components
 
             var value = args.Value is bool boolValue && boolValue;
             return OnPublicChanged.InvokeAsync(value);
+        }
+
+        private Task HandleDeleteRequestedAsync()
+        {
+            return CanDelete
+                ? OnDeleteRequested.InvokeAsync()
+                : Task.CompletedTask;
         }
 
         private static string GetBodyText(global::BusinessEntity.Core.Classes.BusinessEntityData data)

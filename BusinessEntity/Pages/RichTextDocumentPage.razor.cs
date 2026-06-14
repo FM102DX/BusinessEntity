@@ -3,12 +3,14 @@ using BusinessEntity.Core.DomainEntities;
 using BusinessEntity.Core.RichText;
 using BusinessEntity.Components;
 using BusinessEntity.MiniApps.DataProviderMiniApp.Contracts.Connectors;
+using BusinessEntity.MiniApps.TreeMiniApp.Internal;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Connectors;
 using BusinessEntity.MiniApps.UserMiniApp.Contracts.Dtos;
 using BusinessEntity.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.JSInterop;
 using ReactiveUI;
 
 namespace BusinessEntity.Pages
@@ -27,6 +29,10 @@ namespace BusinessEntity.Pages
         [Inject] public IDataProviderConnector DataProviderConnector { get; set; } = default!;
         [Inject] public IUserConnector UserConnector { get; set; } = default!;
         [Inject] public IMessageBus MessageBus { get; set; } = default!;
+        [Inject] public ITreeSelectionService TreeSelectionService { get; set; } = default!;
+        [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
+        [Inject] public NavigationManager NavigationManager { get; set; } = default!;
+        [Inject] private TreeMiniAppService TreeMiniAppService { get; set; } = default!;
 
         private BusinessEntity.Core.Classes.BusinessEntity? Entity;
         private RichTextDocument? Manifest;
@@ -49,6 +55,7 @@ namespace BusinessEntity.Pages
         private bool HasFullDocumentAccess { get; set; }
         private bool CanViewPublishedDocument { get; set; }
         private bool CanEditDocument { get; set; }
+        private bool CanDeleteDocument { get; set; }
         private bool CanPublishDocument { get; set; }
         private bool CanChangePublicFlag { get; set; }
         private bool RequestedEditMode => string.Equals(EditQuery, "1", StringComparison.OrdinalIgnoreCase) ||
@@ -114,6 +121,8 @@ namespace BusinessEntity.Pages
                     Error = "Документ недоступен: опубликованная версия отсутствует.";
                     return;
                 }
+
+                TreeSelectionService.RequestEntitySelection(Entity.Id);
 
                 await RefreshVersionsAsync(cancellationToken);
                 if (!HasFullDocumentAccess)
@@ -527,6 +536,38 @@ namespace BusinessEntity.Pages
             }
         }
 
+        private async Task OnDeleteRequestedAsync()
+        {
+            if (Entity == null || !CanDeleteDocument)
+            {
+                return;
+            }
+
+            var entityId = Entity.Id;
+            var entityName = Entity.Name;
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Удалить rich-text документ \"{entityName}\"?");
+            if (!confirmed)
+            {
+                return;
+            }
+
+            Error = null;
+
+            try
+            {
+                LoadCancellationTokenSource?.Cancel();
+                await TreeMiniAppService.DeleteEntitiesAsync(new[] { entityId });
+                MessageBus.SendMessage(new EntityDeletedMessage(entityId));
+                TreeSelectionService.RequestEntitySelection(null);
+                NavigationManager.NavigateTo("/", replace: true);
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+                SetStatusMessage(null);
+            }
+        }
+
         private async Task OnPublicChangedAsync(bool value)
         {
             if (Entity == null || !CanChangePublicFlag)
@@ -559,6 +600,7 @@ namespace BusinessEntity.Pages
             HasFullDocumentAccess = false;
             CanViewPublishedDocument = false;
             CanEditDocument = false;
+            CanDeleteDocument = false;
             CanPublishDocument = false;
             CanChangePublicFlag = false;
 
@@ -584,6 +626,12 @@ namespace BusinessEntity.Pages
             CanEditDocument = access.CanEditDraft;
             CanPublishDocument = access.CanPublishDraft;
             CanChangePublicFlag = access.CanChangeCommonFlag;
+
+            var permissions = await UserConnector.GetCurrentUserPermissionsForEntityAsync(Entity.Id, cancellationToken);
+            CanDeleteDocument = access.IsAccessAdmin ||
+                                permissions.CanAdminItems ||
+                                permissions.CanAdminSpace ||
+                                permissions.CanGlobalAdmin;
         }
 
         private bool CanReadCurrentDocument()

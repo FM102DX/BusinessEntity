@@ -20,6 +20,7 @@
                               LatestVersion="@LatestVersion"
                               PublishedVersion="@PublishedVersion"
                               InitialTargetPosition="@EditInitialPosition"
+                              CanDelete="@CanDelete"
                               CanPublish="@CanPublish"
                               CanChangePublicFlag="@CanChangePublicFlag"
                               IsPublic="@IsPublic"
@@ -27,6 +28,7 @@
                               OnTitleChanged="HandleTitleChangedAsync"
                               OnSaveRequested="HandleSaveAsync"
                               OnPublishRequested="HandlePublishAsync"
+                              OnDeleteRequested="HandleDeleteAsync"
                               OnPublicChanged="HandlePublicChangedAsync"
                               OnReadModeRequested="HandleReadModeAsync"
                               OnRebuildTableOfContents="@OnRebuildTableOfContents"
@@ -49,6 +51,7 @@ else
                               LatestVersion="@LatestVersion"
                               PublishedVersion="@PublishedVersion"
                               CanEdit="@CanEditViewedVersion"
+                              CanDelete="@CanDelete"
                               CanPublish="@CanPublish"
                               CanChangePublicFlag="@CanChangePublicFlag"
                               IsPublic="@IsPublic"
@@ -58,6 +61,7 @@ else
                               OnRebuildTableOfContents="@OnRebuildTableOfContents"
                               OnEditRequested="HandleEditRequestedAsync"
                               OnPublishRequested="HandlePublishAsync"
+                              OnDeleteRequested="HandleDeleteAsync"
                               OnPublicChanged="HandlePublicChangedAsync"
                               OnVersionSelected="@OnVersionSelected" />
 }

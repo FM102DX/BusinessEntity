@@ -45,6 +45,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private readonly Dictionary<Guid, TreeNodeItemViewModelBase> _nodeById = new();
         // Подписка на сообщения об обновлении сущностей
         private IDisposable? _entityUpdatedSub;
+        private IDisposable? _entityDeletedSub;
         
         // Состояние мульти-селекта
         private List<TreeNodeItemViewModelBase> SelectedNodes { get; set; } = new List<TreeNodeItemViewModelBase>();
@@ -75,6 +76,7 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                 
                 // Подписываемся на изменения выбранного пространства
                 UserContextService.SelectedSpaceChanged += OnSelectedSpaceChanged;
+                TreeSelectionService.EntitySelectionRequested += OnEntitySelectionRequested;
                 
                 // Подписка на сообщения об изменении сущностей через ReactiveUI MessageBus (до построения дерева)
                 try
@@ -126,6 +128,22 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
                             {
                                 WebLogger?.Error(ex);
                             }
+                        });
+                    _entityDeletedSub = MessageBus
+                        .Listen<BusinessEntity.Services.EntityDeletedMessage>()
+                        .Subscribe(msg =>
+                        {
+                            _ = InvokeAsync(async () =>
+                            {
+                                try
+                                {
+                                    await RemoveDeletedEntityFromTreeAsync(msg.EntityId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    WebLogger?.Error(ex);
+                                }
+                            });
                         });
                     WebLogger?.Information("[Tree] Subscribed to MessageBus.Listen<EntityUpdatedMessage>()");
                 }
@@ -215,6 +233,10 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             TreeData = new[] { rootSpaceNode };
             Visible = true;
             IsLoading = false;
+            if (TreeSelectionService.RequestedEntityId.HasValue)
+            {
+                await ApplyRequestedEntitySelectionAsync();
+            }
         }
 
         private SpaceTreeNodeItemViewModel BuildSpaceRoot(TreeSpaceSnapshot snapshot)
@@ -333,6 +355,65 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
         private bool CanToggleNodeExpansion(TreeNodeItemViewModelBase? node)
         {
             return node?.Entity?.EntityType == BusinessEntityTypeEnum.Folder;
+        }
+
+        private async void OnEntitySelectionRequested(Guid? entityId)
+        {
+            try
+            {
+                await ApplyRequestedEntitySelectionAsync(entityId);
+            }
+            catch (Exception ex)
+            {
+                WebLogger?.Error(ex);
+            }
+        }
+
+        private Task ApplyRequestedEntitySelectionAsync()
+        {
+            return ApplyRequestedEntitySelectionAsync(TreeSelectionService.RequestedEntityId);
+        }
+
+        private async Task ApplyRequestedEntitySelectionAsync(Guid? entityId)
+        {
+            if (entityId == null)
+            {
+                await ClearAllSelectionsCoreAsync(refreshUi: true);
+                return;
+            }
+
+            if (TreeData == null || !TreeData.Any())
+            {
+                return;
+            }
+
+            var node = _nodeById.TryGetValue(entityId.Value, out var indexedNode)
+                ? indexedNode
+                : FindNodeByEntityId(TreeData, entityId.Value);
+            if (node == null)
+            {
+                WebLogger?.Warning($"Could not find node with ID {entityId} to select.");
+                return;
+            }
+
+            ExpandAncestors(node);
+            await SelectSingleNodeAsync(node);
+            await SaveTreeExpansionStateAsync();
+        }
+
+        private void ExpandAncestors(TreeNodeItemViewModelBase node)
+        {
+            var parent = node.Parent;
+            while (parent != null)
+            {
+                if (CanToggleNodeExpansion(parent) && parent.Entity != null)
+                {
+                    parent.Expanded = true;
+                    UpdateCollapsedFolderState(parent);
+                }
+
+                parent = parent.Parent;
+            }
         }
 
         private bool ResolveInitialExpandedState(BusinessEntity.Core.Classes.BusinessEntity entity)
@@ -905,7 +986,12 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             {
                 UserContextService.SelectedSpaceChanged -= OnSelectedSpaceChanged;
             }
+            if (TreeSelectionService != null)
+            {
+                TreeSelectionService.EntitySelectionRequested -= OnEntitySelectionRequested;
+            }
             _entityUpdatedSub?.Dispose();
+            _entityDeletedSub?.Dispose();
        }
 
         private Task OnEntityOpenRequestedAsync(TreeNodeItemViewModelBase node)
@@ -1157,6 +1243,33 @@ namespace BusinessEntity.MiniApps.TreeMiniApp.Components
             // Очищаем ссылки узла для предотвращения утечек памяти
             nodeToRemove.Parent = null;
             nodeToRemove.Children.Clear();
+        }
+
+        private async Task RemoveDeletedEntityFromTreeAsync(Guid entityId)
+        {
+            var nodeToRemove = _nodeById.TryGetValue(entityId, out var indexedNode)
+                ? indexedNode
+                : FindNodeByEntityId(TreeData, entityId);
+            if (nodeToRemove == null)
+            {
+                WebLogger?.Warning($"Deleted entity node '{entityId}' was not found in tree.");
+                return;
+            }
+
+            var wasSelected = SelectedNodes.Any(node => node.Entity?.Id == entityId);
+            RemoveNodeFromTree(nodeToRemove);
+
+            if (wasSelected)
+            {
+                await ClearAllSelectionsCoreAsync(refreshUi: false);
+            }
+            else
+            {
+                TreeSelectionService.SetSelectedNodes(SelectedNodes.ToList());
+            }
+
+            await JSRuntime.InvokeAsync<int>("TreeMultiSelect.forceRefreshTreeSelection");
+            await InvokeAsync(StateHasChanged);
         }
 
         // Рекурсивное удаление узла и его детей из индекса

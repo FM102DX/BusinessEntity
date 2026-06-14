@@ -26,8 +26,10 @@ namespace BusinessEntity.Components
         [Parameter] public EventCallback<RichTextDocumentEditorSaveRequest> OnEditorSaved { get; set; }
         [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
         [Parameter] public EventCallback OnPublishRequested { get; set; }
+        [Parameter] public EventCallback OnDeleteRequested { get; set; }
         [Parameter] public EventCallback<bool> OnPublicChanged { get; set; }
         [Parameter] public bool CanPublish { get; set; }
+        [Parameter] public bool CanDelete { get; set; }
         [Parameter] public bool CanChangePublicFlag { get; set; }
         [Parameter] public bool IsPublic { get; set; }
         [Parameter] public bool CanBrowseVersions { get; set; } = true;
@@ -115,6 +117,13 @@ namespace BusinessEntity.Components
             }
 
             await OnPublishRequested.InvokeAsync();
+        }
+
+        private Task HandleDeleteAsync()
+        {
+            return CanDelete
+                ? OnDeleteRequested.InvokeAsync()
+                : Task.CompletedTask;
         }
 
         private Task HandlePublicChangedAsync(bool value)

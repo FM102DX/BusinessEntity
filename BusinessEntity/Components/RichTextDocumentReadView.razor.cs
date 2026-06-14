@@ -26,6 +26,7 @@ namespace BusinessEntity.Components
         [Parameter] public int LatestVersion { get; set; } = 1;
         [Parameter] public int PublishedVersion { get; set; }
         [Parameter] public bool CanEdit { get; set; } = true;
+        [Parameter] public bool CanDelete { get; set; }
         [Parameter] public bool CanPublish { get; set; }
         [Parameter] public bool CanChangePublicFlag { get; set; }
         [Parameter] public bool IsPublic { get; set; }
@@ -36,6 +37,7 @@ namespace BusinessEntity.Components
         [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
         [Parameter] public EventCallback<RichTextDocumentViewportPosition?> OnEditRequested { get; set; }
         [Parameter] public EventCallback OnPublishRequested { get; set; }
+        [Parameter] public EventCallback OnDeleteRequested { get; set; }
         [Parameter] public EventCallback<bool> OnPublicChanged { get; set; }
         [Parameter] public EventCallback<int> OnVersionSelected { get; set; }
 
@@ -136,6 +138,13 @@ namespace BusinessEntity.Components
         private Task HandlePublishAsync()
         {
             return CanPublish ? OnPublishRequested.InvokeAsync() : Task.CompletedTask;
+        }
+
+        private Task HandleDeleteAsync()
+        {
+            return CanDelete
+                ? OnDeleteRequested.InvokeAsync()
+                : Task.CompletedTask;
         }
 
         private Task HandlePublicChangedAsync(ChangeEventArgs args)

@@ -7,10 +7,13 @@ namespace BusinessEntity.Services
         List<TreeNodeItemViewModelBase> SelectedNodes { get; }
         TreeNodeItemViewModelBase? SingleSelectedNode { get; }
         bool IsMultiSelectActive { get; }
+        Guid? RequestedEntityId { get; }
         
         event Action<List<TreeNodeItemViewModelBase>>? SelectionChanged;
+        event Action<Guid?>? EntitySelectionRequested;
         
         void SetSelectedNodes(List<TreeNodeItemViewModelBase> nodes);
+        void RequestEntitySelection(Guid? entityId);
         void ClearSelection();
         string GetSelectedNodesInfo();
         List<string> GetSelectedTitles();
@@ -19,6 +22,7 @@ namespace BusinessEntity.Services
     public class TreeSelectionService : ITreeSelectionService
     {
         private List<TreeNodeItemViewModelBase> _selectedNodes = new List<TreeNodeItemViewModelBase>();
+        private Guid? _requestedEntityId;
         
         public List<TreeNodeItemViewModelBase> SelectedNodes => new List<TreeNodeItemViewModelBase>(_selectedNodes);
         
@@ -26,13 +30,22 @@ namespace BusinessEntity.Services
             _selectedNodes.Count == 1 ? _selectedNodes.First() : null;
         
         public bool IsMultiSelectActive => _selectedNodes.Count > 1;
+
+        public Guid? RequestedEntityId => _requestedEntityId;
         
         public event Action<List<TreeNodeItemViewModelBase>>? SelectionChanged;
+        public event Action<Guid?>? EntitySelectionRequested;
 
         public void SetSelectedNodes(List<TreeNodeItemViewModelBase> nodes)
         {
             _selectedNodes = new List<TreeNodeItemViewModelBase>(nodes ?? new List<TreeNodeItemViewModelBase>());
             SelectionChanged?.Invoke(SelectedNodes);
+        }
+
+        public void RequestEntitySelection(Guid? entityId)
+        {
+            _requestedEntityId = entityId;
+            EntitySelectionRequested?.Invoke(entityId);
         }
 
         public void ClearSelection()

@@ -28,6 +28,7 @@ namespace BusinessEntity.Components
         [Parameter] public int PublishedVersion { get; set; }
         [Parameter] public RichTextDocumentViewportPosition? InitialTargetPosition { get; set; }
         [Parameter] public IReadOnlyList<RichTextDocumentOutlineNode>? OutlineNodes { get; set; }
+        [Parameter] public bool CanDelete { get; set; }
         [Parameter] public bool CanPublish { get; set; }
         [Parameter] public bool CanChangePublicFlag { get; set; }
         [Parameter] public bool IsPublic { get; set; }
@@ -35,6 +36,7 @@ namespace BusinessEntity.Components
         [Parameter] public EventCallback<string?> OnTitleChanged { get; set; }
         [Parameter] public EventCallback OnSaveRequested { get; set; }
         [Parameter] public EventCallback OnPublishRequested { get; set; }
+        [Parameter] public EventCallback OnDeleteRequested { get; set; }
         [Parameter] public EventCallback<bool> OnPublicChanged { get; set; }
         [Parameter] public EventCallback<RichTextDocumentViewportPosition?> OnReadModeRequested { get; set; }
         [Parameter] public EventCallback OnRebuildTableOfContents { get; set; }
@@ -132,6 +134,13 @@ namespace BusinessEntity.Components
         private Task HandlePublishAsync()
         {
             return CanPublish ? OnPublishRequested.InvokeAsync() : Task.CompletedTask;
+        }
+
+        private Task HandleDeleteAsync()
+        {
+            return CanDelete
+                ? OnDeleteRequested.InvokeAsync()
+                : Task.CompletedTask;
         }
 
         private Task HandlePublicChangedAsync(ChangeEventArgs args)

@@ -21,8 +21,10 @@ else
                   DataList="DataList"
                   StartInEditMode="StartInEditMode"
                   CanEdit="CanEditDocument"
+                  CanDelete="CanDeleteDocument"
                   CanChangePublicFlag="CanChangePublicFlag"
                   IsPublic="@(Entity?.IsPublic == true)"
-                  OnPublicChanged="HandlePublicChangedAsync" />
+                  OnPublicChanged="HandlePublicChangedAsync"
+                  OnDeleteRequested="HandleDeleteRequestedAsync" />
     </div>
 }

@@ -486,7 +486,7 @@ Current work context
 
 Если нужен более узкий контекст, дополнительно смотреть:
 - `Context/Policy/graph-storage-policy.md`
-- `Context/Policy/deployment-policy.md`
+- `Context/Policy/Deployment/deployment-policy.md`
 - `Context/Policy/miniapp-reactivebus-architecture-guide.md`
 - `Context/Policy/Comments/comments-policy.md`
 - `Context/MiniApps/user-miniapp.md`
